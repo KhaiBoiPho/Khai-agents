@@ -176,3 +176,58 @@
     flex-direction: column;
   }
 }
+
+/* Flat panes: the sidebar, workspace and review pane meet at hairlines
+   instead of floating as cards. */
+.workspace {
+  height: 100%;
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  background: var(--surface-canvas);
+}
+
+/* Hidden sidebar: the column collapses and a reveal button sits in the
+   workspace's top-left corner. More specific than the responsive column
+   rules above, so it wins at every width. */
+.shell[data-sidebar="hidden"] {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.shell[data-sidebar="hidden"][data-inspector="true"] {
+  grid-template-columns: minmax(460px, 1fr) minmax(370px, 420px);
+}
+
+.showSidebar {
+  position: absolute;
+  top: 12px;
+  left: 10px;
+  z-index: 15;
+  display: grid;
+  width: 30px;
+  height: 30px;
+  place-items: center;
+  border-radius: var(--radius-sm);
+  color: var(--text-tertiary);
+}
+
+.showSidebar:hover {
+  background: var(--surface-hover);
+  color: var(--text-primary);
+}
+
+.shell[data-sidebar="hidden"] .workspace > header:first-of-type {
+  padding-left: 48px;
+}
+
+@media (min-width: 1181px) {
+  .reviewPane {
+    height: 100%;
+    margin: 0;
+    border: 0;
+    border-left: 1px solid var(--border-subtle);
+    border-radius: 0;
+    box-shadow: none;
+  }
+}

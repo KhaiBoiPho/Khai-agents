@@ -515,3 +515,132 @@
   border: 0;
   border-top: 1px solid var(--border-subtle);
 }
+
+/* Codex-style flat sidebar. These rules follow the originals on purpose so
+   they win on source order. */
+.sidebar {
+  height: 100%;
+  margin: 0;
+  padding: 10px 8px 8px;
+  border: 0;
+  border-right: 1px solid var(--border-subtle);
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.topRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 0 0 10px;
+  padding: 0 2px 0 6px;
+}
+
+.brandButton {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 6px;
+  margin-left: -6px;
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+}
+
+.brandButton strong {
+  overflow: hidden;
+  font-size: var(--text-lg);
+  font-weight: var(--weight-semibold);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.brandButton svg {
+  color: var(--text-tertiary);
+}
+
+.brandButton:hover {
+  background: var(--surface-hover);
+}
+
+.topActions {
+  display: flex;
+  gap: 2px;
+}
+
+.topActions button {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  place-items: center;
+  border-radius: var(--radius-sm);
+  color: var(--text-tertiary);
+}
+
+.topActions button:hover {
+  background: var(--surface-hover);
+  color: var(--text-primary);
+}
+
+.search {
+  min-height: 32px;
+  grid-template-columns: 16px 1fr;
+  margin: 0 0 6px;
+  padding: 0 9px;
+  border-color: var(--border-strong);
+  background: var(--surface-raised);
+}
+
+.search:focus-within {
+  border-color: var(--border-emphasis);
+  box-shadow: none;
+}
+
+.newChat {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 16px;
+  padding: 7px 8px;
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-size: var(--text-sm);
+  text-align: left;
+}
+
+.newChat:hover:not(:disabled) {
+  background: var(--surface-hover);
+}
+
+.sectionHeading {
+  padding: 0 4px 4px 8px;
+  color: var(--text-secondary);
+  font: var(--weight-medium) var(--text-sm) inherit;
+  font-family: inherit;
+  letter-spacing: normal;
+  text-transform: none;
+}
+
+.sectionHeading button {
+  opacity: 0;
+}
+
+.sectionHeading:hover button,
+.sectionHeading button:focus-visible {
+  opacity: 1;
+}
+
+.projectButton {
+  min-height: 32px;
+  padding: 2px 8px 2px 6px;
+}
+
+.projectButton strong,
+.projectButton[data-active="true"] strong {
+  font-weight: var(--weight-medium);
+}
+
+.account {
+  margin: 6px 0 0;
+}

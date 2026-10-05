@@ -1013,3 +1013,12 @@
   align-items: flex-start;
   gap: 1px;
 }
+
+/* Fade into the flat workspace canvas rather than the old card surface. */
+.region {
+  background: linear-gradient(
+    to bottom,
+    transparent,
+    var(--surface-canvas) 40px
+  );
+}

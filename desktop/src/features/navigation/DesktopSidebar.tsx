@@ -1,4 +1,5 @@
 import {
+  ChevronDown,
   ChevronRight,
   ChevronsUpDown,
   CircleGauge,
@@ -8,6 +9,8 @@ import {
   FolderOpen,
   Languages,
   LogOut,
+  PanelLeftClose,
+  SquarePen,
   Plus,
   Search,
   Settings,
@@ -42,6 +45,7 @@ interface DesktopSidebarProps {
   onOpenSettings(section?: string): void;
   /** Present only where the shell can end the browser session. */
   onSignOut?: () => void;
+  onHide(): void;
   onQueryChange(query: string): void;
   onOpenProject(): void;
   onSelectProject(projectId: string): void;
@@ -92,6 +96,7 @@ export function DesktopSidebar({
   onDestination,
   onOpenSettings,
   onSignOut,
+  onHide,
   onQueryChange,
   onOpenProject,
   onSelectProject,
@@ -103,6 +108,7 @@ export function DesktopSidebar({
 }: DesktopSidebarProps) {
   const { t } = useTranslation();
   const searchRef = useRef<HTMLInputElement | null>(null);
+  const [searchOpen, setSearchOpen] = useState(false);
   const normalizedQuery = query.trim().toLocaleLowerCase();
   const selectedProject =
     projects.find((project) => project.id === selectedProjectId) ?? null;
@@ -164,8 +170,11 @@ export function DesktopSidebar({
       if (!(event.metaKey || event.ctrlKey) || event.altKey) return;
       if (event.key.toLocaleLowerCase() === "k") {
         event.preventDefault();
-        searchRef.current?.focus();
-        searchRef.current?.select();
+        setSearchOpen(true);
+        requestAnimationFrame(() => {
+          searchRef.current?.focus();
+          searchRef.current?.select();
+        });
       }
       if (
         event.key.toLocaleLowerCase() === "n" &&
@@ -182,56 +191,70 @@ export function DesktopSidebar({
 
   return (
     <aside className={styles.sidebar} aria-label="Projects and Sessions">
-      <div className={styles.brandRow}>
-        <span className={styles.brandMark} aria-hidden="true">
-          {/* Three rules stepping inward: nesting, and so depth. The tile takes
-              its fill from --text-primary and the mark from --text-inverse, so
-              the pair swaps itself in the dark theme. */}
-          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-            <path d="M4.75 7.5h14.5" opacity="1" />
-            <path d="M9 12h10.25" opacity="0.72" />
-            <path d="M13.25 16.5h6" opacity="0.44" />
-          </svg>
-        </span>
-        <span className={styles.brandCopy}>
+      <div className={styles.topRow}>
+        <button
+          type="button"
+          className={styles.brandButton}
+          onClick={() => onOpenSettings()}
+          title="Khai-Agents settings"
+        >
           <strong>Khai-Agents</strong>
+          <ChevronDown size={14} />
+        </button>
+        <span className={styles.topActions}>
+          <button
+            type="button"
+            onClick={() => {
+              setSearchOpen((open) => !open || Boolean(query));
+              requestAnimationFrame(() => searchRef.current?.focus());
+            }}
+            aria-label={t("sidebar.searchSessions", "Search Sessions")}
+            title={`${t("sidebar.searchSessions", "Search Sessions")} (Ctrl+K)`}
+          >
+            <Search size={16} />
+          </button>
+          <button
+            type="button"
+            onClick={onHide}
+            aria-label="Hide sidebar"
+            title="Hide sidebar (Ctrl+B)"
+          >
+            <PanelLeftClose size={16} />
+          </button>
         </span>
       </div>
 
-      {destination === "threads" ? (
-        <>
-          <button
-            className={styles.newThread}
-            type="button"
-            onClick={onCreateThread}
-            disabled={busy || !canCreateThread}
-          >
-            <Plus size={16} strokeWidth={1.9} />
-            {t("sidebar.newThread", "New thread")}
-            <kbd>⌘N</kbd>
-          </button>
-
-          <label className={styles.search}>
-            <Search size={16} strokeWidth={1.8} aria-hidden="true" />
-            <span className={styles.srOnly}>{t("sidebar.searchSessions", "Search Sessions")}</span>
-            <input
-              ref={searchRef}
-              value={query}
-              onChange={(event) => onQueryChange(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === "Escape") {
-                  onQueryChange("");
-                  event.currentTarget.blur();
-                }
-              }}
-              placeholder={t("sidebar.searchSessions", "Search Sessions")}
-              spellCheck={false}
-            />
-            <kbd>⌘K</kbd>
-          </label>
-        </>
+      {searchOpen || query ? (
+        <label className={styles.search}>
+          <Search size={15} strokeWidth={1.8} aria-hidden="true" />
+          <span className={styles.srOnly}>{t("sidebar.searchSessions", "Search Sessions")}</span>
+          <input
+            ref={searchRef}
+            value={query}
+            onChange={(event) => onQueryChange(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Escape") {
+                onQueryChange("");
+                setSearchOpen(false);
+                event.currentTarget.blur();
+              }
+            }}
+            placeholder={t("sidebar.searchSessions", "Search Sessions")}
+            spellCheck={false}
+          />
+        </label>
       ) : null}
 
+      <button
+        className={styles.newChat}
+        type="button"
+        onClick={onCreateThread}
+        disabled={busy || !canCreateThread}
+        title="New chat (Ctrl+N)"
+      >
+        <SquarePen size={16} />
+        {t("sidebar.newChat", "New chat")}
+      </button>
 
       <div className={styles.sectionHeading}>
         <span>{t("sidebar.projects", "Projects")}</span>

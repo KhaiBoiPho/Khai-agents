@@ -1,5 +1,5 @@
-import { FolderOpen, MessageSquarePlus } from "lucide-react";
-import { lazy, Suspense, useState } from "react";
+import { FolderOpen, MessageSquarePlus, PanelLeftOpen } from "lucide-react";
+import { lazy, Suspense, useEffect, useState } from "react";
 
 import { projectCanExecute } from "./app/projectPresentation";
 import { latestExecutingTurn } from "./app/interactiveTurnRouter";
@@ -68,6 +68,16 @@ function LoadingSurface({
   );
 }
 
+const SIDEBAR_KEY = "khai-agents.sidebar-hidden";
+
+function readSidebarHidden(): boolean {
+  try {
+    return localStorage.getItem(SIDEBAR_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
 export function App({
   runtime,
   onSignOut,
@@ -84,6 +94,28 @@ export function App({
   const [composerIntent, setComposerIntent] =
     useState<ComposerLaunchIntent | null>(null);
   const { state, selectedProject, selectedThread } = controller;
+  const [sidebarHidden, setSidebarHidden] = useState(readSidebarHidden);
+  useEffect(() => {
+    try {
+      localStorage.setItem(SIDEBAR_KEY, sidebarHidden ? "1" : "0");
+    } catch {
+      // Storage can be unavailable; the choice then lasts for this page.
+    }
+  }, [sidebarHidden]);
+  useEffect(() => {
+    const toggle = (event: KeyboardEvent) => {
+      if (
+        (event.metaKey || event.ctrlKey) &&
+        !event.altKey &&
+        event.key.toLocaleLowerCase() === "b"
+      ) {
+        event.preventDefault();
+        setSidebarHidden((hidden) => !hidden);
+      }
+    };
+    window.addEventListener("keydown", toggle);
+    return () => window.removeEventListener("keydown", toggle);
+  }, []);
   const createSkillThread = async (skill: SkillInfo) => {
     if (!(await ui.navigateTo("threads"))) return;
     const created = await controller.createThread("code", "Create a Skill");
@@ -141,8 +173,14 @@ export function App({
   );
 
   return (
-    <main className={styles.shell} data-inspector={inspectorVisible}>
+    <main
+      className={styles.shell}
+      data-inspector={inspectorVisible}
+      data-sidebar={sidebarHidden ? "hidden" : "shown"}
+    >
+      {sidebarHidden ? null : (
       <DesktopSidebar
+        onHide={() => setSidebarHidden(true)}
         projects={state.projects}
         threads={state.threads}
         selectedProjectId={state.selectedProjectId}
@@ -208,8 +246,20 @@ export function App({
           await controller.deleteThread(threadId);
         }}
       />
+      )}
 
       <section className={styles.workspace} aria-labelledby="thread-title">
+        {sidebarHidden ? (
+          <button
+            type="button"
+            className={styles.showSidebar}
+            onClick={() => setSidebarHidden(false)}
+            aria-label="Show sidebar"
+            title="Show sidebar (Ctrl+B)"
+          >
+            <PanelLeftOpen size={17} />
+          </button>
+        ) : null}
         <RuntimeNotice
           reconnectOnly={runtime.host?.kind === "browser"}
           runtime={state.runtime}
