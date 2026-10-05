@@ -123,6 +123,9 @@ def _bootstrap_logging() -> None:
 
 def main():
     """Main function"""
+    from core.dotenv import load_dotenv
+
+    load_dotenv()
     _bootstrap_logging()
 
     # Parse command line arguments

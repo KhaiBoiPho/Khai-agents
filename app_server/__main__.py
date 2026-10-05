@@ -59,6 +59,9 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None, *, shared_service: bool = True) -> int:
+    from core.dotenv import load_dotenv
+
+    load_dotenv()
     arguments = list(sys.argv[1:] if argv is None else argv)
     if "--service" in arguments:
         from cli.service_cli import run as service_cli_main

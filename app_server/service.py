@@ -416,6 +416,9 @@ async def serve(files: ServiceFiles, port: int) -> None:
 
 
 def main(argv: list[str] | None = None) -> int:
+    from core.dotenv import load_dotenv
+
+    load_dotenv()
     parser = argparse.ArgumentParser(
         description="Run the DeepCode service in the foreground"
     )

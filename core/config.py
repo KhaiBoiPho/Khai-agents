@@ -91,9 +91,15 @@ class _Base(BaseModel):
 class AgentDefaults(_Base):
     """Default LLM generation settings shared by all phases."""
 
-    connection: str | None = "gemini"
+    # Used when the config file sets no default; ``.env`` may supply them.
+    connection: str | None = Field(
+        default_factory=lambda: os.environ.get("KHAI_DEFAULT_CONNECTION") or "gemini"
+    )
     provider: str = "auto"  # "auto" or registry name (e.g. "openai", "anthropic")
-    model: str = "models/gemini-3.6-flash"
+    model: str = Field(
+        default_factory=lambda: os.environ.get("KHAI_DEFAULT_MODEL")
+        or "models/gemini-3.6-flash"
+    )
     max_tokens: int = 8192
     temperature: float = 0.1
     reasoning_effort: str | None = None
