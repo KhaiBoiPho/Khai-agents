@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import Callable
+import os
+from pathlib import Path
 from typing import Any
 
 from app_server.connection import ConnectionState
@@ -21,6 +23,7 @@ from core.agent_presets import METADATA_KEY as PRESET_METADATA_KEY
 from core.agent_presets import list_agent_presets
 from core.application.application import DeepCodeApplication
 from core.application.errors import (
+    InvalidArgumentError,
     NoActiveTurnError,
     ThreadNotFoundError,
     TurnNotSteerableError,
@@ -306,6 +309,7 @@ class Dispatcher:
             rpc_methods.APPROVAL_RESPOND: self._approval_respond,
             rpc_methods.EVENT_REPLAY: self._event_replay,
             rpc_methods.FILE_LIST: self._file_list,
+            rpc_methods.DIRECTORY_LIST: self._directory_list,
             rpc_methods.FILE_READ: self._file_read,
             rpc_methods.FILE_WRITE: self._file_write,
             rpc_methods.GIT_STATUS: self._git_status,
@@ -1600,6 +1604,40 @@ class Dispatcher:
         return {
             "entries": [file_entry_view(entry) for entry in entries],
             "truncated": truncated,
+        }
+
+    def _directory_list(self, params: Params) -> dict[str, Any]:
+        """Folder names under a path (the home folder by default).
+
+        Backs the web client's folder picker: a browser cannot reveal a
+        dropped folder's path, so the user browses the service machine
+        instead. Only directory names are returned, never file contents.
+        """
+        params.only("path")
+        raw = params.string("path", required=False, allow_empty=True) or ""
+        target = Path(raw).expanduser().resolve() if raw else Path.home().resolve()
+        if not target.is_dir():
+            raise InvalidArgumentError("directory/list path must be a directory")
+        entries: list[dict[str, str]] = []
+        try:
+            with os.scandir(target) as scan:
+                for entry in scan:
+                    if entry.name.startswith("."):
+                        continue
+                    try:
+                        if entry.is_dir(follow_symlinks=True):
+                            entries.append(
+                                {"name": entry.name, "path": str(target / entry.name)}
+                            )
+                    except OSError:
+                        continue
+        except OSError as exc:
+            raise InvalidArgumentError(f"cannot list {target}: {exc.strerror}") from None
+        entries.sort(key=lambda item: item["name"].lower())
+        return {
+            "path": str(target),
+            "parent": str(target.parent) if target.parent != target else None,
+            "entries": entries[:500],
         }
 
     def _file_read(self, params: Params) -> dict[str, Any]:

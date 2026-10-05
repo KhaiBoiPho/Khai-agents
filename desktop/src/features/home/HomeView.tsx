@@ -11,6 +11,7 @@ import { useMemo, useState } from "react";
 import type { Project } from "../../generated/app-server";
 import { isRecoveredHistoryProject } from "../../app/projectPresentation";
 import { MOCK_ACCOUNT } from "../../mocks/preview";
+import { Dropdown } from "../../components/Dropdown";
 import styles from "./HomeView.module.css";
 
 interface HomeViewProps {
@@ -95,20 +96,33 @@ export function HomeView({
             <Laptop size={13} />
             Local
           </span>
-          <label className={styles.chip}>
-            <Folder size={13} />
-            <select
-              value={projectId}
-              onChange={(event) => setProjectId(event.target.value)}
-              aria-label="Folder for the new chat"
-            >
-              {recent.map((project) => (
-                <option key={project.id} value={project.id}>
-                  {project.displayName}
-                </option>
-              ))}
-            </select>
-          </label>
+          <Dropdown
+            triggerClassName={styles.chip}
+            triggerLabel="Folder for the new chat"
+            placement="up"
+            trigger={
+              <>
+                <Folder size={13} />
+                {target?.displayName ?? "Pick a folder…"}
+              </>
+            }
+            sections={[
+              {
+                title: "Recent",
+                items: recent.slice(0, 8).map((project) => ({
+                  id: project.id,
+                  label: project.displayName,
+                  selected: project.id === projectId,
+                  onSelect: () => setProjectId(project.id),
+                })),
+              },
+              {
+                items: [
+                  { id: "open", label: "Open folder…", onSelect: onAddFolder },
+                ],
+              },
+            ]}
+          />
           <button
             type="button"
             className={styles.chipButton}

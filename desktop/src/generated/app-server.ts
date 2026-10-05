@@ -170,6 +170,7 @@ export interface MethodParams {
   "approval/respond": ApprovalRespondParams;
   "event/replay": EventReplayParams;
   "file/list": FileListParams;
+  "directory/list": DirectoryListParams;
   "file/read": FileReadParams;
   "file/write": FileWriteParams;
   "git/status": ThreadReadParams;
@@ -580,6 +581,9 @@ export interface FileListParams {
   depth?: number;
   limit?: number;
 }
+export interface DirectoryListParams {
+  path?: string;
+}
 export interface FileReadParams {
   threadId: string;
   path: string;
@@ -861,6 +865,11 @@ export interface MethodResults {
   "file/list": {
     entries: FileEntry[];
     truncated: boolean;
+  };
+  "directory/list": {
+    path: string;
+    parent: string | null;
+    entries: DirectoryEntry[];
   };
   "file/read": {
     file: FileContent;
@@ -1702,6 +1711,10 @@ export interface FileEntry {
   size: number | null;
   modifiedAt: string | null;
   hidden: boolean;
+}
+export interface DirectoryEntry {
+  name: string;
+  path: string;
 }
 export interface FileContent {
   path: string;

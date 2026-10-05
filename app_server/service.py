@@ -82,7 +82,7 @@ class ControlServer:
             self.browser_auth,
             native_authenticated=self._authenticated,
             phase=lambda: self.phase,
-            service_info={
+            service_info=lambda: {
                 "instanceId": record.instance_id,
                 "schemaVersion": host.application.database.schema_version(),
                 "transport": "websocket",

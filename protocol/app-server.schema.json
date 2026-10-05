@@ -6197,6 +6197,9 @@
         "file/list": {
           "$ref": "#/$defs/FileListParams"
         },
+        "directory/list": {
+          "$ref": "#/$defs/DirectoryListParams"
+        },
         "file/read": {
           "$ref": "#/$defs/FileReadParams"
         },
@@ -6363,6 +6366,7 @@
         "approval/respond",
         "event/replay",
         "file/list",
+        "directory/list",
         "file/read",
         "file/write",
         "git/status",
@@ -7147,6 +7151,32 @@
             "truncated"
           ]
         },
+        "directory/list": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "path": {
+              "type": "string"
+            },
+            "parent": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "entries": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/DirectoryEntry"
+              }
+            }
+          },
+          "required": [
+            "path",
+            "parent",
+            "entries"
+          ]
+        },
         "file/read": {
           "type": "object",
           "additionalProperties": false,
@@ -7464,6 +7494,7 @@
         "approval/respond",
         "event/replay",
         "file/list",
+        "directory/list",
         "file/read",
         "file/write",
         "git/status",
@@ -8259,6 +8290,31 @@
       "required": [
         "text",
         "model"
+      ]
+    },
+    "DirectoryListParams": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "type": "string"
+        }
+      }
+    },
+    "DirectoryEntry": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "path": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "path"
       ]
     }
   }

@@ -505,6 +505,14 @@ export function App({
                 onLaunchIntentConsumed={() => setComposerIntent(null)}
                 onManageProviders={() => ui.openSettings("models")}
                 hasActiveWork={hasPendingTurn || activeWorkflow}
+                projects={state.projects}
+                onSwitchProject={(projectId) => {
+                  void (async () => {
+                    if (await ui.confirmDiscardInspectorDraft()) {
+                      await controller.selectProject(projectId);
+                    }
+                  })();
+                }}
                 onTrustProject={() => void controller.trustProject()}
                 onForkThread={() => {
                   void (async () => {

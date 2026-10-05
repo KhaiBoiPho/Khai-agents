@@ -1,0 +1,227 @@
+.backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgb(0 0 0 / 50%);
+}
+
+.dialog {
+  display: flex;
+  width: min(600px, 100%);
+  max-height: min(640px, 90vh);
+  flex-direction: column;
+  gap: 10px;
+  padding: 20px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-lg);
+  background: var(--surface-raised);
+  box-shadow: var(--shadow-float);
+}
+
+.header h2 {
+  margin: 0 0 4px;
+  font-size: var(--text-lg);
+  font-weight: var(--weight-semibold);
+}
+
+.header p {
+  margin: 0;
+  color: var(--text-tertiary);
+  font-size: var(--text-sm);
+}
+
+.crumbs {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.crumbs > button,
+.path button {
+  display: inline-grid;
+  min-width: 26px;
+  height: 26px;
+  place-items: center;
+  padding: 0 6px;
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+}
+
+.crumbs > button:hover:not(:disabled),
+.path button:hover {
+  background: var(--surface-hover);
+  color: var(--text-primary);
+}
+
+.path {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  align-items: center;
+  overflow: hidden;
+  color: var(--text-tertiary);
+}
+
+.path > span {
+  display: inline-flex;
+  align-items: center;
+  white-space: nowrap;
+}
+
+.list {
+  position: relative;
+  display: flex;
+  min-height: 220px;
+  flex: 1;
+  flex-direction: column;
+  padding: 4px;
+  overflow-y: auto;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--surface-canvas);
+}
+
+.list[data-dragging] {
+  border-color: var(--signal);
+  background: var(--signal-faint);
+}
+
+.list > button {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 6px 8px;
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-size: var(--text-sm);
+  text-align: left;
+}
+
+.list > button svg {
+  flex-shrink: 0;
+  color: var(--text-tertiary);
+}
+
+.list > button span {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.list > button:hover {
+  background: var(--surface-hover);
+}
+
+.list > button[data-selected] {
+  background: var(--signal-soft);
+}
+
+.list > button[data-selected] svg:first-child {
+  color: var(--signal);
+}
+
+.enter {
+  opacity: 0;
+}
+
+.list > button:hover .enter {
+  opacity: 1;
+}
+
+.dropHint {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-top: auto;
+  padding: 12px;
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius-sm);
+  color: var(--text-tertiary);
+  font-size: var(--text-xs);
+}
+
+.status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 10px;
+  color: var(--text-tertiary);
+  font-size: var(--text-sm);
+}
+
+.spin {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.error {
+  margin: 0;
+  color: var(--danger);
+  font-size: var(--text-xs);
+}
+
+.typed input {
+  width: 100%;
+  padding: 7px 10px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  outline: 0;
+  background: var(--surface-canvas);
+  color: var(--text-primary);
+  font-size: var(--text-sm);
+}
+
+.typed input:focus {
+  border-color: var(--border-emphasis);
+}
+
+.footer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.choice {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  color: var(--text-tertiary);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.footer button {
+  padding: 6px 14px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  color: var(--text-primary);
+  font-size: var(--text-sm);
+}
+
+.footer button:hover:not(:disabled) {
+  background: var(--surface-hover);
+}
+
+.footer .primary {
+  border-color: transparent;
+  background: var(--text-primary);
+  color: var(--text-inverse);
+}
+
+.footer .primary:hover:not(:disabled) {
+  background: var(--text-secondary);
+}

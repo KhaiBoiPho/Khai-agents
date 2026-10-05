@@ -57,6 +57,7 @@ import {
 import styles from "./Composer.module.css";
 import { useDictation } from "./useDictation";
 import { usePromptDraft } from "./usePromptDraft";
+import { Dropdown } from "../../components/Dropdown";
 import { isRecoveredHistoryProject } from "../../app/projectPresentation";
 import mascotUrl from "../../assets/khai-mascot.png";
 import { MOCK_ACCOUNT } from "../../mocks/preview";
@@ -108,6 +109,8 @@ interface ComposerProps {
   onOpenProject?: () => void;
   onOpenSettings?: (section: string) => void;
   hasActiveWork?: boolean;
+  projects?: Project[];
+  onSwitchProject?: (projectId: string) => void;
   onTrustProject?: () => void;
   onForkThread?: () => void;
   onCreatePaperThread?: () => void;
@@ -146,6 +149,8 @@ export function Composer({
   onOpenProject,
   onOpenSettings,
   hasActiveWork = false,
+  projects = [],
+  onSwitchProject,
   onTrustProject,
   onForkThread,
   onCreatePaperThread,
@@ -466,22 +471,52 @@ export function Composer({
           <Laptop size={13} />
           Local
         </span>
-        <span
-          className={styles.chip}
+        <Dropdown
+          triggerClassName={styles.chip}
+          triggerLabel="Folder"
           title={thread?.workspacePath ?? project?.canonicalPath ?? undefined}
-        >
-          {recoveredHistory ? <FolderX size={13} /> : <Folder size={13} />}
-          {recoveredHistory
-            ? "Folder unavailable"
-            : project?.displayName ?? "Pick a folder…"}
-          {trusted ? (
-            <ShieldCheck
-              size={13}
-              className={styles.trusted}
-              aria-label="Trusted folder"
-            />
-          ) : null}
-        </span>
+          placement="up"
+          trigger={
+            <>
+              {recoveredHistory ? <FolderX size={13} /> : <Folder size={13} />}
+              {recoveredHistory
+                ? "Folder unavailable"
+                : project?.displayName ?? "Pick a folder…"}
+              {trusted ? (
+                <ShieldCheck
+                  size={13}
+                  className={styles.trusted}
+                  aria-label="Trusted folder"
+                />
+              ) : null}
+            </>
+          }
+          sections={[
+            {
+              title: "Recent",
+              items: [...projects]
+                .filter((entry) => !isRecoveredHistoryProject(entry))
+                .sort((left, right) =>
+                  right.lastOpenedAt.localeCompare(left.lastOpenedAt),
+                )
+                .slice(0, 8)
+                .map((entry) => ({
+                  id: entry.id,
+                  label: entry.displayName,
+                  selected: entry.id === project?.id,
+                  disabled: busy,
+                  onSelect: () => {
+                    if (entry.id !== project?.id) onSwitchProject?.(entry.id);
+                  },
+                })),
+            },
+            {
+              items: onOpenProject
+                ? [{ id: "open", label: "Open folder…", onSelect: onOpenProject }]
+                : [],
+            },
+          ]}
+        />
         {project?.trustState === "untrusted" && !recoveredHistory && onTrustProject ? (
           <button
             type="button"
@@ -505,11 +540,11 @@ export function Composer({
             <FolderPlus size={14} />
           </button>
         ) : null}
+      </div>
+      <div className={styles.composer}>
         {conversationStarted ? (
           <img src={mascotUrl} alt="" className={styles.mascot} />
         ) : null}
-      </div>
-      <div className={styles.composer}>
         <label className={styles.promptLabel} htmlFor="turn-prompt">
           Task instruction
         </label>

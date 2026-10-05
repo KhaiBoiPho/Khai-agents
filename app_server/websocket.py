@@ -128,7 +128,7 @@ class WebSocketTransport:
         *,
         native_authenticated: Callable[[web.Request], bool],
         phase: Callable[[], str],
-        service_info: dict,
+        service_info: dict | Callable[[], dict],
     ) -> None:
         self.host = host
         self.auth = auth
@@ -204,7 +204,14 @@ class WebSocketTransport:
                 return ws
             # The host is already started; registration only takes short locks
             # and starts the peer pump. Keep ownership transfer uncancellable.
-            peer = self.host.connect(outbox.send, service_info=self._service_info)
+            # A callable is read per connection, so a rebuilt web client is
+            # reported without restarting the service.
+            info = (
+                self._service_info()
+                if callable(self._service_info)
+                else self._service_info
+            )
+            peer = self.host.connect(outbox.send, service_info=info)
             writer = asyncio.create_task(self._write(ws, outbox))
             dispatcher = asyncio.create_task(
                 self._dispatch(ws, peer, incoming, outbox, session)

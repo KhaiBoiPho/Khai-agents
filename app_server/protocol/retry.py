@@ -38,6 +38,7 @@ READ_METHODS = frozenset(
         "artifact/read",
         "event/replay",
         "file/list",
+        "directory/list",
         "file/read",
         "git/status",
         "git/diff",
