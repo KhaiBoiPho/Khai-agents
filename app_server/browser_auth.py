@@ -53,6 +53,26 @@ class BrowserAuth:
         self._sessions[session] = now + self.SESSION_TTL
         return session
 
+    def password_session(self, supplied: str, expected: str) -> str:
+        """Open a session for the remote-mode access password."""
+
+        now = self._clock()
+        while self._attempts and self._attempts[0] <= now - 60:
+            self._attempts.popleft()
+        if len(self._attempts) >= 10:
+            raise web.HTTPTooManyRequests(text="Too many login attempts")
+        self._attempts.append(now)
+        if not expected or not secrets.compare_digest(
+            supplied.encode(), expected.encode()
+        ):
+            raise web.HTTPUnauthorized(text="Invalid access password")
+        self._prune(self._sessions)
+        if len(self._sessions) >= self.CAPACITY:
+            raise web.HTTPTooManyRequests(text="Too many browser sessions")
+        session = secrets.token_urlsafe(32)
+        self._sessions[session] = now + self.SESSION_TTL
+        return session
+
     def remaining(self, session: str) -> float:
         return max(0.0, self._sessions.get(session, 0.0) - self._clock())
 

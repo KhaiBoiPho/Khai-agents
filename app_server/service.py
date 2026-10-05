@@ -37,6 +37,18 @@ logger = logging.getLogger(__name__)
 MAX_CONTROL_BYTES = 16_384
 
 
+def _remote_settings() -> tuple[str, str, str]:
+    """Remote mode (hosted behind an HTTPS proxy), read after ``.env`` loads.
+
+    All unset for the ordinary loopback service, which keeps its behavior.
+    """
+
+    origin = os.environ.get("KHAI_PUBLIC_ORIGIN", "").strip().rstrip("/")
+    bind = os.environ.get("KHAI_BIND_HOST", "").strip() or "127.0.0.1"
+    password = os.environ.get("KHAI_ACCESS_PASSWORD", "")
+    return origin, bind, password
+
+
 class _PrivateRotatingLog(RotatingFileHandler):
     def _open(self):
         descriptor = open_private_file(
@@ -52,6 +64,10 @@ class ControlServer:
         self.host = host
         self.record = record
         self._token = token
+        self.public_origin, _bind, self._access_password = _remote_settings()
+        self.public_host = (
+            self.public_origin.split("://", 1)[-1] if self.public_origin else ""
+        )
         self.lifecycle = ServiceLifecycle(host.application)
         self.stopped = asyncio.Event()
         self.interrupt = threading.Event()
@@ -87,6 +103,7 @@ class ControlServer:
                 web.post("/control/rpc", self._rpc),
                 web.post("/auth/exchange", self._exchange),
                 web.post("/auth/logout", self._logout),
+                web.get("/login", self._password_login),
                 web.get("/api/rpc", self.business.handle),
             ]
         )
@@ -98,20 +115,30 @@ class ControlServer:
 
     @web.middleware
     async def _local_only(self, request: web.Request, handler):
-        if request.headers.getall("Host", []) != [f"127.0.0.1:{self.record.port}"]:
+        hosts = request.headers.getall("Host", [])
+        local_host = hosts == [f"127.0.0.1:{self.record.port}"]
+        public_host = bool(self.public_host) and hosts == [self.public_host]
+        if self.public_origin and request.path in {"/health/live", "/health/ready"}:
+            # Platform probes address the pod directly, with its own Host.
+            return await handler(request)
+        if not (local_host or public_host):
             raise web.HTTPForbidden(text="Local service management only")
+        if public_host and request.path.startswith("/control/"):
+            # Service management stays loopback-only even in remote mode.
+            raise web.HTTPForbidden(text="Local service management only")
+        allowed_origins = [self.public_origin] if public_host else [self.record.url]
         origins = request.headers.getall("Origin", [])
         browser_route = request.path.startswith(
             ("/auth/", "/api/", "/assets/")
-        ) or request.path in {"/", "/index.html", "/web-build.json"}
-        if origins and (not browser_route or origins != [self.record.url]):
+        ) or request.path in {"/", "/index.html", "/web-build.json", "/login"}
+        if origins and (not browser_route or origins != allowed_origins):
             raise web.HTTPForbidden(text="Invalid browser origin")
         if request.path.startswith("/auth/") and not origins:
             raise web.HTTPForbidden(text="Browser origin required")
         if (
             request.path.startswith("/api/")
             and request.method not in {"GET", "HEAD"}
-            and origins != [self.record.url]
+            and origins != allowed_origins
         ):
             raise web.HTTPForbidden(text="Browser origin required")
         return await handler(request)
@@ -146,6 +173,30 @@ class ControlServer:
             samesite="Strict",
             max_age=self.browser_auth.SESSION_TTL,
             path="/",
+            secure=bool(self.public_origin),
+        )
+        return response
+
+    async def _password_login(self, request: web.Request) -> web.Response:
+        """Remote mode: trade the access password for a browser session."""
+
+        if not (self.public_origin and self._access_password):
+            raise web.HTTPNotFound()
+        if self.phase != "ready":
+            raise web.HTTPServiceUnavailable(text="Service is not ready")
+        session = self.browser_auth.password_session(
+            request.query.get("key", ""), self._access_password
+        )
+        response = web.HTTPFound("/")
+        # Lax, not Strict: the cookie must ride the redirect that follows.
+        response.set_cookie(
+            self.browser_auth.cookie_name,
+            session,
+            httponly=True,
+            samesite="Lax",
+            max_age=self.browser_auth.SESSION_TTL,
+            path="/",
+            secure=True,
         )
         return response
 
@@ -332,6 +383,7 @@ async def serve(files: ServiceFiles, port: int) -> None:
     installed_signals = []
     listener = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     loop = asyncio.get_running_loop()
+    bind_host = _remote_settings()[1]
     try:
         files.clear()
         if os.name != "nt":
@@ -339,9 +391,9 @@ async def serve(files: ServiceFiles, port: int) -> None:
             # SO_REUSEPORT or Windows address sharing with another live listener.
             listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         try:
-            listener.bind(("127.0.0.1", port))
+            listener.bind((bind_host, port))
         except OSError as exc:
-            logger.error("Cannot listen on 127.0.0.1:%s: %s", port, exc.strerror)
+            logger.error("Cannot listen on %s:%s: %s", bind_host, port, exc.strerror)
             raise
         listener.listen(socket.SOMAXCONN)
         listener.setblocking(False)

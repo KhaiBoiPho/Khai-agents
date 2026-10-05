@@ -1,0 +1,37 @@
+# Khai-Agents hosted image: the web workbench served by the app service.
+#
+# Remote mode is driven entirely by environment variables (see
+# docker/entrypoint.sh and .env.example); nothing secret is baked in.
+
+FROM node:22-bookworm-slim AS web
+WORKDIR /src
+COPY protocol ./protocol
+COPY core/version.py ./core/version.py
+COPY desktop/package.json desktop/package-lock.json ./desktop/
+RUN npm --prefix desktop ci --no-audit --no-fund
+COPY desktop ./desktop
+RUN mkdir -p app_server && npm --prefix desktop run build:web
+
+FROM python:3.12-slim-bookworm
+ENV PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    DEEPCODE_HOME=/data/deepcode \
+    KHAI_BIND_HOST=0.0.0.0 \
+    PORT=8080
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends git ripgrep curl ca-certificates openssh-client \
+    && rm -rf /var/lib/apt/lists/*
+WORKDIR /app
+COPY scripts/ci/requirements.lock ./scripts/ci/requirements.lock
+COPY desktop/sidecar-requirements.lock ./desktop/sidecar-requirements.lock
+RUN pip install -r scripts/ci/requirements.lock
+COPY . .
+COPY --from=web /src/app_server/web_assets ./app_server/web_assets
+RUN pip install --no-deps --no-build-isolation -e . \
+    && chmod +x docker/entrypoint.sh \
+    && mkdir -p /data/deepcode /workspace
+VOLUME ["/data", "/workspace"]
+EXPOSE 8080
+HEALTHCHECK --interval=30s --timeout=5s --start-period=60s \
+    CMD curl -fsS "http://127.0.0.1:${PORT}/health/live" || exit 1
+ENTRYPOINT ["/app/docker/entrypoint.sh"]

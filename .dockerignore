@@ -1,24 +1,29 @@
 # Git
 .git
-.gitignore
 
 # Node
-new_ui/frontend/node_modules
-new_ui/frontend/dist
+**/node_modules
+desktop/src-tauri/target
+desktop/build
+desktop/dist
 
 # Python
-__pycache__
+**/__pycache__
 *.pyc
 *.pyo
 *.egg-info
 .eggs
-dist
-build
-
-# Virtual environments
 .venv
 venv
 env
+
+# Built in the image's web stage
+app_server/web_assets
+
+# Secrets
+.env
+.env.*
+!.env.example
 
 # IDE
 .vscode
@@ -33,13 +38,6 @@ uploads
 logs
 *.log
 
-# Docker
-deepcode_docker/Dockerfile
-deepcode_docker/docker-compose.yml
-deepcode_docker/.dockerignore
-deepcode_docker/run_docker.sh
-
-# Documentation
-assets
-*.md
-LICENSE
+# Not needed in the image
+eval
+website
