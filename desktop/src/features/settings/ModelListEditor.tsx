@@ -29,6 +29,7 @@ import type {
 } from "../../generated/app-server";
 import { capacityText, parseCapacity } from "./modelCapacity";
 import styles from "./ConnectionSettings.module.css";
+import { Select } from "../../components/Select";
 
 interface ModelListEditorProps {
   protocol?: ProviderProtocol;
@@ -105,7 +106,7 @@ export function ModelListEditor({
             </summary>
             <label>
               {t("provider.inputModalities", "Input modalities")}
-              <select
+              <Select
                 value={entry.inputModalities?.join(",") ?? ""}
                 onChange={(event) =>
                   update(index, {
@@ -133,11 +134,11 @@ export function ModelListEditor({
                     {entry.inputModalities.join(", ")}
                   </option>
                 ) : null}
-              </select>
+              </Select>
             </label>
             <label>
               {t("provider.toolCalling", "Tool calling")}
-              <select
+              <Select
                 value={
                   entry.toolCalling == null ? "" : String(entry.toolCalling)
                 }
@@ -153,7 +154,7 @@ export function ModelListEditor({
                 <option value="">{t("provider.inherit", "Inherit")}</option>
                 <option value="true">{t("provider.yes", "Yes")}</option>
                 <option value="false">{t("provider.no", "No")}</option>
-              </select>
+              </Select>
             </label>
             <CompatEditor
               protocol={protocol}

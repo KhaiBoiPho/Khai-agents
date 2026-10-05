@@ -8,14 +8,19 @@
 import type { ComponentType } from "react";
 import type { LucideIcon } from "lucide-react";
 import {
+  Brain,
+  BriefcaseBusiness,
   CircleGauge,
   CircleUserRound,
+  Code,
   Cpu,
+  KeyRound,
+  Monitor,
   Plug,
   Puzzle,
   ScrollText,
   Settings as SettingsIcon,
-  SquareStack,
+  Shield,
 } from "lucide-react";
 
 import type {
@@ -26,23 +31,37 @@ import type {
   SkillInfo,
 } from "../../generated/app-server";
 import type { ClientRuntime } from "../../rpc/contracts";
-import { SkillsPage } from "../extensions/SkillsPage";
-import { McpPage } from "../mcp/McpPage";
-import { GeneralSection } from "./sections/GeneralSection";
-import { AccountSection, UsageSection } from "./sections/PreviewSections";
+import {
+  AccountPage,
+  CapabilitiesPage,
+  MemoryPage,
+  PrivacyPage,
+  UsagePage,
+} from "./pages/AccountPages";
+import { DeveloperPage, SystemPage } from "./pages/ComputerPages";
+import {
+  AgentsPage,
+  ConnectorsPage,
+  PluginsSettingsPage,
+  SkillsSettingsPage,
+} from "./pages/CustomizePages";
+import { GeneralPage } from "./pages/GeneralPage";
 import { ModelsSection } from "./sections/ModelsSection";
-import { PluginsSection } from "./sections/PluginsSection";
-import { PresetsSection } from "./sections/PresetsSection";
 
 export type SettingsSectionId =
   | "general"
   | "account"
+  | "privacy"
   | "usage"
+  | "capabilities"
+  | "memory"
+  | "system"
+  | "developer"
   | "agent-presets"
-  | "models"
   | "skills"
   | "mcp"
-  | "plugins";
+  | "plugins"
+  | "models";
 
 /** Everything a section may need; each uses the subset it cares about. */
 export interface SettingsSectionProps {
@@ -70,26 +89,12 @@ export interface SettingsSection {
   icon: LucideIcon;
   component: ComponentType<SettingsSectionProps>;
   /** Rail heading the entry sits under. */
-  group: "settings" | "customize";
+  group: "settings" | "computer" | "customize" | "platform";
   /** Full pages carry their own heading; the dialog adds none for them. */
   ownsTitle?: boolean;
 }
 
-function McpSection({ runtime, project }: SettingsSectionProps) {
-  return <McpPage runtime={runtime} project={project} />;
-}
-
-function SkillsSection({ runtime, project, onCreateSkill }: SettingsSectionProps) {
-  return (
-    <SkillsPage
-      runtime={runtime}
-      project={project}
-      onCreateSkill={onCreateSkill ?? (async () => undefined)}
-    />
-  );
-}
-
-// Grouped like a desktop settings window: app settings, then customization.
+// Grouped like a desktop settings window.
 const SECTIONS: readonly SettingsSection[] = [
   {
     id: "general",
@@ -97,74 +102,128 @@ const SECTIONS: readonly SettingsSection[] = [
     labelKey: "settings.section.general",
     label: "General",
     icon: SettingsIcon,
-    component: GeneralSection,
+    component: GeneralPage,
     group: "settings",
+    ownsTitle: true,
   },
   {
     id: "account",
-    order: 2,
+    order: 1,
     labelKey: "settings.section.account",
     label: "Account",
     icon: CircleUserRound,
-    component: AccountSection,
+    component: AccountPage,
     group: "settings",
+    ownsTitle: true,
+  },
+  {
+    id: "privacy",
+    order: 2,
+    labelKey: "settings.section.privacy",
+    label: "Privacy",
+    icon: Shield,
+    component: PrivacyPage,
+    group: "settings",
+    ownsTitle: true,
   },
   {
     id: "usage",
-    order: 4,
+    order: 3,
     labelKey: "settings.section.usage",
     label: "Usage",
     icon: CircleGauge,
-    component: UsageSection,
+    component: UsagePage,
     group: "settings",
+    ownsTitle: true,
+  },
+  {
+    id: "capabilities",
+    order: 4,
+    labelKey: "settings.section.capabilities",
+    label: "Capabilities",
+    icon: BriefcaseBusiness,
+    component: CapabilitiesPage,
+    group: "settings",
+    ownsTitle: true,
+  },
+  {
+    id: "memory",
+    order: 5,
+    labelKey: "settings.section.memory",
+    label: "Memory",
+    icon: Brain,
+    component: MemoryPage,
+    group: "settings",
+    ownsTitle: true,
+  },
+  {
+    id: "system",
+    order: 10,
+    labelKey: "settings.section.system",
+    label: "System",
+    icon: Monitor,
+    component: SystemPage,
+    group: "computer",
+    ownsTitle: true,
+  },
+  {
+    id: "developer",
+    order: 11,
+    labelKey: "settings.section.developer",
+    label: "Developer",
+    icon: Code,
+    component: DeveloperPage,
+    group: "computer",
+    ownsTitle: true,
   },
   {
     id: "agent-presets",
-    order: 10,
+    order: 20,
     labelKey: "settings.section.agents",
     label: "Agents",
     icon: Cpu,
-    component: PresetsSection,
-    group: "settings",
-  },
-  {
-    id: "models",
-    order: 20,
-    labelKey: "settings.section.providers",
-    label: "Providers",
-    icon: SquareStack,
-    component: ModelsSection,
-    group: "settings",
+    component: AgentsPage,
+    group: "customize",
+    ownsTitle: true,
   },
   {
     id: "skills",
-    order: 25,
+    order: 21,
     labelKey: "settings.section.skills",
     label: "Skills",
     icon: ScrollText,
-    component: SkillsSection,
+    component: SkillsSettingsPage,
     group: "customize",
     ownsTitle: true,
   },
   {
     id: "mcp",
-    order: 30,
+    order: 22,
     labelKey: "settings.section.mcp",
     label: "Connectors",
     icon: Plug,
-    component: McpSection,
+    component: ConnectorsPage,
     group: "customize",
     ownsTitle: true,
   },
   {
     id: "plugins",
-    order: 40,
+    order: 23,
     labelKey: "settings.section.plugins",
     label: "Plugins",
     icon: Puzzle,
-    component: PluginsSection,
+    component: PluginsSettingsPage,
     group: "customize",
     ownsTitle: true,
+  },
+  {
+    id: "models",
+    order: 30,
+    labelKey: "settings.section.providers",
+    label: "API keys",
+    icon: KeyRound,
+    component: ModelsSection,
+    group: "platform",
   },
 ];
 

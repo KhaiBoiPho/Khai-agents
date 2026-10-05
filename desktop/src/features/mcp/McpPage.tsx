@@ -26,6 +26,7 @@ import type {
 import type { ClientRuntime } from "../../rpc/contracts";
 import styles from "../management/ManagementWorkspace.module.css";
 import { useMcpCatalog } from "./useMcpCatalog";
+import { Select } from "../../components/Select";
 
 type Transport = "stdio" | "sse" | "streamableHttp";
 
@@ -393,9 +394,9 @@ export function McpPage({
         </header>
         <div className={styles.formGrid}>
           <Field label="Name"><input value={draft.name} onChange={(event) => update(setDraft, "name", event.target.value)} /></Field>
-          <Field label="Scope"><select value={draft.scope} onChange={(event) => update(setDraft, "scope", event.target.value as ConfigScope)}><option value="user">User</option><option value="project" disabled={!canUseProjectScope}>This project</option></select></Field>
-          <Field label="Transport"><select value={draft.transport} onChange={(event) => update(setDraft, "transport", event.target.value as Transport)}><option value="stdio">Local stdio</option><option value="streamableHttp">Streamable HTTP</option><option value="sse">SSE</option></select></Field>
-          <Field label="Approval"><select value={draft.approvalMode} onChange={(event) => update(setDraft, "approvalMode", event.target.value as Draft["approvalMode"])}><option value="writes">Ask for writes</option><option value="prompt">Always ask</option><option value="auto">Use global policy</option><option value="approve">Approved when globally allowed</option></select></Field>
+          <Field label="Scope"><Select value={draft.scope} onChange={(event) => update(setDraft, "scope", event.target.value as ConfigScope)}><option value="user">User</option><option value="project" disabled={!canUseProjectScope}>This project</option></Select></Field>
+          <Field label="Transport"><Select value={draft.transport} onChange={(event) => update(setDraft, "transport", event.target.value as Transport)}><option value="stdio">Local stdio</option><option value="streamableHttp">Streamable HTTP</option><option value="sse">SSE</option></Select></Field>
+          <Field label="Approval"><Select value={draft.approvalMode} onChange={(event) => update(setDraft, "approvalMode", event.target.value as Draft["approvalMode"])}><option value="writes">Ask for writes</option><option value="prompt">Always ask</option><option value="auto">Use global policy</option><option value="approve">Approved when globally allowed</option></Select></Field>
           {draft.transport === "stdio" ? (
             <>
               <Field label="Command" wide><input value={draft.command} onChange={(event) => update(setDraft, "command", event.target.value)} placeholder="Executable or absolute path" /></Field>
@@ -408,7 +409,7 @@ export function McpPage({
           ) : (
             <>
               <Field label="URL" wide><input value={draft.url} onChange={(event) => update(setDraft, "url", event.target.value)} placeholder="https://example.com/mcp" /></Field>
-              <Field label="Authentication"><select value={draft.auth} onChange={(event) => update(setDraft, "auth", event.target.value as Draft["auth"])}><option value="none">None / configured headers</option><option value="oauth">OAuth</option></select></Field>
+              <Field label="Authentication"><Select value={draft.auth} onChange={(event) => update(setDraft, "auth", event.target.value as Draft["auth"])}><option value="none">None / configured headers</option><option value="oauth">OAuth</option></Select></Field>
               <Field label="Headers from environment" wide><textarea rows={2} value={draft.headerEnv} onChange={(event) => update(setDraft, "headerEnv", event.target.value)} placeholder="Authorization=MY_HEADER_ENV" /></Field>
               <Field label="URL parameters from environment" wide><textarea rows={2} value={draft.urlParamEnv} onChange={(event) => update(setDraft, "urlParamEnv", event.target.value)} placeholder="apiKey=MY_API_KEY" /></Field>
             </>

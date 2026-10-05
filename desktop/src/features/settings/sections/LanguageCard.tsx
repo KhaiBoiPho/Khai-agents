@@ -8,6 +8,7 @@ import { useTranslation } from "react-i18next";
 
 import { LOCALES, setLocale, type Locale } from "../../../app/i18n";
 import styles from "../../management/ManagementWorkspace.module.css";
+import { Select } from "../../../components/Select";
 
 export function LanguageCard() {
   const { t, i18n } = useTranslation();
@@ -24,7 +25,7 @@ export function LanguageCard() {
       <div className={styles.formGrid}>
         <label>
           {t("settings.language.label", "Interface language")}
-          <select
+          <Select
             value={
               LOCALES.some((locale) => locale.value === i18n.language)
                 ? i18n.language
@@ -37,7 +38,7 @@ export function LanguageCard() {
                 {locale.label}
               </option>
             ))}
-          </select>
+          </Select>
         </label>
       </div>
       <p className={styles.note}>

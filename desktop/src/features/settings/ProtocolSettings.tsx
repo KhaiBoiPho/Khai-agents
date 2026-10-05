@@ -5,6 +5,7 @@ import type {
 } from "../../generated/app-server";
 import type { Draft } from "./connectionDraft";
 import styles from "./ConnectionSettings.module.css";
+import { Select } from "../../components/Select";
 
 export function ProtocolSettings({
   draft,
@@ -18,7 +19,7 @@ export function ProtocolSettings({
     <div className={styles.wide}>
       <label>
         {t("provider.protocol", "API protocol")}
-        <select
+        <Select
           value={draft.protocol}
           onChange={(event) => {
             const protocol = event.target.value as ProviderProtocol;
@@ -42,11 +43,11 @@ export function ProtocolSettings({
           <option value="openai_chat">OpenAI Chat Completions</option>
           <option value="openai_responses">OpenAI Responses</option>
           <option value="anthropic_messages">Anthropic Messages</option>
-        </select>
+        </Select>
       </label>
       <label>
         {t("provider.auth", "Authentication")}
-        <select
+        <Select
           value={draft.auth}
           onChange={(event) =>
             onChange({
@@ -67,7 +68,7 @@ export function ProtocolSettings({
           <option value="none" disabled={draft.adapter === "anthropic"}>
             {t("provider.noAuth", "No authentication")}
           </option>
-        </select>
+        </Select>
       </label>
       <CompatEditor
         protocol={draft.protocol}
@@ -155,7 +156,7 @@ export function CompatEditor({
             .map((field) => (
               <label key={field.key}>
                 {t(`provider.compat.${field.key}`, field.label)}
-                <select
+                <Select
                   value={
                     value[field.key] == null ? "" : String(value[field.key])
                   }
@@ -188,7 +189,7 @@ export function CompatEditor({
                         : candidate}
                     </option>
                   ))}
-                </select>
+                </Select>
               </label>
             ))}
         </div>

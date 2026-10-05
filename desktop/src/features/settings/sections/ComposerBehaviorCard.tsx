@@ -11,6 +11,7 @@ import {
 } from "../../../app/composerBehavior";
 import { useTranslation } from "react-i18next";
 import styles from "../../management/ManagementWorkspace.module.css";
+import { Select } from "../../../components/Select";
 
 const BEHAVIOR_LABELS: Record<BusyEnterBehavior, string> = {
   steer: "Steer the active Turn",
@@ -33,7 +34,7 @@ export function ComposerBehaviorCard() {
       <div className={styles.formGrid}>
         <label>
           While a Turn is running, Enter…
-          <select
+          <Select
             value={busyEnter}
             onChange={(event) =>
               setBusyEnter(event.target.value as BusyEnterBehavior)
@@ -44,7 +45,7 @@ export function ComposerBehaviorCard() {
                 {BEHAVIOR_LABELS[behavior]}
               </option>
             ))}
-          </select>
+          </Select>
         </label>
       </div>
       <p className={styles.note}>

@@ -11,6 +11,7 @@ import type { AgentPresetEntry, SettingsSnapshot } from "../../../generated/app-
 import type { SettingsSectionProps } from "../settingsSections";
 import { useTranslation } from "react-i18next";
 import styles from "../../management/ManagementWorkspace.module.css";
+import { Select } from "../../../components/Select";
 
 function configuredDefaultPreset(settings: SettingsSnapshot | null): string {
   const agents = settings?.agents;
@@ -81,7 +82,7 @@ export function DefaultPresetCard({
       <div className={styles.formGrid}>
         <label>
           Default for new Sessions
-          <select
+          <Select
             value={selection}
             onChange={(event) => setDraft(event.target.value)}
           >
@@ -94,7 +95,7 @@ export function DefaultPresetCard({
                 {entry.name} [{entry.trust}]
               </option>
             ))}
-          </select>
+          </Select>
         </label>
       </div>
       <p className={styles.note}>

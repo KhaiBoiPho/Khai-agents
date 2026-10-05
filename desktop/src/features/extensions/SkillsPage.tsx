@@ -10,6 +10,7 @@ import type { ClientRuntime } from "../../rpc/contracts";
 import styles from "../management/ManagementWorkspace.module.css";
 import { MarkdownContent } from "../thread/MarkdownContent";
 import { useSkillManagement } from "./useSkillManagement";
+import { Select } from "../../components/Select";
 
 interface SkillsPageProps {
   runtime: ClientRuntime;
@@ -59,7 +60,7 @@ export function SkillsPage({ runtime, project, onCreateSkill }: SkillsPageProps)
         <div className={styles.formActions}>
           <label className={styles.compactSelect}>
             <span>Store changes in</span>
-            <select
+            <Select
               aria-label="Skill configuration scope"
               title="Controls the import destination and enablement policy layer"
               value={scope}
@@ -67,7 +68,7 @@ export function SkillsPage({ runtime, project, onCreateSkill }: SkillsPageProps)
             >
               <option value="project">This project</option>
               <option value="user">User settings</option>
-            </select>
+            </Select>
           </label>
           <button
             className={styles.secondaryButton}

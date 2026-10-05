@@ -206,3 +206,8 @@
   border: none;
   padding: 0;
 }
+
+/* Leave the close button its own strip above every page header. */
+.content {
+  padding-top: 52px;
+}

@@ -19,6 +19,7 @@ import {
 import { confirmAction } from "../../../platform/confirmAction";
 import { useTranslation } from "react-i18next";
 import styles from "../../management/ManagementWorkspace.module.css";
+import { Select } from "../../../components/Select";
 
 interface PermissionCardProps {
   settings: SettingsSnapshot | null;
@@ -85,7 +86,7 @@ export function PermissionCard({
       <div className={styles.formGrid}>
         <label>
           Default Session access
-          <select
+          <Select
             value={accessPreset ?? ""}
             onChange={(event) => {
               const value = event.target.value;
@@ -104,7 +105,7 @@ export function PermissionCard({
                 {option.label}
               </option>
             ))}
-          </select>
+          </Select>
         </label>
       </div>
       <p className={styles.note}>

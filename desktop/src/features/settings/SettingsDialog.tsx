@@ -24,10 +24,13 @@ import {
   type SettingsSectionId,
 } from "./settingsSections";
 import styles from "./SettingsDialog.module.css";
+import { Select } from "../../components/Select";
 
 const RAIL_GROUPS = [
   { id: "settings", labelKey: "settings.group.settings", label: "Settings" },
+  { id: "computer", labelKey: "settings.group.computer", label: "This computer" },
   { id: "customize", labelKey: "settings.group.customize", label: "Customize" },
+  { id: "platform", labelKey: "settings.group.platform", label: "Platform" },
 ] as const;
 
 interface SettingsDialogProps {
@@ -172,17 +175,17 @@ export function SettingsDialog({
           <footer className={styles.railFooter}>
             <label className={styles.scope}>
               {t("settings.writeTo", "Write to")}
-              <select
+              <Select
                 value={effectiveScope}
                 onChange={(event) =>
                   setScope(event.target.value as ConfigScope)
                 }
               >
-                <option value="user">{t("settings.scope.user", "User config")}</option>
+                <option value="user">{t("settings.scope.userShort", "User")}</option>
                 <option value="project" disabled={!canWriteProject}>
-                  {t("settings.scope.project", "Selected project")}
+                  {t("settings.scope.projectShort", "Project")}
                 </option>
-              </select>
+              </Select>
             </label>
             <button
               className={styles.documentAction}

@@ -18,6 +18,7 @@ import type {
 import { ConnectionVerification } from "../ConnectionVerification";
 import type { ConnectionCatalogController } from "../useConnectionCatalog";
 import styles from "../../management/ManagementWorkspace.module.css";
+import { Select } from "../../../components/Select";
 
 interface AgentDraft {
   defaultConnection: string;
@@ -179,7 +180,7 @@ export function AgentModelCard({
       <div className={styles.formGrid}>
         <label>
           Provider connection
-          <select
+          <Select
             value={agents.defaultConnection}
             onChange={(event) =>
               updateAgents({
@@ -194,7 +195,7 @@ export function AgentModelCard({
                 {connection.label}
               </option>
             ))}
-          </select>
+          </Select>
         </label>
         <ModelField
           label="Model"
@@ -236,7 +237,7 @@ export function AgentModelCard({
         <div className={styles.formGrid}>
           <label>
             Planning connection
-            <select
+            <Select
               value={agents.planningConnection}
               onChange={(event) =>
                 updateAgents({
@@ -251,7 +252,7 @@ export function AgentModelCard({
                   {connection.label}
                 </option>
               ))}
-            </select>
+            </Select>
           </label>
           <ModelField
             label="Planning model"
@@ -266,7 +267,7 @@ export function AgentModelCard({
           />
           <label>
             Coding & implementation connection
-            <select
+            <Select
               value={agents.implementationConnection}
               onChange={(event) =>
                 updateAgents({
@@ -281,7 +282,7 @@ export function AgentModelCard({
                   {connection.label}
                 </option>
               ))}
-            </select>
+            </Select>
           </label>
           <ModelField
             label="Coding & implementation model"
@@ -421,7 +422,7 @@ function EffortField({
   return (
     <label>
       Reasoning effort
-      <select
+      <Select
         aria-label="Reasoning effort"
         value={value}
         onChange={(event) => onChange(event.target.value)}
@@ -431,7 +432,7 @@ function EffortField({
             {option.label}
           </option>
         ))}
-      </select>
+      </Select>
       <small>
         {model
           ? efforts.length

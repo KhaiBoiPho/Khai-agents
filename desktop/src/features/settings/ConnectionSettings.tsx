@@ -26,6 +26,7 @@ import { ProtocolSettings } from "./ProtocolSettings";
 import { ConnectionProbe } from "./ConnectionProbe";
 import { ProviderLogin } from "./ProviderLogin";
 import styles from "./ConnectionSettings.module.css";
+import { Select } from "../../components/Select";
 
 interface ConnectionSettingsProps {
   controller: ConnectionCatalogController;
@@ -289,7 +290,7 @@ export function ConnectionSettings({
         </div>
         <div className={styles.addActions}>
           <label className={styles.addSelect}>
-            <select
+            <Select
               aria-label="Add provider"
               value=""
               disabled={busy || saving}
@@ -308,7 +309,7 @@ export function ConnectionSettings({
                     {template.label} · {template.local ? "local" : "cloud"}
                   </option>
                 ))}
-            </select>
+            </Select>
           </label>
           <button
             type="button"
@@ -673,7 +674,7 @@ export function ConnectionSettings({
                     ) : null}
                     <label>
                       Adapter
-                      <select
+                      <Select
                         value={editing.adapter}
                         onChange={(event) =>
                           setEditing({
@@ -684,11 +685,11 @@ export function ConnectionSettings({
                       >
                         <option value="openai_compat">OpenAI compatible</option>
                         <option value="anthropic">Anthropic native</option>
-                      </select>
+                      </Select>
                     </label>
                     <label>
                       Model catalog
-                      <select
+                      <Select
                         value={editing.modelCatalog}
                         onChange={(event) =>
                           setEditing({
@@ -703,7 +704,7 @@ export function ConnectionSettings({
                         <option value="openai">OpenAI compatible</option>
                         <option value="anthropic">Anthropic</option>
                         <option value="manual">Manual list</option>
-                      </select>
+                      </Select>
                     </label>
 
                     {editingExisting ? (

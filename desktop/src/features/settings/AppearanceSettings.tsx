@@ -18,6 +18,7 @@ import { parseVsCodeTheme, ThemeImportError } from "../../app/importedTheme";
 import { useTranslation } from "react-i18next";
 import styles from "../management/ManagementWorkspace.module.css";
 import modeStyles from "./AppearanceSettings.module.css";
+import { Select } from "../../components/Select";
 
 // The dsh tri-state: the three modes everyone reaches for, as cards. The
 // full palette list (Paper, Midnight, Claude, …) stays in the advanced
@@ -153,7 +154,7 @@ export function AppearanceSettings() {
             return (
               <label key={setting.key} htmlFor={id}>
                 {label}
-                <select
+                <Select
                   id={id}
                   value={value as ThemePreference}
                   onChange={(event) =>
@@ -174,7 +175,7 @@ export function AppearanceSettings() {
                       )}
                     </option>
                   ))}
-                </select>
+                </Select>
               </label>
             );
           }
@@ -222,7 +223,7 @@ export function AppearanceSettings() {
                 }
               />
               {installed.length > 0 ? (
-                <select
+                <Select
                   aria-label={t(
                     "settings.appearance.addInstalledFont",
                     "Add an installed font",
@@ -263,7 +264,7 @@ export function AppearanceSettings() {
                       </optgroup>
                     );
                   })}
-                </select>
+                </Select>
               ) : null}
             </label>
           );
