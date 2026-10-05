@@ -292,3 +292,14 @@
 .sessionButton {
   grid-template-columns: 9px minmax(0, 1fr) auto auto;
 }
+
+/* Plain rows: the status dot only shows while something needs attention. */
+.beacon:not([data-status="running"]):not([data-status="failed"]):not([data-status="waiting"]) {
+  display: none;
+}
+
+.sessionButton {
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  gap: 8px;
+  padding-left: 8px;
+}

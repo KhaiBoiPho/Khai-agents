@@ -1,5 +1,8 @@
 import {
   BriefcaseBusiness,
+  CalendarDays,
+  ListTodo,
+  SquarePen,
   ChevronRight,
   ChevronsUpDown,
   CircleGauge,
@@ -26,12 +29,14 @@ import type { Project, Thread } from "../../generated/app-server";
 import type { DesktopDestination } from "../../app/useDesktopUi";
 import type { SidecarStatus } from "../../rpc/contracts";
 import { SessionRow } from "./SessionRow";
-import { groupByDay, isChatsProject } from "../../app/chats";
+import { isChatsProject } from "../../app/chats";
 import { useThreadMarks } from "../../app/threadMarks";
 import { useProjectDisclosure } from "./useProjectDisclosure";
 import { useTranslation } from "react-i18next";
 
 import styles from "./DesktopSidebar.module.css";
+
+export type SidebarPage = "calendar" | "plan" | "documents" | "notes";
 
 interface DesktopSidebarProps {
   projects: Project[];
@@ -50,8 +55,8 @@ interface DesktopSidebarProps {
   onHide(): void;
   homeOpen: boolean;
   onShowHome(): void;
-  activePage?: "documents" | "notes" | null;
-  onOpenPage(page: "documents" | "notes"): void;
+  activePage?: SidebarPage | null;
+  onOpenPage(page: SidebarPage): void;
   onCreateThreadIn(projectId: string): void;
   onQueryChange(query: string): void;
   onOpenProject(): void;
@@ -192,12 +197,12 @@ export function DesktopSidebar({
       (thread): thread is Thread =>
         Boolean(thread) && !marks.pinned.includes(thread!.id),
     );
-  const chatDays = groupByDay(
-    visibleThreads.filter(
+  const recentChats = visibleThreads
+    .filter(
       (thread) =>
         chatsProjectIds.has(thread.projectId) && !marks.pinned.includes(thread.id),
-    ),
-  );
+    )
+    .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
   const row = (thread: Thread) => (
     <SessionRow
       key={thread.id}
@@ -245,76 +250,83 @@ export function DesktopSidebar({
     return () => window.removeEventListener("keydown", handleShortcut);
   }, [busy, canCreateThread, onCreateThread]);
 
+  const navItem = (page: SidebarPage, icon: React.ReactNode, label: string) => (
+    <button type="button" data-active={activePage === page} onClick={() => onOpenPage(page)}>
+      {icon}
+      {label}
+    </button>
+  );
+
   return (
     <aside className={styles.sidebar} aria-label="Projects and Sessions">
       <div className={styles.iconRow}>
         <strong className={styles.brandName}>Khai-Agents</strong>
-        <button
-          type="button"
-          onClick={onHide}
-          aria-label="Hide sidebar"
-          title="Hide sidebar (Ctrl+B)"
-        >
-          <PanelLeftClose size={16} />
-        </button>
+        <span className={styles.topActions}>
+          <button
+            type="button"
+            onClick={() => {
+              setSearchOpen((open) => !open || Boolean(query));
+              requestAnimationFrame(() => searchRef.current?.focus());
+            }}
+            aria-label={t("sidebar.searchSessions", "Search chats")}
+            title="Search chats (Ctrl+K)"
+          >
+            <Search size={16} />
+          </button>
+          <button
+            type="button"
+            onClick={onHide}
+            aria-label="Hide sidebar"
+            title="Hide sidebar (Ctrl+B)"
+          >
+            <PanelLeftClose size={16} />
+          </button>
+        </span>
       </div>
 
-      <label className={styles.search}>
-        <Search size={14} strokeWidth={1.8} aria-hidden="true" />
-        <span className={styles.srOnly}>{t("sidebar.searchSessions", "Search Sessions")}</span>
-        <input
-          ref={searchRef}
-          value={query}
-          onChange={(event) => onQueryChange(event.target.value)}
-          onKeyDown={(event) => {
-            if (event.key === "Escape") {
-              onQueryChange("");
-              event.currentTarget.blur();
-            }
-          }}
-          placeholder={t("sidebar.search", "Search")}
-          spellCheck={false}
-        />
-      </label>
+      {searchOpen || query ? (
+        <label className={styles.search}>
+          <Search size={14} strokeWidth={1.8} aria-hidden="true" />
+          <span className={styles.srOnly}>{t("sidebar.searchSessions", "Search chats")}</span>
+          <input
+            ref={searchRef}
+            value={query}
+            onChange={(event) => onQueryChange(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Escape") {
+                onQueryChange("");
+                setSearchOpen(false);
+                event.currentTarget.blur();
+              }
+            }}
+            placeholder={t("sidebar.search", "Search chats")}
+            spellCheck={false}
+          />
+        </label>
+      ) : null}
 
       <nav className={styles.primaryNav} aria-label="Main">
         <button
           type="button"
           className={styles.newButton}
+          data-active={homeOpen}
           onClick={onCreateThread}
-          disabled={busy || !canCreateThread}
           title="New chat (Ctrl+N)"
         >
-          <Plus size={15} />
-          {t("sidebar.new", "New")}
+          <SquarePen size={15} />
+          {t("sidebar.newChat", "New chat")}
         </button>
-        <button type="button" data-active={homeOpen} onClick={onShowHome}>
-          <FolderClosed size={15} />
-          {t("sidebar.projects", "Projects")}
-        </button>
-        <button
-          type="button"
-          data-active={activePage === "documents"}
-          onClick={() => onOpenPage("documents")}
-        >
-          <FileText size={15} />
-          {t("sidebar.documents", "Documents")}
-        </button>
-        <button
-          type="button"
-          data-active={activePage === "notes"}
-          onClick={() => onOpenPage("notes")}
-        >
-          <NotebookPen size={15} />
-          {t("sidebar.notes", "Notes")}
-        </button>
+        {navItem("calendar", <CalendarDays size={15} />, t("sidebar.calendar", "Calendar"))}
+        {navItem("plan", <ListTodo size={15} />, t("sidebar.plan", "Plan"))}
+        {navItem("documents", <FileText size={15} />, t("sidebar.documents", "Documents"))}
+        {navItem("notes", <NotebookPen size={15} />, t("sidebar.notes", "Notes"))}
         <button type="button" onClick={() => onOpenSettings("skills")}>
           <BriefcaseBusiness size={15} />
           {t("sidebar.customize", "Customize")}
         </button>
       </nav>
 
-      <nav className={styles.projectList} aria-label="Session history">
+      <nav className={styles.projectList} aria-label="Chat history">
         {pinnedThreads.length ? (
           <section className={styles.chatSection}>
             <p className={styles.chatHeading}>Pinned</p>
@@ -327,102 +339,102 @@ export function DesktopSidebar({
             {favoriteThreads.map(row)}
           </section>
         ) : null}
-        {projects.length === 0 ? (
-          <button className={styles.emptyProject} type="button" onClick={onOpenProject}>
-            <FolderOpen size={18} />
-            <span>
-              <strong>{t("sidebar.openFolder", "Open a local folder")}</strong>
-              <small>{t("sidebar.openFolderHint", "Your CLI Sessions will appear here.")}</small>
-            </span>
-          </button>
-        ) : normalizedQuery && projectGroups.length === 0 ? (
-          <div className={styles.noResults}>
-            <Search size={16} />
-            <strong>{t("sidebar.noResults", "No matching Sessions")}</strong>
-            <small>{t("sidebar.noResultsHint", "Search by title, project, or workspace path.")}</small>
+
+        <section className={styles.chatSection}>
+          <div className={styles.sectionRow}>
+            <p className={styles.chatHeading}>Projects</p>
+            <button
+              type="button"
+              onClick={onOpenProject}
+              disabled={busy}
+              aria-label="Add a project folder"
+              title="Add a project folder"
+            >
+              <Plus size={14} />
+            </button>
           </div>
-        ) : (
-          projectGroups.map((group) => {
-            const project = group.project;
-            const expanded =
-              Boolean(normalizedQuery) || disclosure.isExpanded(group.key);
-            return (
-              <section className={styles.projectGroup} key={group.key}>
-                <div className={styles.groupHeader}>
-                  <button
-                    type="button"
-                    className={styles.groupName}
-                    data-active={group.active}
-                    aria-expanded={expanded}
-                    aria-controls={`project-sessions-${group.key}`}
-                    onClick={() => {
-                      if (project && project.id !== selectedProjectId) {
-                        disclosure.expand(group.key);
-                        onSelectProject(project.id);
-                      } else {
-                        disclosure.toggle(group.key);
-                      }
-                    }}
-                    title={project?.canonicalPath ?? group.description}
-                  >
-                    <span>{group.displayName}</span>
-                    {project?.trustState === "untrusted" ? (
-                      <ShieldAlert
-                        size={12}
-                        className={styles.untrusted}
-                        aria-label="Project not trusted"
-                      />
-                    ) : null}
-                    <ChevronRight
-                      size={13}
-                      className={styles.groupChevron}
-                      data-expanded={expanded}
-                      aria-hidden="true"
-                    />
-                  </button>
-                  {project ? (
+          {projectGroups.length === 0 ? (
+            <p className={styles.emptyLine}>
+              {normalizedQuery ? "No matching projects" : "No projects"}
+            </p>
+          ) : (
+            projectGroups.map((group) => {
+              const project = group.project;
+              const expanded =
+                Boolean(normalizedQuery) || disclosure.isExpanded(group.key);
+              return (
+                <section className={styles.projectGroup} key={group.key}>
+                  <div className={styles.groupHeader}>
                     <button
                       type="button"
-                      className={styles.groupAdd}
-                      onClick={() => onCreateThreadIn(project.id)}
-                      disabled={busy || !projectCanExecute(project)}
-                      aria-label={`New chat in ${group.displayName}`}
-                      title={`New chat in ${group.displayName}`}
+                      className={styles.groupName}
+                      data-active={group.active}
+                      aria-expanded={expanded}
+                      aria-controls={`project-sessions-${group.key}`}
+                      onClick={() => {
+                        if (project && project.id !== selectedProjectId) {
+                          disclosure.expand(group.key);
+                          onSelectProject(project.id);
+                        } else {
+                          disclosure.toggle(group.key);
+                        }
+                      }}
+                      title={project?.canonicalPath ?? group.description}
                     >
-                      <Plus size={14} />
+                      {expanded ? <FolderOpen size={15} /> : <FolderClosed size={15} />}
+                      <span>{group.displayName}</span>
+                      {project?.trustState === "untrusted" ? (
+                        <ShieldAlert
+                          size={12}
+                          className={styles.untrusted}
+                          aria-label="Project not trusted"
+                        />
+                      ) : null}
                     </button>
-                  ) : null}
-                </div>
+                    {project ? (
+                      <button
+                        type="button"
+                        className={styles.groupAdd}
+                        onClick={() => onCreateThreadIn(project.id)}
+                        disabled={busy || !projectCanExecute(project)}
+                        aria-label={`New chat in ${group.displayName}`}
+                        title={`New chat in ${group.displayName}`}
+                      >
+                        <Plus size={14} />
+                      </button>
+                    ) : null}
+                  </div>
+                  <ProjectSessions
+                    id={`project-sessions-${group.key}`}
+                    expanded={expanded}
+                    threads={group.threads}
+                    selectedThreadId={selectedThreadId}
+                    searching={Boolean(normalizedQuery)}
+                    busy={busy}
+                    onSelectThread={(threadId) => {
+                      disclosure.expand(group.key);
+                      onSelectThread(threadId);
+                    }}
+                    onRenameThread={onRenameThread}
+                    onArchiveThread={onArchiveThread}
+                    onDeleteThread={onDeleteThread}
+                  />
+                </section>
+              );
+            })
+          )}
+        </section>
 
-                <ProjectSessions
-                  id={`project-sessions-${group.key}`}
-                  expanded={expanded}
-                  threads={group.threads}
-                  selectedThreadId={selectedThreadId}
-                  searching={Boolean(normalizedQuery)}
-                  busy={busy}
-                  onSelectThread={(threadId) => {
-                    disclosure.expand(group.key);
-                    onSelectThread(threadId);
-                  }}
-                  onRenameThread={onRenameThread}
-                  onArchiveThread={onArchiveThread}
-                  onDeleteThread={onDeleteThread}
-                />
-              </section>
-            );
-          })
-        )}
-        <button className={styles.addFolder} type="button" onClick={onOpenProject} disabled={busy}>
-          <Plus size={13} />
-          {t("sidebar.addFolder", "Add folder")}
-        </button>
-        {chatDays.map((day) => (
-          <section className={styles.chatSection} key={day.label}>
-            <p className={styles.chatHeading}>{day.label}</p>
-            {day.threads.map(row)}
-          </section>
-        ))}
+        <section className={styles.chatSection}>
+          <p className={styles.chatHeading}>Recents</p>
+          {recentChats.length ? (
+            recentChats.map(row)
+          ) : (
+            <p className={styles.emptyLine}>
+              {normalizedQuery ? "No matching chats" : "No chats yet"}
+            </p>
+          )}
+        </section>
       </nav>
 
       <AccountMenu

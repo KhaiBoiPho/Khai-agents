@@ -226,3 +226,53 @@
 .box button:disabled {
   opacity: 0.3;
 }
+
+/* Centered start: greeting, composer, then suggestions. */
+.home {
+  justify-content: center;
+  padding: 24px 24px 12vh;
+}
+
+.greeting {
+  justify-content: center;
+  margin: 0 auto 26px;
+  font-size: 1.7rem;
+  font-weight: var(--weight-medium);
+}
+
+.greetingMascot {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+}
+
+.composerArea {
+  margin-top: 0;
+}
+
+.suggestions {
+  display: flex;
+  width: min(720px, 100%);
+  flex-direction: column;
+  margin: 18px auto 0;
+}
+
+.suggestions button {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 10px 14px;
+  border-radius: var(--radius-md);
+  color: var(--text-secondary);
+  font-size: var(--text-base);
+  text-align: left;
+}
+
+.suggestions button svg {
+  color: var(--text-tertiary);
+}
+
+.suggestions button:hover {
+  background: var(--surface-hover);
+  color: var(--text-primary);
+}

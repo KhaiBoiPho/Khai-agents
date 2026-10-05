@@ -1,16 +1,19 @@
 import {
-  ChevronRight,
   ArrowUp,
   Folder,
   FolderPlus,
+  FolderSearch,
+  Globe,
   Laptop,
-  Sparkle,
+  ListTodo,
+  PenLine,
 } from "lucide-react";
 import { useMemo, useState } from "react";
 
 import type { Project } from "../../generated/app-server";
 import { isRecoveredHistoryProject } from "../../app/projectPresentation";
 import { isChatsProject } from "../../app/chats";
+import mascotUrl from "../../assets/khai-mascot.png";
 import { MOCK_ACCOUNT } from "../../mocks/preview";
 import { Dropdown } from "../../components/Dropdown";
 import styles from "./HomeView.module.css";
@@ -62,37 +65,10 @@ export function HomeView({
 
   return (
     <div className={styles.home}>
-      <div className={styles.column}>
-        <h2 className={styles.greeting}>
-          <Sparkle size={22} className={styles.mark} aria-hidden="true" />
-          Welcome back, {MOCK_ACCOUNT.name}
-        </h2>
-
-        <section className={styles.projects} aria-label="Projects">
-          <h3>Projects</h3>
-          {recent.length ? (
-            recent.slice(0, 8).map((project) => (
-              <button
-                type="button"
-                key={project.id}
-                className={styles.projectRow}
-                onClick={() => onOpenProject(project.id)}
-                title={project.canonicalPath}
-              >
-                <span className={styles.dot} aria-hidden="true" />
-                <span className={styles.projectName}>{project.displayName}</span>
-                <span className={styles.when}>{relativeTime(project.lastOpenedAt)}</span>
-                <ChevronRight size={15} />
-              </button>
-            ))
-          ) : (
-            <button type="button" className={styles.projectRow} onClick={onAddFolder}>
-              <FolderPlus size={15} />
-              <span className={styles.projectName}>Open a local folder</span>
-            </button>
-          )}
-        </section>
-      </div>
+      <h2 className={styles.greeting}>
+        <img src={mascotUrl} alt="" className={styles.greetingMascot} />
+        What's on your mind today, {MOCK_ACCOUNT.name}?
+      </h2>
 
       <div className={styles.composerArea}>
         <div className={styles.chips}>
@@ -183,9 +159,31 @@ export function HomeView({
           </p>
         ) : null}
       </div>
+      <div className={styles.suggestions}>
+        {SUGGESTIONS.map((suggestion) => {
+          const Icon = suggestion.icon;
+          return (
+            <button
+              type="button"
+              key={suggestion.label}
+              onClick={() => setPrompt(suggestion.prompt)}
+            >
+              <Icon size={16} />
+              {suggestion.label}
+            </button>
+          );
+        })}
+      </div>
     </div>
   );
 }
+
+const SUGGESTIONS = [
+  { label: "Explain a codebase", icon: FolderSearch, prompt: "Explain the structure of this project: " },
+  { label: "Write or edit", icon: PenLine, prompt: "Help me write " },
+  { label: "Search the web", icon: Globe, prompt: "Search the web for " },
+  { label: "Plan a task", icon: ListTodo, prompt: "Make a step-by-step plan to " },
+];
 
 function relativeTime(iso: string): string {
   const then = Date.parse(iso);

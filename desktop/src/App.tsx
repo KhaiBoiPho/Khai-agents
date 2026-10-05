@@ -22,6 +22,9 @@ import { DesktopSidebar } from "./features/navigation/DesktopSidebar";
 import { HomeView } from "./features/home/HomeView";
 import { DocumentsPage } from "./features/pages/DocumentsPage";
 import { NotesPage } from "./features/pages/NotesPage";
+import { CalendarPage } from "./features/pages/CalendarPage";
+import { PlanPage } from "./features/pages/PlanPage";
+import type { SidebarPage } from "./features/navigation/DesktopSidebar";
 import { useTranscriptMode } from "./features/thread/transcriptMode";
 import type { ClientRuntime } from "./rpc/contracts";
 import type { SkillInfo } from "./generated/app-server";
@@ -77,6 +80,13 @@ function LoadingSurface({
 
 const SIDEBAR_KEY = "khai-agents.sidebar-hidden";
 
+const PAGE_TITLES: Record<SidebarPage, string> = {
+  calendar: "Calendar",
+  plan: "Plan",
+  documents: "Documents",
+  notes: "Notes",
+};
+
 function readSidebarHidden(): boolean {
   try {
     return localStorage.getItem(SIDEBAR_KEY) === "1";
@@ -103,7 +113,7 @@ export function App({
   const { state, selectedProject, selectedThread } = controller;
   const [sidebarHidden, setSidebarHidden] = useState(readSidebarHidden);
   const [homeOpen, setHomeOpen] = useState(false);
-  const [page, setPage] = useState<"documents" | "notes" | null>(null);
+  const [page, setPage] = useState<SidebarPage | null>(null);
   useEffect(() => {
     try {
       localStorage.setItem(SIDEBAR_KEY, sidebarHidden ? "1" : "0");
@@ -305,10 +315,18 @@ export function App({
         {page ? (
           <>
             <header className={styles.titleSlot}>
-              <h1 id="thread-title">{page === "notes" ? "Notes" : "Documents"}</h1>
+              <h1 id="thread-title">{PAGE_TITLES[page]}</h1>
             </header>
             <section className={styles.threadViewport}>
-              {page === "notes" ? <NotesPage /> : <DocumentsPage />}
+              {page === "notes" ? (
+                <NotesPage />
+              ) : page === "calendar" ? (
+                <CalendarPage />
+              ) : page === "plan" ? (
+                <PlanPage />
+              ) : (
+                <DocumentsPage />
+              )}
             </section>
           </>
         ) : showHome ? (
