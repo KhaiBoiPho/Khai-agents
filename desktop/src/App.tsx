@@ -342,7 +342,8 @@ export function App({
                 aria-label={inspectorVisible ? "Close review panel" : "Open review panel"}
                 title={inspectorVisible ? "Close review panel" : "Open review panel"}
               >
-                {inspectorVisible ? <PanelRightClose size={17} /> : <PanelRight size={17} />}
+                {inspectorVisible ? <PanelRightClose size={16} /> : <PanelRight size={16} />}
+                Review
               </button>
             ) : null}
 

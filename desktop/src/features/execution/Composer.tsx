@@ -1,4 +1,5 @@
 import {
+  Atom,
   Check,
   ChevronDown,
   CornerDownLeft,
@@ -6,6 +7,7 @@ import {
   FolderPlus,
   FolderX,
   GitFork,
+  Globe,
   Github,
   Laptop,
   Mic,
@@ -56,6 +58,8 @@ import styles from "./Composer.module.css";
 import { useDictation } from "./useDictation";
 import { usePromptDraft } from "./usePromptDraft";
 import { isRecoveredHistoryProject } from "../../app/projectPresentation";
+import mascotUrl from "../../assets/khai-mascot.png";
+import { MOCK_ACCOUNT } from "../../mocks/preview";
 import { ModelPicker } from "./ModelPicker";
 import { ContextRing } from "./ContextRing";
 
@@ -177,6 +181,20 @@ export function Composer({
     initialLaunch?.skillIds ?? [],
   );
   const [deliveryNotice, setDeliveryNotice] = useState<string | null>(null);
+  const [searchOn, setSearchOn] = useState(false);
+  const executionDefaults = executionTarget(thread, settings);
+  const deepThinkOn = DEEP_EFFORTS.has(
+    (thread?.reasoningEffort ?? executionDefaults.effort ?? "").toLocaleLowerCase(),
+  );
+  const toggleDeepThink = () => {
+    if (!executionDefaults.connection || !executionDefaults.model) return;
+    onModelChange(
+      executionDefaults.connection,
+      executionDefaults.model,
+      deepThinkOn ? "auto" : "high",
+      thread?.contextWindow ?? null,
+    );
+  };
   const dictation = useDictation({
     runtime,
     onTranscript: insertDictation,
@@ -292,10 +310,9 @@ export function Composer({
       return;
     }
     record(value);
-    const executionPrompt = withContextFiles(
-      value,
-      attachments,
-      thread?.workspacePath,
+    const executionPrompt = withSearch(
+      withContextFiles(value, attachments, thread?.workspacePath),
+      searchOn,
     );
     const selectable = new Set(skillCatalog.activeSkills.map((skill) => skill.id));
     const selectedIds = selectedSkillIds.filter((skillId) =>
@@ -323,10 +340,9 @@ export function Composer({
       await submit();
       return;
     }
-    const executionPrompt = withContextFiles(
-      value,
-      attachments,
-      thread?.workspacePath,
+    const executionPrompt = withSearch(
+      withContextFiles(value, attachments, thread?.workspacePath),
+      searchOn,
     );
     const selectable = new Set(skillCatalog.activeSkills.map((skill) => skill.id));
     const selectedIds = selectedSkillIds.filter((skillId) =>
@@ -435,7 +451,16 @@ export function Composer({
     disabledReason;
 
   return (
-    <footer className={styles.region}>
+    <footer
+      className={styles.region}
+      data-centered={!conversationStarted || undefined}
+    >
+      {!conversationStarted ? (
+        <h2 className={styles.greeting}>
+          <img src={mascotUrl} alt="" className={styles.greetingMascot} />
+          Hi {MOCK_ACCOUNT.name}. How can I help?
+        </h2>
+      ) : null}
       <div className={styles.chips}>
         <span className={styles.chip} title="Runs on this machine">
           <Laptop size={13} />
@@ -479,6 +504,9 @@ export function Composer({
           >
             <FolderPlus size={14} />
           </button>
+        ) : null}
+        {conversationStarted ? (
+          <img src={mascotUrl} alt="" className={styles.mascot} />
         ) : null}
       </div>
       <div className={styles.composer}>
@@ -725,6 +753,28 @@ export function Composer({
               onOpenSettings ? () => onOpenSettings("plugins") : undefined
             }
           />
+          <button
+            type="button"
+            className={styles.toggle}
+            aria-pressed={deepThinkOn}
+            onClick={toggleDeepThink}
+            disabled={busy || !executionDefaults.model}
+            title="Think longer before answering (high reasoning effort)"
+          >
+            <Atom size={14} />
+            DeepThink
+          </button>
+          <button
+            type="button"
+            className={styles.toggle}
+            aria-pressed={searchOn}
+            onClick={() => setSearchOn((on) => !on)}
+            disabled={!editable}
+            title="Ask the agent to search the web for this message"
+          >
+            <Globe size={14} />
+            Search
+          </button>
           {dictation.available ? (
             <button
               className={styles.iconButton}
@@ -1101,4 +1151,36 @@ function ModeMenu({
       ) : null}
     </div>
   );
+}
+
+const DEEP_EFFORTS = new Set(["high", "xhigh", "max"]);
+
+/** The connection, model and effort a thread runs with, defaults included. */
+function executionTarget(
+  thread: Thread | null,
+  settings: SettingsSnapshot | null,
+): { connection: string | null; model: string | null; effort: string | null } {
+  const defaults = settings?.agents.defaults;
+  const record =
+    typeof defaults === "object" && defaults !== null && !Array.isArray(defaults)
+      ? (defaults as Record<string, unknown>)
+      : {};
+  const text = (value: unknown) =>
+    typeof value === "string" && value ? value : null;
+  return {
+    connection: thread?.connectionId ?? text(record.connection),
+    model: thread?.model ?? text(record.model),
+    effort: text(record.reasoningEffort) ?? text(record.reasoning_effort),
+  };
+}
+
+/**
+ * Search mode rides on the prompt: the agent is asked to use its web-search
+ * tools (the Firecrawl connector) for this one message.
+ */
+function withSearch(prompt: string, enabled: boolean): string {
+  if (!enabled) return prompt;
+  return `${prompt}
+
+Search the web with the available web-search tools (for example Firecrawl) before answering, and cite the sources you used.`;
 }

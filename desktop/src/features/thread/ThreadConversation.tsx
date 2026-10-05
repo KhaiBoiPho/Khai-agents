@@ -119,21 +119,7 @@ export function ThreadConversation({
     return (
       <div className={styles.conversationFrame}>
         <div className={styles.conversationScroller}>
-          <div className={styles.empty}>
-            <span className={styles.emptyRail} aria-hidden="true">
-              <i />
-              <i />
-              <i />
-            </span>
-            <h2>Start with a task.</h2>
-            <p>
-              Describe the outcome, the constraints, and how Khai-Agents should
-              verify the result.
-            </p>
-            <small>
-              Conversation, tools, approvals, and review stay in this Session.
-            </small>
-          </div>
+          {/* Empty threads show the centered composer and its greeting. */}
         </div>
       </div>
     );

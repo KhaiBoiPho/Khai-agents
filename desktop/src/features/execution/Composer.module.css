@@ -1088,3 +1088,64 @@
   width: 26px;
   height: 26px;
 }
+
+/* Empty thread: the composer sits mid-screen under a greeting, then drops
+   to the bottom once the conversation starts. */
+.region[data-centered] {
+  top: 50%;
+  bottom: auto;
+  padding-top: 0;
+  background: none;
+  transform: translateY(-62%);
+}
+
+.greeting {
+  display: flex;
+  width: var(--conversation-width);
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  margin: 0 auto 22px;
+  color: var(--text-primary);
+  font-size: var(--text-xl);
+  font-weight: var(--weight-medium);
+  pointer-events: auto;
+}
+
+.greetingMascot {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+}
+
+.mascot {
+  width: 30px;
+  height: 30px;
+  margin-left: auto;
+  border-radius: 50%;
+}
+
+/* DeepThink / Search pills. */
+.toggle {
+  display: inline-flex;
+  height: 26px;
+  align-items: center;
+  gap: 5px;
+  padding: 0 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-pill);
+  color: var(--text-secondary);
+  font-size: var(--text-xs);
+  white-space: nowrap;
+}
+
+.toggle:hover:not(:disabled) {
+  background: var(--surface-hover);
+  color: var(--text-primary);
+}
+
+.toggle[aria-pressed="true"] {
+  border-color: color-mix(in srgb, var(--signal) 55%, transparent);
+  background: var(--signal-soft);
+  color: var(--signal);
+}

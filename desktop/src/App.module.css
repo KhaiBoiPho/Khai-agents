@@ -265,3 +265,11 @@
   background: var(--surface-hover);
   color: var(--text-primary);
 }
+
+.reviewToggle {
+  display: inline-flex;
+  width: auto;
+  gap: 6px;
+  padding: 0 10px;
+  font-size: var(--text-sm);
+}
