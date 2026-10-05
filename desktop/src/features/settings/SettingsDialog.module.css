@@ -18,7 +18,7 @@
   height: min(700px, 90vh);
   overflow: hidden;
   border: 1px solid var(--border-subtle);
-  border-radius: 12px;
+  border-radius: var(--radius-lg);
   background: var(--surface-raised);
   box-shadow: 0 24px 64px rgb(0 0 0 / 0.28);
 }

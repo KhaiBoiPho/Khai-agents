@@ -1,6 +1,6 @@
 :root {
-  color: #202321;
-  background: #e4e9e5;
+  color: #0d0d0d;
+  background: #f2f2f2;
   color-scheme: light dark;
 
   /* Appearance preferences (src/app/appearance.ts) override the three
@@ -16,18 +16,18 @@
   --conversation-width: min(820px, 100%);
 
   font-family:
-    var(--font-ui-preferred) -apple-system, BlinkMacSystemFont, "SF Pro Text",
-    "Segoe UI Variable", "Segoe UI", Inter, sans-serif;
+    var(--font-ui-preferred) "Source Sans 3 Variable", "Source Sans 3",
+    -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   font-size: var(--font-size-base);
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
 
   --font-display:
-    ui-rounded, "SF Pro Rounded", "Avenir Next", "Segoe UI Variable Display",
-    -apple-system, BlinkMacSystemFont, sans-serif;
+    "Source Sans 3 Variable", "Source Sans 3", -apple-system,
+    BlinkMacSystemFont, sans-serif;
   --font-mono:
-    "SFMono-Regular", ui-monospace, "Cascadia Code", Consolas, monospace;
+    Inconsolata, ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
 
   /* Type scale.
      Every step is `rem`, so it resolves against the root font-size — which is
@@ -63,17 +63,18 @@
      than reading CSS. The steps are 12 / 14 / 16 / 18 px — no custom property,
      because nothing here could consume one. */
 
-  --surface-shell: #e4e9e5;
-  --surface-canvas: #f7f8f7;
-  --surface-sidebar: #eef1ef;
-  --surface-sidebar-strong: #e7ebe8;
+  /* Neutral greys with an orange accent, after cdesktop's palette. */
+  --surface-shell: #f2f2f2;
+  --surface-canvas: #ffffff;
+  --surface-sidebar: #f2f2f2;
+  --surface-sidebar-strong: #e8e8e8;
   --surface-raised: #ffffff;
-  --surface-overlay: rgb(255 255 255 / 88%);
-  --surface-hover: #e5e9e6;
-  --surface-selected: #dde3e0;
-  --surface-user: #edf0ef;
-  --surface-code: #f0f2f1;
-  --surface-inset: #e8ece9;
+  --surface-overlay: rgb(255 255 255 / 92%);
+  --surface-hover: #ebebeb;
+  --surface-selected: #e3e3e3;
+  --surface-user: #e9f3fc;
+  --surface-code: #f5f5f5;
+  --surface-inset: #ededed;
 
   /* The text ramp and the accents are darker than they look like they should
      be, because they carry 10–12px text on the shell and sidebar rather than on
@@ -84,26 +85,28 @@
      Spread, not merely darkened: pushing tertiary alone to 4.5:1 lands it on
      top of secondary and collapses three levels into two, so the whole ramp is
      restated at roughly 12.9 / 7.2 / 4.6 against the shell. */
-  --text-primary: #202321;
-  --text-secondary: #474b48;
-  --text-tertiary: #626964;
-  --text-inverse: #f8faf9;
+  --text-primary: #0d0d0d;
+  --text-secondary: #333333;
+  --text-tertiary: #636363;
+  --text-inverse: #ffffff;
   --text-on-accent: #ffffff;
 
-  --border-subtle: #dfe4e1;
-  --border-strong: #cfd6d2;
-  --border-emphasis: #aab4ae;
+  --border-subtle: #e0e0e0;
+  --border-strong: #d9d9d9;
+  --border-emphasis: #a6a6a6;
 
-  --signal: #4d5bd5;
-  --signal-strong: #4150bd;
-  --signal-soft: rgb(77 91 213 / 13%);
-  --signal-faint: rgb(77 91 213 / 7%);
-  --success: #3a725e;
-  --success-soft: #e7f1ed;
-  --attention: #935b2f;
-  --attention-soft: #f8eee6;
-  --danger: #ab4850;
-  --danger-soft: #f8e9eb;
+  /* The accent is the brand orange darkened until 11px text clears 4.5:1;
+     the soft tints keep the bright brand hue. */
+  --signal: #b8560f;
+  --signal-strong: #9a4710;
+  --signal-soft: rgb(234 122 42 / 14%);
+  --signal-faint: rgb(234 122 42 / 7%);
+  --success: #3d7a3a;
+  --success-soft: #e8f3e7;
+  --attention: #a35a06;
+  --attention-soft: #fbefe0;
+  --danger: #b83c3c;
+  --danger-soft: #fae8e8;
 
   /* The terminal keeps its own dark palette in both themes, the way an embedded
      terminal does everywhere else. It is stated here rather than inside the
@@ -118,19 +121,20 @@
   --text-terminal: #e6eae7;
   --text-terminal-dim: #9aa39c;
 
-  --radius-2xs: 4px;
-  --radius-xs: 7px;
-  --radius-sm: 10px;
-  --radius-md: 14px;
-  --radius-lg: 18px;
-  --radius-xl: 24px;
+  /* Tight corners, as in cdesktop. */
+  --radius-2xs: 2px;
+  --radius-xs: 3px;
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-xl: 10px;
   --radius-pill: 999px;
 
-  --shadow-soft: 0 1px 2px rgb(27 34 30 / 4%);
+  --shadow-soft: 0 1px 2px rgb(0 0 0 / 5%);
   --shadow-float:
-    0 18px 48px rgb(27 34 30 / 10%), 0 3px 10px rgb(27 34 30 / 5%);
+    0 12px 32px rgb(0 0 0 / 10%), 0 2px 6px rgb(0 0 0 / 6%);
   --shadow-menu:
-    0 18px 42px rgb(27 34 30 / 14%), 0 3px 10px rgb(27 34 30 / 7%);
+    0 12px 28px rgb(0 0 0 / 14%), 0 2px 6px rgb(0 0 0 / 8%);
 }
 
 /* System preference. The :not() lets an explicit light choice win here,
@@ -138,41 +142,41 @@
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     color-scheme: dark;
-    color: #f1f4f2;
-    background: #101211;
+    color: #f5f5f5;
+    background: #0a0a0a;
 
-    --surface-shell: #101211;
-    --surface-canvas: #181b19;
-    --surface-sidebar: #151816;
-    --surface-sidebar-strong: #1b1f1c;
-    --surface-raised: #222624;
-    --surface-overlay: rgb(29 33 30 / 88%);
-    --surface-hover: #292e2b;
-    --surface-selected: #303632;
-    --surface-user: #282d2a;
-    --surface-code: #151816;
-    --surface-inset: #121513;
+    --surface-shell: #0a0a0a;
+    --surface-canvas: #0a0a0a;
+    --surface-sidebar: #171717;
+    --surface-sidebar-strong: #1f1f1f;
+    --surface-raised: #1f1f1f;
+    --surface-overlay: rgb(23 23 23 / 92%);
+    --surface-hover: #262626;
+    --surface-selected: #333333;
+    --surface-user: #081c26;
+    --surface-code: #171717;
+    --surface-inset: #0f0f0f;
 
-    --text-primary: #f1f4f2;
-    --text-secondary: #b3bab5;
-    --text-tertiary: #919892;
-    --text-inverse: #151816;
+    --text-primary: #f5f5f5;
+    --text-secondary: #c4c4c4;
+    --text-tertiary: #8f8f8f;
+    --text-inverse: #0a0a0a;
     --text-on-accent: #ffffff;
 
-    --border-subtle: #2b302d;
-    --border-strong: #3a413d;
-    --border-emphasis: #59625d;
+    --border-subtle: #262626;
+    --border-strong: #333333;
+    --border-emphasis: #555555;
 
-    --signal: #929cff;
-    --signal-strong: #aab2ff;
-    --signal-soft: rgb(146 156 255 / 16%);
-    --signal-faint: rgb(146 156 255 / 8%);
-    --success: #6abb9c;
-    --success-soft: rgb(63 125 103 / 17%);
-    --attention: #d79058;
-    --attention-soft: rgb(178 100 43 / 14%);
-    --danger: #e4777e;
-    --danger-soft: rgb(179 64 73 / 14%);
+    --signal: #ea7a2a;
+    --signal-strong: #e79255;
+    --signal-soft: rgb(234 122 42 / 18%);
+    --signal-faint: rgb(234 122 42 / 9%);
+    --success: #54b04f;
+    --success-soft: rgb(84 176 79 / 16%);
+    --attention: #db7706;
+    --attention-soft: rgb(219 119 6 / 15%);
+    --danger: #d25151;
+    --danger-soft: rgb(210 81 81 / 15%);
 
     --shadow-soft: 0 1px 2px rgb(0 0 0 / 16%);
     --shadow-float:
@@ -197,41 +201,41 @@
    twice — tokens.test.ts fails if the two ever disagree. */
 :root[data-theme="dark"] {
     color-scheme: dark;
-    color: #f1f4f2;
-    background: #101211;
+    color: #f5f5f5;
+    background: #0a0a0a;
 
-    --surface-shell: #101211;
-    --surface-canvas: #181b19;
-    --surface-sidebar: #151816;
-    --surface-sidebar-strong: #1b1f1c;
-    --surface-raised: #222624;
-    --surface-overlay: rgb(29 33 30 / 88%);
-    --surface-hover: #292e2b;
-    --surface-selected: #303632;
-    --surface-user: #282d2a;
-    --surface-code: #151816;
-    --surface-inset: #121513;
+    --surface-shell: #0a0a0a;
+    --surface-canvas: #0a0a0a;
+    --surface-sidebar: #171717;
+    --surface-sidebar-strong: #1f1f1f;
+    --surface-raised: #1f1f1f;
+    --surface-overlay: rgb(23 23 23 / 92%);
+    --surface-hover: #262626;
+    --surface-selected: #333333;
+    --surface-user: #081c26;
+    --surface-code: #171717;
+    --surface-inset: #0f0f0f;
 
-    --text-primary: #f1f4f2;
-    --text-secondary: #b3bab5;
-    --text-tertiary: #919892;
-    --text-inverse: #151816;
+    --text-primary: #f5f5f5;
+    --text-secondary: #c4c4c4;
+    --text-tertiary: #8f8f8f;
+    --text-inverse: #0a0a0a;
     --text-on-accent: #ffffff;
 
-    --border-subtle: #2b302d;
-    --border-strong: #3a413d;
-    --border-emphasis: #59625d;
+    --border-subtle: #262626;
+    --border-strong: #333333;
+    --border-emphasis: #555555;
 
-    --signal: #929cff;
-    --signal-strong: #aab2ff;
-    --signal-soft: rgb(146 156 255 / 16%);
-    --signal-faint: rgb(146 156 255 / 8%);
-    --success: #6abb9c;
-    --success-soft: rgb(63 125 103 / 17%);
-    --attention: #d79058;
-    --attention-soft: rgb(178 100 43 / 14%);
-    --danger: #e4777e;
-    --danger-soft: rgb(179 64 73 / 14%);
+    --signal: #ea7a2a;
+    --signal-strong: #e79255;
+    --signal-soft: rgb(234 122 42 / 18%);
+    --signal-faint: rgb(234 122 42 / 9%);
+    --success: #54b04f;
+    --success-soft: rgb(84 176 79 / 16%);
+    --attention: #db7706;
+    --attention-soft: rgb(219 119 6 / 15%);
+    --danger: #d25151;
+    --danger-soft: rgb(210 81 81 / 15%);
 
     --shadow-soft: 0 1px 2px rgb(0 0 0 / 16%);
     --shadow-float:

@@ -1,5 +1,8 @@
 import { createRoot } from "react-dom/client";
 import { BrowserShell } from "./BrowserShell";
+import "@fontsource-variable/source-sans-3";
+import "@fontsource/inconsolata/400.css";
+import "@fontsource/inconsolata/600.css";
 import "./styles/tokens.css";
 
 const root = document.getElementById("root");
