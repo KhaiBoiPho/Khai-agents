@@ -4,7 +4,6 @@ import {
   CornerDownLeft,
   Folder,
   FolderPlus,
-  GitBranch,
   Github,
   Laptop,
   Mic,
@@ -54,7 +53,6 @@ import { useDictation } from "./useDictation";
 import { usePromptDraft } from "./usePromptDraft";
 import { ModelPicker } from "./ModelPicker";
 import { ContextRing } from "./ContextRing";
-import { MOCK_GIT } from "../../mocks/preview";
 
 interface ComposerProps {
   editable: boolean;
@@ -162,8 +160,6 @@ export function Composer({
     initialLaunch?.skillIds ?? [],
   );
   const [deliveryNotice, setDeliveryNotice] = useState<string | null>(null);
-  // TODO(backend): preview only; nothing creates a worktree yet.
-  const [worktree, setWorktree] = useState(false);
   const dictation = useDictation({
     runtime,
     onTranscript: insertDictation,
@@ -426,26 +422,6 @@ export function Composer({
           <Folder size={13} />
           {project?.displayName ?? "Pick a folder…"}
         </span>
-        <span className={styles.chip} title="Git branch (preview)">
-          <GitBranch size={13} />
-          {MOCK_GIT.branch}
-          <label className={styles.worktree}>
-            <input
-              type="checkbox"
-              checked={worktree}
-              onChange={(event) => setWorktree(event.target.checked)}
-            />
-            worktree
-          </label>
-        </span>
-        <PresetPicker
-          entries={presetCatalog.entries}
-          current={presetCatalog.current}
-          locked={conversationStarted}
-          busy={busy || presetCatalog.busy}
-          error={presetCatalog.error}
-          onSelect={(presetId) => void presetCatalog.select(presetId)}
-        />
         {onOpenProject ? (
           <button
             type="button"
@@ -739,6 +715,14 @@ export function Composer({
             effective={effectiveProductAccess}
             disabled={busy || !thread}
             onChange={(preset) => void onAccessPresetChange(preset)}
+          />
+          <PresetPicker
+            entries={presetCatalog.entries}
+            current={presetCatalog.current}
+            locked={conversationStarted}
+            busy={busy || presetCatalog.busy}
+            error={presetCatalog.error}
+            onSelect={(presetId) => void presetCatalog.select(presetId)}
           />
         </div>
         <div className={styles.toolbarRight}>
