@@ -20,7 +20,6 @@ import {
 } from "./features/execution/Composer";
 import { DesktopSidebar } from "./features/navigation/DesktopSidebar";
 import { HomeView } from "./features/home/HomeView";
-import { ConversationSplitter } from "./features/thread/ConversationSplitter";
 import { useTranscriptMode } from "./features/thread/transcriptMode";
 import type { ClientRuntime } from "./rpc/contracts";
 import type { SkillInfo } from "./generated/app-server";
@@ -551,7 +550,6 @@ export function App({
             />
           </Suspense>
         )}
-        {showingThreads && !showHome && selectedThread ? <ConversationSplitter /> : null}
       </section>
 
       {inspectorVisible ? (
