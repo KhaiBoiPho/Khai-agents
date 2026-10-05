@@ -187,7 +187,7 @@ export function McpPage({
       <header className={styles.pageHeader}>
         <div>
           <p className={styles.eyebrow}>Agent capabilities</p>
-          <h1 id="mcp-title">MCP Servers</h1>
+          <h1 id="mcp-title">Connectors</h1>
           <p>
             Add an MCP server, test the connection, then enable it. Enabled
             tools become available to the coding agent automatically when a

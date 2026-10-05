@@ -1,0 +1,120 @@
+.section {
+  display: flex;
+  max-width: 760px;
+  flex-direction: column;
+}
+
+.section h3 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 22px 0 4px;
+  font-size: var(--text-base);
+  font-weight: var(--weight-semibold);
+}
+
+.tag {
+  padding: 1px 7px;
+  border-radius: var(--radius-pill);
+  background: var(--signal-soft);
+  color: var(--signal);
+  font-size: var(--text-2xs);
+  font-style: normal;
+  font-weight: var(--weight-medium);
+}
+
+.profile {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.profile > span:nth-child(2) {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+}
+
+.profile small,
+.row small,
+.note,
+.limit small {
+  color: var(--text-tertiary);
+  font-size: var(--text-xs);
+}
+
+.avatar {
+  display: grid;
+  width: 40px;
+  height: 40px;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--signal);
+  color: var(--text-on-accent);
+  font-weight: var(--weight-semibold);
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border-subtle);
+  font-size: var(--text-sm);
+}
+
+.row > span:first-child {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.row strong {
+  font-weight: var(--weight-medium);
+}
+
+.row > span:last-child {
+  color: var(--text-secondary);
+}
+
+.note {
+  margin: 0 0 10px;
+}
+
+.limit {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.limitHead {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: var(--text-sm);
+}
+
+.limitHead strong {
+  font-weight: var(--weight-medium);
+}
+
+.limitHead span {
+  color: var(--text-tertiary);
+}
+
+.bar {
+  height: 5px;
+  overflow: hidden;
+  border-radius: var(--radius-pill);
+  background: var(--border-subtle);
+}
+
+.bar span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--signal);
+}

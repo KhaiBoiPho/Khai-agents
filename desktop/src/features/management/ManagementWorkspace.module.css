@@ -977,3 +977,81 @@
     flex-wrap: wrap;
   }
 }
+
+/* Inside the settings window the cards flatten into titled groups of
+   hairline-separated rows, the way a desktop settings pane reads. Scoped by
+   the dialog's data attribute so the standalone pages keep their cards. */
+[data-settings-surface] .page {
+  width: 100%;
+  height: auto;
+  padding: 0;
+  overflow: visible;
+}
+
+[data-settings-surface] .pageHeader {
+  margin-bottom: 20px;
+}
+
+[data-settings-surface] .pageHeader h1 {
+  margin: 0 0 6px;
+  font-family: inherit;
+  font-size: var(--text-lg);
+  font-weight: var(--weight-semibold);
+  letter-spacing: normal;
+}
+
+[data-settings-surface] .pageHeader p {
+  color: var(--text-tertiary);
+  font-size: var(--text-sm);
+}
+
+[data-settings-surface] .eyebrow {
+  display: none;
+}
+
+[data-settings-surface] .settingsGrid {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 30px;
+}
+
+[data-settings-surface] .formCard {
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+[data-settings-surface] .formCard > header h2 {
+  margin: 0 0 4px;
+  font-family: inherit;
+  font-size: var(--text-base);
+  font-weight: var(--weight-semibold);
+  letter-spacing: normal;
+}
+
+[data-settings-surface] .formCard > p {
+  color: var(--text-tertiary);
+  font-size: var(--text-sm);
+}
+
+[data-settings-surface] .formGrid,
+[data-settings-surface] .fullWidthCard > .formGrid {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0;
+  margin-top: 8px;
+}
+
+[data-settings-surface] .formGrid > label {
+  grid-template-columns: minmax(0, 1fr) minmax(180px, 280px);
+  align-items: center;
+  column-gap: 24px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border-subtle);
+  color: var(--text-primary);
+  font-size: var(--text-sm);
+}
+
+[data-settings-surface] .formGrid > label > small {
+  grid-column: 1;
+}

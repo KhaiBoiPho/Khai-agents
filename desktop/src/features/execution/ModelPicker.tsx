@@ -175,7 +175,7 @@ export function ModelPicker({
         }
       >
         <strong>{shortModelName(currentModel?.name ?? effectiveModel)}</strong>
-        <span>· {effortLabel(effectiveEffort)}</span>
+        <span>{effortLabel(effectiveEffort)}</span>
       </button>
 
       {open ? (

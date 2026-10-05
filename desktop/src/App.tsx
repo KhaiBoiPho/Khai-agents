@@ -17,6 +17,7 @@ import { ConversationSplitter } from "./features/thread/ConversationSplitter";
 import { ThreadHeader } from "./features/thread/ThreadHeader";
 import { useTranscriptMode } from "./features/thread/transcriptMode";
 import type { ClientRuntime } from "./rpc/contracts";
+import type { SkillInfo } from "./generated/app-server";
 import { initI18n } from "./app/i18n";
 import styles from "./App.module.css";
 
@@ -83,6 +84,19 @@ export function App({
   const [composerIntent, setComposerIntent] =
     useState<ComposerLaunchIntent | null>(null);
   const { state, selectedProject, selectedThread } = controller;
+  const createSkillThread = async (skill: SkillInfo) => {
+    if (!(await ui.navigateTo("threads"))) return;
+    const created = await controller.createThread("code", "Create a Skill");
+    if (!created) return;
+    ui.closeSettings();
+    setComposerIntent({
+      threadId: created.id,
+      prompt:
+        skill.defaultPrompt ??
+        `Use $${skill.name} to create a focused reusable Skill for this project.`,
+      skillIds: [skill.id],
+    });
+  };
   const activeTurn = latestExecutingTurn(state.turns, selectedThread?.id);
   const queuedTurns = state.turns
     .filter(
@@ -387,14 +401,15 @@ export function App({
                 onInterrupt={() => void controller.interrupt()}
                 launchIntent={composerIntent}
                 onLaunchIntentConsumed={() => setComposerIntent(null)}
-                onNewThread={() => {
+                onManageProviders={() => ui.openSettings("models")}
+                onOpenSettings={(section) => ui.openSettings(section)}
+                onOpenProject={() => {
                   void (async () => {
                     if (await ui.confirmDiscardInspectorDraft()) {
-                      await controller.createThread();
+                      await controller.openProject();
                     }
                   })();
                 }}
-                onManageProviders={() => ui.openSettings("models")}
               />
             ) : null}
           </>
@@ -414,21 +429,7 @@ export function App({
                   }
                 })();
               }}
-              onCreateSkill={async (skill) => {
-                if (!(await ui.navigateTo("threads"))) return;
-                const created = await controller.createThread(
-                  "code",
-                  "Create a Skill",
-                );
-                if (!created) return;
-                setComposerIntent({
-                  threadId: created.id,
-                  prompt:
-                    skill.defaultPrompt ??
-                    `Use $${skill.name} to create a focused reusable Skill for this project.`,
-                  skillIds: [skill.id],
-                });
-              }}
+              onCreateSkill={createSkillThread}
             />
           </Suspense>
         )}
@@ -468,6 +469,7 @@ export function App({
             onUpdate={controller.updateSettings}
             onClose={ui.closeSettings}
             initialSection={ui.settingsSection}
+            onCreateSkill={createSkillThread}
           />
         </Suspense>
       ) : null}

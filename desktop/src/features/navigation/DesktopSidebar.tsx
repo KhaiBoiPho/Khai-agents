@@ -1,18 +1,17 @@
 import {
   ChevronRight,
   ChevronsUpDown,
+  CircleGauge,
   CircleHelp,
   Folder,
   FolderClock,
   FolderOpen,
-  MessageSquare,
   Languages,
   LogOut,
   Plus,
   Search,
   Settings,
   ShieldAlert,
-  WandSparkles,
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
@@ -233,24 +232,6 @@ export function DesktopSidebar({
         </>
       ) : null}
 
-      <nav className={styles.destinations} aria-label="Khai-Agents destinations">
-        <button
-          type="button"
-          data-active={destination === "threads"}
-          onClick={() => onDestination("threads")}
-        >
-          <MessageSquare size={16} />
-          {t("sidebar.threads", "Threads")}
-        </button>
-        <button
-          type="button"
-          data-active={destination === "skills"}
-          onClick={() => onDestination("skills")}
-        >
-          <WandSparkles size={16} />
-          {t("sidebar.skills", "Skills")}
-        </button>
-      </nav>
 
       <div className={styles.sectionHeading}>
         <span>{t("sidebar.projects", "Projects")}</span>
@@ -420,6 +401,14 @@ function AccountMenu({
             <Settings size={16} />
             {t("sidebar.settings", "Settings")}
             <kbd>Ctrl+,</kbd>
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            onClick={() => choose(() => onOpenSettings("usage"))}
+          >
+            <CircleGauge size={16} />
+            {t("sidebar.usage", "Usage")}
           </button>
           <button
             type="button"

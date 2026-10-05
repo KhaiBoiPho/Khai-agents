@@ -1,11 +1,19 @@
 import {
   Check,
+  ChevronDown,
   CornerDownLeft,
   Folder,
+  FolderPlus,
+  GitBranch,
+  Github,
+  Laptop,
   Mic,
   Paperclip,
+  Plug,
   Plus,
-  SlidersHorizontal,
+  Puzzle,
+  ScrollText,
+  SquareSlash,
   Sparkles,
   Square,
   X,
@@ -26,7 +34,6 @@ import type { InteractiveDelivery } from "../../app/interactiveTurnRouter";
 import { useComposerBehavior } from "../../app/composerBehavior";
 import { useTranslation } from "react-i18next";
 import {
-  ACCESS_PRESET_OPTIONS,
   settingsDefaultAccessLabel,
   settingsProductAccessPreset,
   turnExecutionAccessLabel,
@@ -46,6 +53,8 @@ import styles from "./Composer.module.css";
 import { useDictation } from "./useDictation";
 import { usePromptDraft } from "./usePromptDraft";
 import { ModelPicker } from "./ModelPicker";
+import { ContextRing } from "./ContextRing";
+import { MOCK_GIT } from "../../mocks/preview";
 
 interface ComposerProps {
   editable: boolean;
@@ -88,8 +97,9 @@ interface ComposerProps {
   onInterrupt(): void;
   launchIntent: ComposerLaunchIntent | null;
   onLaunchIntentConsumed(): void;
-  onNewThread?: () => void;
   onManageProviders?: () => void;
+  onOpenProject?: () => void;
+  onOpenSettings?: (section: string) => void;
 }
 
 export interface ComposerLaunchIntent {
@@ -119,8 +129,9 @@ export function Composer({
   onInterrupt,
   launchIntent,
   onLaunchIntentConsumed,
-  onNewThread,
   onManageProviders,
+  onOpenProject,
+  onOpenSettings,
 }: ComposerProps) {
   const active = executingTurn !== null;
   const { busyEnter } = useComposerBehavior();
@@ -151,6 +162,8 @@ export function Composer({
     initialLaunch?.skillIds ?? [],
   );
   const [deliveryNotice, setDeliveryNotice] = useState<string | null>(null);
+  // TODO(backend): preview only; nothing creates a worktree yet.
+  const [worktree, setWorktree] = useState(false);
   const dictation = useDictation({
     runtime,
     onTranscript: insertDictation,
@@ -331,6 +344,23 @@ export function Composer({
     }
   };
 
+  useEffect(() => {
+    const shortcut = (event: globalThis.KeyboardEvent) => {
+      if (
+        (event.metaKey || event.ctrlKey) &&
+        !event.altKey &&
+        event.key.toLocaleLowerCase() === "u" &&
+        editable &&
+        !busy
+      ) {
+        event.preventDefault();
+        void pickContextFiles();
+      }
+    };
+    window.addEventListener("keydown", shortcut);
+    return () => window.removeEventListener("keydown", shortcut);
+  });
+
   const onKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
     if (event.key === "Escape" && dictation.recording) {
       event.preventDefault();
@@ -374,11 +404,6 @@ export function Composer({
     }
   };
 
-  const accessValue = accessPresetOverride ?? "";
-  const accessLabel = accessPresetOverride
-    ? ACCESS_PRESET_OPTIONS.find((option) => option.value === accessPresetOverride)
-        ?.label ?? accessPresetOverride
-    : `Default · ${defaultAccessLabel}`;
   const notice =
     commandError ??
     contextError ??
@@ -390,6 +415,29 @@ export function Composer({
   return (
     <footer className={styles.region}>
       <div className={styles.chips}>
+        <span className={styles.chip} title="Runs on this machine">
+          <Laptop size={13} />
+          Local
+        </span>
+        <span
+          className={styles.chip}
+          title={thread?.workspacePath ?? project?.canonicalPath ?? undefined}
+        >
+          <Folder size={13} />
+          {project?.displayName ?? "Pick a folder…"}
+        </span>
+        <span className={styles.chip} title="Git branch (preview)">
+          <GitBranch size={13} />
+          {MOCK_GIT.branch}
+          <label className={styles.worktree}>
+            <input
+              type="checkbox"
+              checked={worktree}
+              onChange={(event) => setWorktree(event.target.checked)}
+            />
+            worktree
+          </label>
+        </span>
         <PresetPicker
           entries={presetCatalog.entries}
           current={presetCatalog.current}
@@ -398,23 +446,16 @@ export function Composer({
           error={presetCatalog.error}
           onSelect={(presetId) => void presetCatalog.select(presetId)}
         />
-        <span
-          className={styles.chip}
-          title={thread?.workspacePath ?? project?.canonicalPath ?? undefined}
-        >
-          <Folder size={13} />
-          {project?.displayName ?? "Pick a folder…"}
-        </span>
-        {onNewThread ? (
+        {onOpenProject ? (
           <button
             type="button"
             className={styles.chipButton}
-            onClick={onNewThread}
+            onClick={onOpenProject}
             disabled={busy}
-            aria-label="New thread"
-            title="New thread"
+            aria-label="Open another folder"
+            title="Open another folder"
           >
-            <Plus size={14} />
+            <FolderPlus size={14} />
           </button>
         ) : null}
       </div>
@@ -632,59 +673,31 @@ export function Composer({
       </div>
       <div className={styles.toolbar}>
         <div className={styles.context}>
-          <label
-            className={styles.accessMode}
-            data-access={effectiveProductAccess ?? "inherit"}
-            title="Tool access for new submissions"
-          >
-            <span>{accessLabel}</span>
-            <select
-              aria-label="New submissions access"
-              value={accessValue}
-              onChange={(event) => {
-                const value = event.target.value;
-                void onAccessPresetChange(
-                  value ? (value as ExecutionAccessPreset) : null,
-                );
-              }}
-              disabled={busy || !thread}
-            >
-              <option value="">Default · {defaultAccessLabel}</option>
-              {ACCESS_PRESET_OPTIONS.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-          </label>
-          <button
-            className={styles.iconButton}
-            type="button"
-            onClick={() => setSkillPickerOpen((open) => !open)}
-            disabled={
-              !editable || busy || active || !skillCatalog.activeSkills.length
-            }
-            aria-expanded={skillPickerOpen}
-            aria-label="Select Skills for this turn"
-            title={
-              skillCatalog.activeSkills.length
-                ? "Select Skills for this turn"
-                : "No selectable Skills"
-            }
-          >
-            <SlidersHorizontal size={15} />
-            {selectedSkills.length ? <b>{selectedSkills.length}</b> : null}
-          </button>
-          <button
-            className={styles.iconButton}
-            type="button"
-            onClick={() => void pickContextFiles()}
+          <PlusMenu
             disabled={!editable || busy}
-            aria-label="Attach workspace files"
-            title="Attach workspace files"
-          >
-            <Paperclip size={15} />
-          </button>
+            skillsAvailable={
+              !active && skillCatalog.activeSkills.length > 0
+            }
+            selectedSkills={selectedSkills.length}
+            onAddFiles={() => void pickContextFiles()}
+            onAddFolder={onOpenProject}
+            onSlashCommands={() => {
+              setPrompt("/");
+              textareaRef.current?.focus();
+            }}
+            onImportIssue={() => {
+              // TODO(backend): fetch the issue; for now seed the prompt.
+              setPrompt("Fix this GitHub issue: <paste the issue URL>");
+              textareaRef.current?.focus();
+            }}
+            onSkills={() => setSkillPickerOpen(true)}
+            onConnectors={
+              onOpenSettings ? () => onOpenSettings("mcp") : undefined
+            }
+            onPlugins={
+              onOpenSettings ? () => onOpenSettings("plugins") : undefined
+            }
+          />
           {dictation.available ? (
             <button
               className={styles.iconButton}
@@ -720,16 +733,31 @@ export function Composer({
               <X size={13} />
             </button>
           ) : null}
+          <ModeMenu
+            value={accessPresetOverride}
+            defaultLabel={defaultAccessLabel}
+            effective={effectiveProductAccess}
+            disabled={busy || !thread}
+            onChange={(preset) => void onAccessPresetChange(preset)}
+          />
         </div>
-        <ModelPicker
-          runtime={runtime}
-          project={project}
-          thread={thread}
-          settings={settings}
-          disabled={busy}
-          onChange={onModelChange}
-          onManageProviders={onManageProviders}
-        />
+        <div className={styles.toolbarRight}>
+          <ModelPicker
+            runtime={runtime}
+            project={project}
+            thread={thread}
+            settings={settings}
+            disabled={busy}
+            onChange={onModelChange}
+            onManageProviders={onManageProviders}
+          />
+          <ContextRing
+            contextWindow={thread?.contextWindow ?? null}
+            onOpenUsage={
+              onOpenSettings ? () => onOpenSettings("usage") : undefined
+            }
+          />
+        </div>
       </div>
       {notice || active ? (
         <p className={styles.hint}>
@@ -780,4 +808,232 @@ function withContextFiles(
     "Attached workspace context:",
     ...references.map((path) => `- ${path}`),
   ].join("\n");
+}
+
+/** Close a popover on an outside click or Escape. */
+function usePopover() {
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    if (!open) return;
+    const close = (event: MouseEvent) => {
+      if (!rootRef.current?.contains(event.target as Node)) setOpen(false);
+    };
+    const escape = (event: globalThis.KeyboardEvent) => {
+      if (event.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("mousedown", close);
+    document.addEventListener("keydown", escape);
+    return () => {
+      document.removeEventListener("mousedown", close);
+      document.removeEventListener("keydown", escape);
+    };
+  }, [open]);
+  return { open, setOpen, rootRef };
+}
+
+interface PlusMenuProps {
+  disabled: boolean;
+  skillsAvailable: boolean;
+  selectedSkills: number;
+  onAddFiles(): void;
+  onAddFolder?: () => void;
+  onSlashCommands(): void;
+  onImportIssue(): void;
+  onSkills(): void;
+  onConnectors?: () => void;
+  onPlugins?: () => void;
+}
+
+/** The "+" menu: everything that adds context or capability to a prompt. */
+function PlusMenu({
+  disabled,
+  skillsAvailable,
+  selectedSkills,
+  onAddFiles,
+  onAddFolder,
+  onSlashCommands,
+  onImportIssue,
+  onSkills,
+  onConnectors,
+  onPlugins,
+}: PlusMenuProps) {
+  const { open, setOpen, rootRef } = usePopover();
+  const run = (action?: () => void) => () => {
+    setOpen(false);
+    action?.();
+  };
+  return (
+    <div className={styles.popoverRoot} ref={rootRef}>
+      <button
+        className={styles.iconButton}
+        type="button"
+        onClick={() => setOpen((current) => !current)}
+        disabled={disabled}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        aria-label="Add to prompt"
+        title="Add to prompt"
+      >
+        <Plus size={16} />
+        {selectedSkills ? <b>{selectedSkills}</b> : null}
+      </button>
+      {open ? (
+        <div className={styles.popover} role="menu">
+          <button type="button" role="menuitem" onClick={run(onAddFiles)}>
+            <Paperclip size={15} />
+            Add files
+            <kbd>Ctrl+U</kbd>
+          </button>
+          {onAddFolder ? (
+            <button type="button" role="menuitem" onClick={run(onAddFolder)}>
+              <Folder size={15} />
+              Add folder
+            </button>
+          ) : null}
+          <button type="button" role="menuitem" onClick={run(onImportIssue)}>
+            <Github size={15} />
+            Import GitHub issue
+          </button>
+          <button type="button" role="menuitem" onClick={run(onSlashCommands)}>
+            <SquareSlash size={15} />
+            Slash commands
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            onClick={run(onSkills)}
+            disabled={!skillsAvailable}
+          >
+            <ScrollText size={15} />
+            Skills
+          </button>
+          {onConnectors ? (
+            <button type="button" role="menuitem" onClick={run(onConnectors)}>
+              <Plug size={15} />
+              Connectors
+            </button>
+          ) : null}
+          {onPlugins ? (
+            <button type="button" role="menuitem" onClick={run(onPlugins)}>
+              <Puzzle size={15} />
+              Add plugins
+            </button>
+          ) : null}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+const MODE_OPTIONS: ReadonlyArray<{
+  value: ExecutionAccessPreset | null;
+  label: string;
+  description: string;
+}> = [
+  { value: null, label: "Default", description: "Use the access set in Settings" },
+  { value: "ask", label: "Ask", description: "Ask before running tools that change things" },
+  { value: "read_only", label: "Read only", description: "Read and plan without changing files" },
+];
+
+interface ModeMenuProps {
+  value: ExecutionAccessPreset | null;
+  defaultLabel: string;
+  effective: ExecutionAccessPreset | null;
+  disabled: boolean;
+  onChange(preset: ExecutionAccessPreset | null): void;
+}
+
+/** Access mode for new submissions, with numbered shortcuts while open. */
+function ModeMenu({
+  value,
+  defaultLabel,
+  effective,
+  disabled,
+  onChange,
+}: ModeMenuProps) {
+  const { open, setOpen, rootRef } = usePopover();
+  const choose = (preset: ExecutionAccessPreset | null) => {
+    setOpen(false);
+    if (preset !== value) onChange(preset);
+  };
+
+  useEffect(() => {
+    if (!open) return;
+    const pick = (event: globalThis.KeyboardEvent) => {
+      const index = Number(event.key) - 1;
+      if (index >= 0 && index < MODE_OPTIONS.length) {
+        event.preventDefault();
+        choose(MODE_OPTIONS[index].value);
+      }
+    };
+    document.addEventListener("keydown", pick);
+    return () => document.removeEventListener("keydown", pick);
+  });
+
+  const label =
+    value === "full_access"
+      ? "Bypass permissions"
+      : value
+        ? MODE_OPTIONS.find((option) => option.value === value)?.label ?? value
+        : "Default";
+  return (
+    <div className={styles.popoverRoot} ref={rootRef}>
+      <button
+        type="button"
+        className={styles.modeTrigger}
+        data-access={effective ?? "inherit"}
+        onClick={() => setOpen((current) => !current)}
+        disabled={disabled}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        aria-label="Access mode for new submissions"
+        title={value ? label : `Default · ${defaultLabel}`}
+      >
+        {label}
+        <ChevronDown size={12} />
+      </button>
+      {open ? (
+        <div className={styles.popover} data-wide role="menu">
+          <p className={styles.popoverTitle}>Mode</p>
+          {MODE_OPTIONS.map((option, index) => {
+            const selected = option.value === value;
+            return (
+              <button
+                type="button"
+                role="menuitemradio"
+                aria-checked={selected}
+                key={option.label}
+                className={styles.modeOption}
+                onClick={() => choose(option.value)}
+              >
+                <span>
+                  <strong>
+                    {option.label}
+                    {option.value === null ? ` · ${defaultLabel}` : ""}
+                  </strong>
+                  <small>{option.description}</small>
+                </span>
+                {selected ? <Check size={14} /> : null}
+                <kbd>{index + 1}</kbd>
+              </button>
+            );
+          })}
+          <hr />
+          <div className={styles.bypassRow}>
+            <span>Bypass permissions</span>
+            <button
+              type="button"
+              data-on={value === "full_access"}
+              onClick={() =>
+                choose(value === "full_access" ? null : "full_access")
+              }
+            >
+              {value === "full_access" ? "Disable" : "Enable"}
+            </button>
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
 }

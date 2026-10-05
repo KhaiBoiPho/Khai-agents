@@ -9,8 +9,8 @@
 .trigger {
   display: inline-flex;
   align-items: baseline;
-  gap: 4px;
-  max-width: 280px;
+  gap: 10px;
+  max-width: 300px;
   padding: 4px 6px;
   border-radius: var(--radius-sm);
   color: var(--text-tertiary);

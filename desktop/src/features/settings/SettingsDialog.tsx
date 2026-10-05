@@ -6,7 +6,7 @@
  * section copy.
  */
 
-import { FileText, X } from "lucide-react";
+import { FileText, Search, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -15,6 +15,7 @@ import type {
   JsonObject,
   Project,
   SettingsSnapshot,
+  SkillInfo,
 } from "../../generated/app-server";
 import { useEscapeLayer } from "../../app/escapeLayer";
 import type { ClientRuntime } from "../../rpc/contracts";
@@ -23,6 +24,11 @@ import {
   type SettingsSectionId,
 } from "./settingsSections";
 import styles from "./SettingsDialog.module.css";
+
+const RAIL_GROUPS = [
+  { id: "settings", labelKey: "settings.group.settings", label: "Settings" },
+  { id: "customize", labelKey: "settings.group.customize", label: "Customize" },
+] as const;
 
 interface SettingsDialogProps {
   runtime: ClientRuntime;
@@ -38,6 +44,7 @@ interface SettingsDialogProps {
   onClose(): void;
   /** Section to open on; unknown or null falls back to the first one. */
   initialSection?: string | null;
+  onCreateSkill?: (skill: SkillInfo) => Promise<void>;
 }
 
 export function SettingsDialog({
@@ -49,6 +56,7 @@ export function SettingsDialog({
   onUpdate,
   onClose,
   initialSection = null,
+  onCreateSkill,
 }: SettingsDialogProps) {
   const { t } = useTranslation();
   const [activeId, setActiveId] = useState<SettingsSectionId>(
@@ -58,6 +66,7 @@ export function SettingsDialog({
   );
   const [scope, setScope] = useState<ConfigScope>("user");
   const [openError, setOpenError] = useState<string | null>(null);
+  const [filter, setFilter] = useState("");
   const canWriteProject = project?.trustState === "trusted";
   const effectiveScope: ConfigScope =
     scope === "project" && canWriteProject ? "project" : "user";
@@ -116,67 +125,97 @@ export function SettingsDialog({
         aria-labelledby="settings-dialog-title"
       >
         <nav className={styles.rail} aria-label="Settings sections">
-          <h1 id="settings-dialog-title">{t("settings.title", "Settings")}</h1>
-          {SETTINGS_SECTIONS.map((section) => {
-            const Icon = section.icon;
+          <label className={styles.railSearch}>
+            <Search size={15} />
+            <input
+              value={filter}
+              onChange={(event) => setFilter(event.target.value)}
+              placeholder={t("settings.search", "Search")}
+              aria-label={t("settings.search", "Search")}
+            />
+          </label>
+          <h1 id="settings-dialog-title" className={styles.srOnly}>
+            {t("settings.title", "Settings")}
+          </h1>
+          {RAIL_GROUPS.map((group) => {
+            const query = filter.trim().toLocaleLowerCase();
+            const entries = SETTINGS_SECTIONS.filter(
+              (section) =>
+                section.group === group.id &&
+                (!query ||
+                  t(section.labelKey, section.label)
+                    .toLocaleLowerCase()
+                    .includes(query)),
+            );
+            if (!entries.length) return null;
             return (
-              <button
-                key={section.id}
-                type="button"
-                className={styles.railButton}
-                data-active={section.id === active.id}
-                onClick={() => setActiveId(section.id)}
-              >
-                <Icon size={16} />
-                {t(section.labelKey, section.label)}
-              </button>
+              <div className={styles.railGroup} key={group.id}>
+                <p>{t(group.labelKey, group.label)}</p>
+                {entries.map((section) => {
+                  const Icon = section.icon;
+                  return (
+                    <button
+                      key={section.id}
+                      type="button"
+                      className={styles.railButton}
+                      data-active={section.id === active.id}
+                      onClick={() => setActiveId(section.id)}
+                    >
+                      <Icon size={16} />
+                      {t(section.labelKey, section.label)}
+                    </button>
+                  );
+                })}
+              </div>
             );
           })}
+          <footer className={styles.railFooter}>
+            <label className={styles.scope}>
+              {t("settings.writeTo", "Write to")}
+              <select
+                value={effectiveScope}
+                onChange={(event) =>
+                  setScope(event.target.value as ConfigScope)
+                }
+              >
+                <option value="user">{t("settings.scope.user", "User config")}</option>
+                <option value="project" disabled={!canWriteProject}>
+                  {t("settings.scope.project", "Selected project")}
+                </option>
+              </select>
+            </label>
+            <button
+              className={styles.documentAction}
+              type="button"
+              disabled={!settings?.configPath}
+              title={
+                runtime.host?.nativeOpen === false
+                  ? "Copy configuration path"
+                  : t("settings.openConfig", "Open configuration file")
+              }
+              aria-label={t("settings.openConfig", "Open configuration file")}
+              onClick={() => void openConfigFile()}
+            >
+              <FileText size={15} />
+            </button>
+          </footer>
         </nav>
         <div className={styles.main}>
-          <header className={styles.header}>
-            <h2>{t(active.labelKey, active.label)}</h2>
-            <div className={styles.headerActions}>
-              <label className={styles.scope}>
-                {t("settings.writeTo", "Write to")}
-                <select
-                  value={effectiveScope}
-                  onChange={(event) =>
-                    setScope(event.target.value as ConfigScope)
-                  }
-                >
-                  <option value="user">{t("settings.scope.user", "User config")}</option>
-                  <option value="project" disabled={!canWriteProject}>
-                    {t("settings.scope.project", "Selected project")}
-                  </option>
-                </select>
-              </label>
-              <button
-                className={styles.documentAction}
-                type="button"
-                disabled={!settings?.configPath}
-                title={
-                  runtime.host?.nativeOpen === false
-                    ? "Copy configuration path"
-                    : t("settings.openConfig", "Open configuration file")
-                }
-                aria-label={t("settings.openConfig", "Open configuration file")}
-                onClick={() => void openConfigFile()}
-              >
-                <FileText size={15} />
-              </button>
-              <button
-                className={styles.close}
-                type="button"
-                aria-label={t("settings.close", "Close settings")}
-                onClick={onClose}
-              >
-                <X size={16} />
-              </button>
-            </div>
-          </header>
+          <button
+            className={styles.close}
+            type="button"
+            aria-label={t("settings.close", "Close settings")}
+            onClick={onClose}
+          >
+            <X size={18} />
+          </button>
           {openError ? <p className={styles.openError}>{openError}</p> : null}
-          <div className={styles.content}>
+          <div className={styles.content} data-settings-surface>
+            {active.ownsTitle ? null : (
+              <h2 className={styles.sectionTitle}>
+                {t(active.labelKey, active.label)}
+              </h2>
+            )}
             <ActiveSection
               runtime={runtime}
               project={project}
@@ -185,6 +224,7 @@ export function SettingsDialog({
               scope={effectiveScope}
               onRefresh={onRefresh}
               onUpdate={onUpdate}
+              onCreateSkill={onCreateSkill}
             />
           </div>
         </div>

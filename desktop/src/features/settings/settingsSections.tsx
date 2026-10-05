@@ -8,9 +8,12 @@
 import type { ComponentType } from "react";
 import type { LucideIcon } from "lucide-react";
 import {
+  CircleGauge,
+  CircleUserRound,
   Cpu,
   Plug,
   Puzzle,
+  ScrollText,
   Settings as SettingsIcon,
   SquareStack,
 } from "lucide-react";
@@ -20,18 +23,24 @@ import type {
   JsonObject,
   Project,
   SettingsSnapshot,
+  SkillInfo,
 } from "../../generated/app-server";
 import type { ClientRuntime } from "../../rpc/contracts";
+import { SkillsPage } from "../extensions/SkillsPage";
 import { McpPage } from "../mcp/McpPage";
 import { GeneralSection } from "./sections/GeneralSection";
+import { AccountSection, UsageSection } from "./sections/PreviewSections";
 import { ModelsSection } from "./sections/ModelsSection";
 import { PluginsSection } from "./sections/PluginsSection";
 import { PresetsSection } from "./sections/PresetsSection";
 
 export type SettingsSectionId =
   | "general"
+  | "account"
+  | "usage"
   | "agent-presets"
   | "models"
+  | "skills"
   | "mcp"
   | "plugins";
 
@@ -49,6 +58,7 @@ export interface SettingsSectionProps {
     scope: ConfigScope,
     riskAcknowledged?: boolean,
   ): Promise<void>;
+  onCreateSkill?: (skill: SkillInfo) => Promise<void>;
 }
 
 export interface SettingsSection {
@@ -59,13 +69,27 @@ export interface SettingsSection {
   label: string;
   icon: LucideIcon;
   component: ComponentType<SettingsSectionProps>;
+  /** Rail heading the entry sits under. */
+  group: "settings" | "customize";
+  /** Full pages carry their own heading; the dialog adds none for them. */
+  ownsTitle?: boolean;
 }
 
 function McpSection({ runtime, project }: SettingsSectionProps) {
   return <McpPage runtime={runtime} project={project} />;
 }
 
-// Order and names follow cdesktop's settings rail.
+function SkillsSection({ runtime, project, onCreateSkill }: SettingsSectionProps) {
+  return (
+    <SkillsPage
+      runtime={runtime}
+      project={project}
+      onCreateSkill={onCreateSkill ?? (async () => undefined)}
+    />
+  );
+}
+
+// Grouped like a desktop settings window: app settings, then customization.
 const SECTIONS: readonly SettingsSection[] = [
   {
     id: "general",
@@ -74,6 +98,25 @@ const SECTIONS: readonly SettingsSection[] = [
     label: "General",
     icon: SettingsIcon,
     component: GeneralSection,
+    group: "settings",
+  },
+  {
+    id: "account",
+    order: 2,
+    labelKey: "settings.section.account",
+    label: "Account",
+    icon: CircleUserRound,
+    component: AccountSection,
+    group: "settings",
+  },
+  {
+    id: "usage",
+    order: 4,
+    labelKey: "settings.section.usage",
+    label: "Usage",
+    icon: CircleGauge,
+    component: UsageSection,
+    group: "settings",
   },
   {
     id: "agent-presets",
@@ -82,6 +125,7 @@ const SECTIONS: readonly SettingsSection[] = [
     label: "Agents",
     icon: Cpu,
     component: PresetsSection,
+    group: "settings",
   },
   {
     id: "models",
@@ -90,14 +134,27 @@ const SECTIONS: readonly SettingsSection[] = [
     label: "Providers",
     icon: SquareStack,
     component: ModelsSection,
+    group: "settings",
+  },
+  {
+    id: "skills",
+    order: 25,
+    labelKey: "settings.section.skills",
+    label: "Skills",
+    icon: ScrollText,
+    component: SkillsSection,
+    group: "customize",
+    ownsTitle: true,
   },
   {
     id: "mcp",
     order: 30,
     labelKey: "settings.section.mcp",
-    label: "MCP Servers",
+    label: "Connectors",
     icon: Plug,
     component: McpSection,
+    group: "customize",
+    ownsTitle: true,
   },
   {
     id: "plugins",
@@ -106,6 +163,8 @@ const SECTIONS: readonly SettingsSection[] = [
     label: "Plugins",
     icon: Puzzle,
     component: PluginsSection,
+    group: "customize",
+    ownsTitle: true,
   },
 ];
 
