@@ -36,6 +36,8 @@ interface SettingsDialogProps {
     riskAcknowledged?: boolean,
   ): Promise<void>;
   onClose(): void;
+  /** Section to open on; unknown or null falls back to the first one. */
+  initialSection?: string | null;
 }
 
 export function SettingsDialog({
@@ -46,10 +48,13 @@ export function SettingsDialog({
   onRefresh,
   onUpdate,
   onClose,
+  initialSection = null,
 }: SettingsDialogProps) {
   const { t } = useTranslation();
   const [activeId, setActiveId] = useState<SettingsSectionId>(
-    SETTINGS_SECTIONS[0].id,
+    () =>
+      SETTINGS_SECTIONS.find((section) => section.id === initialSection)?.id ??
+      SETTINGS_SECTIONS[0].id,
   );
   const [scope, setScope] = useState<ConfigScope>("user");
   const [openError, setOpenError] = useState<string | null>(null);
@@ -110,62 +115,67 @@ export function SettingsDialog({
         aria-modal="true"
         aria-labelledby="settings-dialog-title"
       >
-        <header className={styles.header}>
+        <nav className={styles.rail} aria-label="Settings sections">
           <h1 id="settings-dialog-title">{t("settings.title", "Settings")}</h1>
-          <div className={styles.headerActions}>
-            <label className={styles.scope}>
-              {t("settings.writeTo", "Write to")}
-              <select
-                value={effectiveScope}
-                onChange={(event) =>
-                  setScope(event.target.value as ConfigScope)
-                }
+          {SETTINGS_SECTIONS.map((section) => {
+            const Icon = section.icon;
+            return (
+              <button
+                key={section.id}
+                type="button"
+                className={styles.railButton}
+                data-active={section.id === active.id}
+                onClick={() => setActiveId(section.id)}
               >
-                <option value="user">{t("settings.scope.user", "User config")}</option>
-                <option value="project" disabled={!canWriteProject}>
-                  {t("settings.scope.project", "Selected project")}
-                </option>
-              </select>
-            </label>
-            <button
-              className={styles.documentAction}
-              type="button"
-              disabled={!settings?.configPath}
-              title={settings?.configPath ?? undefined}
-              onClick={() => void openConfigFile()}
-            >
-              <FileText size={14} />
-              {runtime.host?.nativeOpen === false ? "Copy configuration path" : t("settings.openConfig", "Open configuration file")}
-            </button>
-            <button
-              className={styles.close}
-              type="button"
-              aria-label={t("settings.close", "Close settings")}
-              onClick={onClose}
-            >
-              <X size={16} />
-            </button>
-          </div>
-        </header>
-        {openError ? <p className={styles.openError}>{openError}</p> : null}
-        <div className={styles.body}>
-          <nav className={styles.rail} aria-label="Settings sections">
-            {SETTINGS_SECTIONS.map((section) => {
-              const Icon = section.icon;
-              return (
-                <button
-                  key={section.id}
-                  type="button"
-                  className={styles.railButton}
-                  data-active={section.id === active.id}
-                  onClick={() => setActiveId(section.id)}
+                <Icon size={16} />
+                {t(section.labelKey, section.label)}
+              </button>
+            );
+          })}
+        </nav>
+        <div className={styles.main}>
+          <header className={styles.header}>
+            <h2>{t(active.labelKey, active.label)}</h2>
+            <div className={styles.headerActions}>
+              <label className={styles.scope}>
+                {t("settings.writeTo", "Write to")}
+                <select
+                  value={effectiveScope}
+                  onChange={(event) =>
+                    setScope(event.target.value as ConfigScope)
+                  }
                 >
-                  <Icon size={16} />
-                  {t(section.labelKey, section.label)}
-                </button>
-              );
-            })}
-          </nav>
+                  <option value="user">{t("settings.scope.user", "User config")}</option>
+                  <option value="project" disabled={!canWriteProject}>
+                    {t("settings.scope.project", "Selected project")}
+                  </option>
+                </select>
+              </label>
+              <button
+                className={styles.documentAction}
+                type="button"
+                disabled={!settings?.configPath}
+                title={
+                  runtime.host?.nativeOpen === false
+                    ? "Copy configuration path"
+                    : t("settings.openConfig", "Open configuration file")
+                }
+                aria-label={t("settings.openConfig", "Open configuration file")}
+                onClick={() => void openConfigFile()}
+              >
+                <FileText size={15} />
+              </button>
+              <button
+                className={styles.close}
+                type="button"
+                aria-label={t("settings.close", "Close settings")}
+                onClick={onClose}
+              >
+                <X size={16} />
+              </button>
+            </div>
+          </header>
+          {openError ? <p className={styles.openError}>{openError}</p> : null}
           <div className={styles.content}>
             <ActiveSection
               runtime={runtime}

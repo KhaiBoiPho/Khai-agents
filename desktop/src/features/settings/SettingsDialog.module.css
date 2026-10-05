@@ -12,8 +12,8 @@
 }
 
 .dialog {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: 215px 1fr;
   width: min(1080px, 94vw);
   height: min(700px, 90vh);
   overflow: hidden;
@@ -32,10 +32,17 @@
   border-bottom: 1px solid var(--border-subtle);
 }
 
-.header h1 {
+.header h2 {
   margin: 0;
   font-size: var(--text-lg, 1.1rem);
-  font-weight: var(--weight-display, 650);
+  font-weight: var(--weight-semibold, 600);
+}
+
+.main {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
 }
 
 .headerActions {
@@ -64,18 +71,18 @@
 .documentAction {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 6px 12px;
-  border: 1px solid var(--border-subtle);
-  border-radius: 999px;
-  background: var(--surface-raised);
-  color: var(--text-secondary);
-  font-size: var(--text-xs);
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-tertiary);
   cursor: pointer;
 }
 
 .documentAction:hover:not(:disabled) {
-  border-color: var(--border-strong);
+  background: var(--surface-hover);
   color: var(--text-primary);
 }
 
@@ -110,29 +117,32 @@
   font-size: var(--text-xs);
 }
 
-.body {
-  display: grid;
-  grid-template-columns: 200px 1fr;
-  flex: 1;
-  min-height: 0;
-}
-
 .rail {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  padding: 14px 10px;
+  gap: 2px;
+  min-height: 0;
+  padding: 0 0 14px;
   border-right: 1px solid var(--border-subtle);
-  background: color-mix(in srgb, var(--surface-sidebar) 40%, var(--surface-raised));
+  background: var(--surface-sidebar);
+}
+
+.rail h1 {
+  margin: 0 0 8px;
+  padding: 15px 14px;
+  border-bottom: 1px solid var(--border-subtle);
+  font-size: var(--text-lg, 1.1rem);
+  font-weight: var(--weight-semibold, 600);
 }
 
 .railButton {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 9px 12px;
+  margin: 0 8px;
+  padding: 8px 10px;
   border: none;
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   background: transparent;
   color: var(--text-secondary);
   font-size: var(--text-sm);
@@ -146,8 +156,8 @@
 }
 
 .railButton[data-active="true"] {
-  background: var(--surface-hover);
-  color: var(--text-primary);
+  background: var(--signal-soft);
+  color: var(--signal);
   font-weight: var(--weight-semibold, 600);
 }
 

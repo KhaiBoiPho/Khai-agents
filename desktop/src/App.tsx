@@ -67,7 +67,13 @@ function LoadingSurface({
   );
 }
 
-export function App({ runtime }: { runtime: ClientRuntime }) {
+export function App({
+  runtime,
+  onSignOut,
+}: {
+  runtime: ClientRuntime;
+  onSignOut?: () => void;
+}) {
   const controller = useWorkspaceController(runtime);
   // Mounted for its effect: paints saved appearance preferences at startup.
   useAppearance();
@@ -135,7 +141,8 @@ export function App({ runtime }: { runtime: ClientRuntime }) {
         onDestination={(destination) => {
           void ui.navigateTo(destination);
         }}
-        onOpenSettings={ui.openSettings}
+        onOpenSettings={(section) => ui.openSettings(section)}
+        onSignOut={onSignOut}
         onQueryChange={ui.setSessionQuery}
         onOpenProject={() => {
           void (async () => {
@@ -380,6 +387,14 @@ export function App({ runtime }: { runtime: ClientRuntime }) {
                 onInterrupt={() => void controller.interrupt()}
                 launchIntent={composerIntent}
                 onLaunchIntentConsumed={() => setComposerIntent(null)}
+                onNewThread={() => {
+                  void (async () => {
+                    if (await ui.confirmDiscardInspectorDraft()) {
+                      await controller.createThread();
+                    }
+                  })();
+                }}
+                onManageProviders={() => ui.openSettings("models")}
               />
             ) : null}
           </>
@@ -452,6 +467,7 @@ export function App({ runtime }: { runtime: ClientRuntime }) {
             onRefresh={controller.refreshSettings}
             onUpdate={controller.updateSettings}
             onClose={ui.closeSettings}
+            initialSection={ui.settingsSection}
           />
         </Suspense>
       ) : null}

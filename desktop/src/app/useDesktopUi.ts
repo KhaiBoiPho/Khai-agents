@@ -24,13 +24,15 @@ export interface DesktopUiState {
   inspectorDirty: boolean;
   /** The settings dialog overlays the current destination (dsh style). */
   settingsOpen: boolean;
+  /** Section the settings dialog opens on; null means its first section. */
+  settingsSection: string | null;
 }
 
 export interface DesktopUiController extends DesktopUiState {
   setDestination(destination: DesktopDestination): void;
   navigateTo(destination: DesktopDestination): Promise<boolean>;
   setSessionQuery(query: string): void;
-  openSettings(): void;
+  openSettings(section?: string): void;
   closeSettings(): void;
   openInspector(tab?: DesktopInspectorTab): void;
   closeInspector(): Promise<void>;
@@ -48,7 +50,11 @@ export function useDesktopUi(): DesktopUiController {
     useState<DesktopInspectorTab>("changes");
   const [inspectorDirty, setInspectorDirty] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const openSettings = useCallback(() => setSettingsOpen(true), []);
+  const [settingsSection, setSettingsSection] = useState<string | null>(null);
+  const openSettings = useCallback((section?: string) => {
+    setSettingsSection(section ?? null);
+    setSettingsOpen(true);
+  }, []);
   const closeSettings = useCallback(() => setSettingsOpen(false), []);
 
   const confirmDiscardInspectorDraft = useCallback(async () => {
@@ -99,6 +105,7 @@ export function useDesktopUi(): DesktopUiController {
       inspectorTab,
       inspectorDirty,
       settingsOpen,
+      settingsSection,
       setDestination,
       navigateTo,
       setSessionQuery,
@@ -123,6 +130,7 @@ export function useDesktopUi(): DesktopUiController {
       openSettings,
       sessionQuery,
       settingsOpen,
+      settingsSection,
       toggleInspector,
       confirmDiscardInspectorDraft,
     ],

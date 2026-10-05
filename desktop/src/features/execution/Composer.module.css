@@ -658,3 +658,183 @@
     text-align: left;
   }
 }
+
+/* cdesktop-style composer: chips above a flat input box, and a quiet
+   toolbar below it with access mode and tools on the left and the model
+   picker on the right. These rules follow the originals on purpose so they
+   win on source order. */
+.chips {
+  display: flex;
+  width: var(--conversation-width);
+  align-items: center;
+  gap: 6px;
+  margin: 0 auto 8px;
+  pointer-events: auto;
+}
+
+.chip,
+.chipButton {
+  display: inline-flex;
+  height: 28px;
+  min-width: 0;
+  align-items: center;
+  gap: 6px;
+  padding: 0 10px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-hover);
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+  white-space: nowrap;
+}
+
+.chip {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.chipButton {
+  width: 28px;
+  justify-content: center;
+  padding: 0;
+}
+
+.chipButton:hover:not(:disabled) {
+  background: var(--surface-selected);
+  color: var(--text-primary);
+}
+
+.composer {
+  position: relative;
+  border-color: var(--border-strong);
+  border-radius: var(--radius-md);
+  background: var(--surface-sidebar);
+  box-shadow: none;
+}
+
+.composer:focus-within {
+  border-color: var(--border-emphasis);
+  box-shadow: none;
+  transform: none;
+}
+
+.inputRow {
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+  padding-right: 9px;
+}
+
+.composer textarea {
+  min-height: 48px;
+  flex: 1;
+  padding: 13px 14px;
+  line-height: 1.5;
+}
+
+.sendButton,
+.stopButton {
+  width: 28px;
+  height: 28px;
+  min-height: 0;
+  margin-bottom: 10px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  box-shadow: none;
+}
+
+.sendButton {
+  background: transparent;
+  color: var(--text-tertiary);
+}
+
+.sendButton:hover:not(:disabled) {
+  transform: none;
+  background: var(--surface-hover);
+  color: var(--text-primary);
+}
+
+.stopButton {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+.toolbar {
+  width: var(--conversation-width);
+  min-height: 30px;
+  margin: 6px auto 0;
+  padding: 0 2px;
+  pointer-events: auto;
+}
+
+.accessMode {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 6px;
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+  white-space: nowrap;
+}
+
+.accessMode span {
+  padding: 0;
+  color: inherit;
+  font-size: inherit;
+}
+
+.accessMode select {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.accessMode:hover {
+  background: var(--surface-hover);
+}
+
+.accessMode[data-access="full_access"] {
+  color: var(--signal);
+}
+
+.iconButton {
+  position: relative;
+  display: grid;
+  width: 28px;
+  height: 28px;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: var(--radius-sm);
+  color: var(--text-tertiary);
+}
+
+.iconButton:hover:not(:disabled) {
+  background: var(--surface-hover);
+  color: var(--text-primary);
+}
+
+.iconButton[data-recording="true"] {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+.iconButton b {
+  position: absolute;
+  top: 0;
+  right: 0;
+  display: grid;
+  min-width: 13px;
+  height: 13px;
+  place-items: center;
+  border-radius: var(--radius-pill);
+  background: var(--signal);
+  color: var(--text-on-accent);
+  font: var(--text-micro) var(--font-mono);
+}
+
+.hint {
+  width: var(--conversation-width);
+}

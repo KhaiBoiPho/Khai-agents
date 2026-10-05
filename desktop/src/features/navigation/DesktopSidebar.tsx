@@ -1,12 +1,14 @@
 import {
   ChevronRight,
-  Cable,
+  ChevronsUpDown,
+  CircleHelp,
   Folder,
   FolderClock,
   FolderOpen,
   MessageSquare,
+  Languages,
+  LogOut,
   Plus,
-  Puzzle,
   Search,
   Settings,
   ShieldAlert,
@@ -38,7 +40,9 @@ interface DesktopSidebarProps {
   destination: DesktopDestination;
   settingsOpen: boolean;
   onDestination(destination: DesktopDestination): void;
-  onOpenSettings(): void;
+  onOpenSettings(section?: string): void;
+  /** Present only where the shell can end the browser session. */
+  onSignOut?: () => void;
   onQueryChange(query: string): void;
   onOpenProject(): void;
   onSelectProject(projectId: string): void;
@@ -88,6 +92,7 @@ export function DesktopSidebar({
   settingsOpen,
   onDestination,
   onOpenSettings,
+  onSignOut,
   onQueryChange,
   onOpenProject,
   onSelectProject,
@@ -245,30 +250,6 @@ export function DesktopSidebar({
           <WandSparkles size={16} />
           {t("sidebar.skills", "Skills")}
         </button>
-        <button
-          type="button"
-          data-active={destination === "plugins"}
-          onClick={() => onDestination("plugins")}
-        >
-          <Puzzle size={16} />
-          {t("sidebar.plugins", "Plugins")}
-        </button>
-        <button
-          type="button"
-          data-active={destination === "mcp"}
-          onClick={() => onDestination("mcp")}
-        >
-          <Cable size={16} />
-          {t("sidebar.mcp", "MCP")}
-        </button>
-        <button
-          type="button"
-          data-active={settingsOpen}
-          onClick={onOpenSettings}
-        >
-          <Settings size={16} />
-          {t("sidebar.settings", "Settings")}
-        </button>
       </nav>
 
       <div className={styles.sectionHeading}>
@@ -368,7 +349,129 @@ export function DesktopSidebar({
         )}
       </nav>
 
+      <AccountMenu
+        settingsOpen={settingsOpen}
+        onOpenSettings={onOpenSettings}
+        onSignOut={onSignOut}
+      />
     </aside>
+  );
+}
+
+const ACCOUNT_NAME = "Khai";
+const HELP_URL = "https://github.com/KhaiBoiPho/Khai-agents";
+
+/** Bottom-of-sidebar account button and menu, after the Claude web app. */
+function AccountMenu({
+  settingsOpen,
+  onOpenSettings,
+  onSignOut,
+}: {
+  settingsOpen: boolean;
+  onOpenSettings(section?: string): void;
+  onSignOut?: () => void;
+}) {
+  const { t } = useTranslation();
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const close = (event: MouseEvent) => {
+      if (!rootRef.current?.contains(event.target as Node)) setOpen(false);
+    };
+    const escape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("mousedown", close);
+    document.addEventListener("keydown", escape);
+    return () => {
+      document.removeEventListener("mousedown", close);
+      document.removeEventListener("keydown", escape);
+    };
+  }, [open]);
+
+  useEffect(() => {
+    const shortcut = (event: KeyboardEvent) => {
+      if ((event.metaKey || event.ctrlKey) && event.key === ",") {
+        event.preventDefault();
+        onOpenSettings();
+      }
+    };
+    window.addEventListener("keydown", shortcut);
+    return () => window.removeEventListener("keydown", shortcut);
+  }, [onOpenSettings]);
+
+  const choose = (action: () => void) => {
+    setOpen(false);
+    action();
+  };
+
+  return (
+    <div className={styles.account} ref={rootRef}>
+      {open ? (
+        <div className={styles.accountMenu} role="menu">
+          <p className={styles.accountMenuTitle}>Khai-Agents · Local</p>
+          <button
+            type="button"
+            role="menuitem"
+            onClick={() => choose(() => onOpenSettings())}
+          >
+            <Settings size={16} />
+            {t("sidebar.settings", "Settings")}
+            <kbd>Ctrl+,</kbd>
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            onClick={() => choose(() => onOpenSettings("general"))}
+          >
+            <Languages size={16} />
+            {t("sidebar.language", "Language")}
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            onClick={() =>
+              choose(() => window.open(HELP_URL, "_blank", "noopener"))
+            }
+          >
+            <CircleHelp size={16} />
+            {t("sidebar.help", "Get help")}
+          </button>
+          {onSignOut ? (
+            <>
+              <hr />
+              <button
+                type="button"
+                role="menuitem"
+                onClick={() => choose(onSignOut)}
+              >
+                <LogOut size={16} />
+                {t("sidebar.signOut", "Log out")}
+              </button>
+            </>
+          ) : null}
+        </div>
+      ) : null}
+      <button
+        type="button"
+        className={styles.accountButton}
+        data-active={open || settingsOpen}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        onClick={() => setOpen((current) => !current)}
+      >
+        <span className={styles.avatar} aria-hidden="true">
+          {ACCOUNT_NAME.charAt(0)}
+        </span>
+        <span className={styles.accountName}>
+          <strong>{ACCOUNT_NAME}</strong>
+          <small>Local</small>
+        </span>
+        <ChevronsUpDown size={14} />
+      </button>
+    </div>
   );
 }
 

@@ -1,7 +1,7 @@
 .shell {
   height: 100dvh;
   display: grid;
-  grid-template-rows: 32px minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
   background: var(--surface-shell);
   color: var(--text-primary);
 }

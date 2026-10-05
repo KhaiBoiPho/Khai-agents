@@ -1,9 +1,11 @@
 import {
-  ArrowUp,
   Check,
+  CornerDownLeft,
+  Folder,
   Mic,
   Paperclip,
-  ShieldCheck,
+  Plus,
+  SlidersHorizontal,
   Sparkles,
   Square,
   X,
@@ -35,7 +37,6 @@ import type { TranscriptMode } from "../thread/transcriptMode";
 import { PresetPicker } from "../presets/PresetPicker";
 import { usePresetCatalog } from "../presets/usePresetCatalog";
 import { useSkillCatalog } from "../skills/useSkillCatalog";
-import { GoalRail } from "../goal/GoalRail";
 import {
   matchingCommands,
   parseComposerCommand,
@@ -45,7 +46,6 @@ import styles from "./Composer.module.css";
 import { useDictation } from "./useDictation";
 import { usePromptDraft } from "./usePromptDraft";
 import { ModelPicker } from "./ModelPicker";
-import { TranscriptModePicker } from "./TranscriptModePicker";
 
 interface ComposerProps {
   editable: boolean;
@@ -88,6 +88,8 @@ interface ComposerProps {
   onInterrupt(): void;
   launchIntent: ComposerLaunchIntent | null;
   onLaunchIntentConsumed(): void;
+  onNewThread?: () => void;
+  onManageProviders?: () => void;
 }
 
 export interface ComposerLaunchIntent {
@@ -107,20 +109,9 @@ export function Composer({
   project,
   thread,
   settings,
-  goal,
-  goalOutcome,
-  goalTurns,
   disabledReason,
-  transcriptMode,
-  onTranscriptModeChange,
   onModelChange,
   onAccessPresetChange,
-  onSetGoal,
-  onPauseGoal,
-  onResumeGoal,
-  onContinueGoal,
-  onClearGoal,
-  onSelectGoalEvidence,
   onPickContextFiles,
   onCommand,
   onSend,
@@ -128,6 +119,8 @@ export function Composer({
   onInterrupt,
   launchIntent,
   onLaunchIntentConsumed,
+  onNewThread,
+  onManageProviders,
 }: ComposerProps) {
   const active = executingTurn !== null;
   const { busyEnter } = useComposerBehavior();
@@ -381,44 +374,54 @@ export function Composer({
     }
   };
 
+  const accessValue = accessPresetOverride ?? "";
+  const accessLabel = accessPresetOverride
+    ? ACCESS_PRESET_OPTIONS.find((option) => option.value === accessPresetOverride)
+        ?.label ?? accessPresetOverride
+    : `Default · ${defaultAccessLabel}`;
+  const notice =
+    commandError ??
+    contextError ??
+    dictation.error ??
+    deliveryNotice ??
+    dictationStatus ??
+    disabledReason;
+
   return (
     <footer className={styles.region}>
-      <GoalRail
-        goal={goal}
-        outcome={goalOutcome}
-        turns={goalTurns}
-        enabled={canExecute}
-        busy={busy}
-        skills={skillCatalog.activeSkills}
-        onSet={onSetGoal}
-        onPause={onPauseGoal}
-        onResume={onResumeGoal}
-        onContinue={onContinueGoal}
-        onClear={onClearGoal}
-        onSelectEvidence={onSelectGoalEvidence}
-      />
+      <div className={styles.chips}>
+        <PresetPicker
+          entries={presetCatalog.entries}
+          current={presetCatalog.current}
+          locked={conversationStarted}
+          busy={busy || presetCatalog.busy}
+          error={presetCatalog.error}
+          onSelect={(presetId) => void presetCatalog.select(presetId)}
+        />
+        <span
+          className={styles.chip}
+          title={thread?.workspacePath ?? project?.canonicalPath ?? undefined}
+        >
+          <Folder size={13} />
+          {project?.displayName ?? "Pick a folder…"}
+        </span>
+        {onNewThread ? (
+          <button
+            type="button"
+            className={styles.chipButton}
+            onClick={onNewThread}
+            disabled={busy}
+            aria-label="New thread"
+            title="New thread"
+          >
+            <Plus size={14} />
+          </button>
+        ) : null}
+      </div>
       <div className={styles.composer}>
         <label className={styles.promptLabel} htmlFor="turn-prompt">
           Task instruction
         </label>
-        <textarea
-          ref={textareaRef}
-          id="turn-prompt"
-          value={prompt}
-          onChange={(event) => {
-            setPrompt(event.target.value);
-            setCommandError(null);
-            setDeliveryNotice(null);
-          }}
-          onKeyDown={onKeyDown}
-          placeholder={
-            active
-              ? "Send guidance or corrections to the active Turn…"
-              : "Ask Khai-Agents to build, inspect, or verify…"
-          }
-          rows={1}
-          disabled={!editable}
-        />
         {commandSuggestions.length ? (
           <div className={styles.commandMenu} role="listbox" aria-label="Commands">
             {commandSuggestions.map((command) => (
@@ -582,160 +585,37 @@ export function Composer({
                 </span>
               ) : null}
             </div>
-            <p className={styles.accessFrozenNote}>
-              Active and queued Turns keep their frozen model and access.
-            </p>
           </div>
         ) : null}
-        <div className={styles.toolbar}>
-          <div className={styles.context}>
-            <button
-              className={styles.attachButton}
-              type="button"
-              onClick={() => void pickContextFiles()}
-              disabled={!editable || busy}
-              aria-label="Attach workspace files"
-              title="Attach workspace files"
-            >
-              <Paperclip size={14} />
-            </button>
-            <button
-              className={styles.skillButton}
-              type="button"
-              onClick={() => setSkillPickerOpen((open) => !open)}
-              disabled={
-                !editable || busy || active || !skillCatalog.activeSkills.length
-              }
-              aria-expanded={skillPickerOpen}
-              aria-label="Select Skills for this turn"
-              title={
-                skillCatalog.activeSkills.length
-                  ? "Select Skills for this turn"
-                  : "No selectable Skills"
-              }
-            >
-              <Sparkles size={14} />
-              {selectedSkills.length ? <b>{selectedSkills.length}</b> : null}
-            </button>
-            {dictation.available ? (
-              <button
-                className={styles.dictationButton}
-                data-recording={dictation.recording}
-                type="button"
-                onClick={dictation.toggle}
-                disabled={
-                  dictation.transcribing || (!editable && !dictation.recording)
-                }
-                aria-pressed={dictation.recording}
-                aria-label={
-                  dictation.recording
-                    ? t("composer.dictation.stop", "Stop and transcribe")
-                    : t("composer.dictation.start", "Start voice input")
-                }
-                title={
-                  dictation.recording
-                    ? t("composer.dictation.stop", "Stop and transcribe")
-                    : t("composer.dictation.start", "Start voice input")
-                }
-              >
-                {dictation.recording ? <Square size={12} /> : <Mic size={14} />}
-              </button>
-            ) : null}
-            {dictation.recording ? (
-              <button
-                className={styles.dictationCancel}
-                type="button"
-                onClick={dictation.cancel}
-                aria-label={t("composer.dictation.cancel", "Discard recording")}
-                title={t("composer.dictation.cancel", "Discard recording")}
-              >
-                <X size={12} />
-              </button>
-            ) : null}
-            <span title={thread?.workspacePath ?? project?.canonicalPath}>
-              {thread?.mode === "paper" ? "Paper2Code" : "Local"}
-            </span>
-            <ModelPicker
-              runtime={runtime}
-              project={project}
-              thread={thread}
-              settings={settings}
-              disabled={busy}
-              onChange={onModelChange}
-            />
-            <PresetPicker
-              entries={presetCatalog.entries}
-              current={presetCatalog.current}
-              locked={conversationStarted}
-              busy={busy || presetCatalog.busy}
-              error={presetCatalog.error}
-              onSelect={(presetId) => void presetCatalog.select(presetId)}
-            />
-            <TranscriptModePicker
-              mode={transcriptMode}
-              onChange={onTranscriptModeChange}
-            />
-            <label
-              className={styles.selector}
-              data-access={effectiveProductAccess ?? "inherit"}
-              title={
-                effectiveProductAccess === "full_access"
-                  ? "New submissions use Full access"
-                  : "Tool access for new submissions"
-              }
-            >
-              <ShieldCheck size={12} />
-              <small className={styles.selectorCaption}>New</small>
-              <select
-                aria-label="New submissions access"
-                value={accessPresetOverride ?? ""}
-                onChange={(event) => {
-                  const value = event.target.value;
-                  void onAccessPresetChange(
-                    value ? (value as ExecutionAccessPreset) : null,
-                  );
-                }}
-                disabled={busy || !thread}
-              >
-                <option value="">
-                  Default · {defaultAccessLabel}
-                </option>
-                {ACCESS_PRESET_OPTIONS.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-          </div>
+        <div className={styles.inputRow}>
+          <textarea
+            ref={textareaRef}
+            id="turn-prompt"
+            value={prompt}
+            onChange={(event) => {
+              setPrompt(event.target.value);
+              setCommandError(null);
+              setDeliveryNotice(null);
+            }}
+            onKeyDown={onKeyDown}
+            placeholder={
+              active
+                ? "Send guidance to the running turn…"
+                : "Type / for commands"
+            }
+            rows={1}
+            disabled={!editable}
+          />
           {active ? (
-            <div className={styles.activeActions}>
-              <button
-                className={styles.steerButton}
-                type="button"
-                onClick={() => void submit()}
-                disabled={!canExecute || busy || !prompt.trim()}
-              >
-                Steer
-              </button>
-              <button
-                className={styles.queueButton}
-                type="button"
-                onClick={() => void submitQueued()}
-                disabled={!canExecute || busy || !prompt.trim()}
-              >
-                {t("composer.queueNext", "Queue next")}
-              </button>
-              <button
-                className={styles.stopButton}
-                type="button"
-                onClick={onInterrupt}
-                aria-label="Stop turn"
-              >
-                <Square size={14} fill="currentColor" />
-                Stop
-              </button>
-            </div>
+            <button
+              className={styles.stopButton}
+              type="button"
+              onClick={onInterrupt}
+              aria-label="Stop turn"
+              title="Stop"
+            >
+              <Square size={12} fill="currentColor" />
+            </button>
           ) : (
             <button
               className={styles.sendButton}
@@ -743,29 +623,126 @@ export function Composer({
               onClick={() => void submit()}
               disabled={!canExecute || busy || !prompt.trim()}
               aria-label="Run turn"
+              title="Send"
             >
-              <ArrowUp size={18} strokeWidth={2.2} />
+              <CornerDownLeft size={16} />
             </button>
           )}
         </div>
       </div>
-      <p className={styles.hint}>
-        {commandError ??
-          contextError ??
-          dictation.error ??
-          deliveryNotice ??
-          dictationStatus ??
-          disabledReason ??
-          "Khai-Agents may ask before sensitive tools run."}
-        <span>
-          {active
-            ? busyEnter === "queue"
-              ? t("composer.hint.queueSteer", "↵ queue · ⌘↵ steer")
-              : t("composer.hint.steerQueue", "↵ steer · ⌘↵ queue")
-            : t("composer.hint.send", "↵ send")}{" "}
-          · {t("composer.hint.newline", "⇧↵ newline")}
-        </span>
-      </p>
+      <div className={styles.toolbar}>
+        <div className={styles.context}>
+          <label
+            className={styles.accessMode}
+            data-access={effectiveProductAccess ?? "inherit"}
+            title="Tool access for new submissions"
+          >
+            <span>{accessLabel}</span>
+            <select
+              aria-label="New submissions access"
+              value={accessValue}
+              onChange={(event) => {
+                const value = event.target.value;
+                void onAccessPresetChange(
+                  value ? (value as ExecutionAccessPreset) : null,
+                );
+              }}
+              disabled={busy || !thread}
+            >
+              <option value="">Default · {defaultAccessLabel}</option>
+              {ACCESS_PRESET_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <button
+            className={styles.iconButton}
+            type="button"
+            onClick={() => setSkillPickerOpen((open) => !open)}
+            disabled={
+              !editable || busy || active || !skillCatalog.activeSkills.length
+            }
+            aria-expanded={skillPickerOpen}
+            aria-label="Select Skills for this turn"
+            title={
+              skillCatalog.activeSkills.length
+                ? "Select Skills for this turn"
+                : "No selectable Skills"
+            }
+          >
+            <SlidersHorizontal size={15} />
+            {selectedSkills.length ? <b>{selectedSkills.length}</b> : null}
+          </button>
+          <button
+            className={styles.iconButton}
+            type="button"
+            onClick={() => void pickContextFiles()}
+            disabled={!editable || busy}
+            aria-label="Attach workspace files"
+            title="Attach workspace files"
+          >
+            <Paperclip size={15} />
+          </button>
+          {dictation.available ? (
+            <button
+              className={styles.iconButton}
+              data-recording={dictation.recording}
+              type="button"
+              onClick={dictation.toggle}
+              disabled={
+                dictation.transcribing || (!editable && !dictation.recording)
+              }
+              aria-pressed={dictation.recording}
+              aria-label={
+                dictation.recording
+                  ? t("composer.dictation.stop", "Stop and transcribe")
+                  : t("composer.dictation.start", "Start voice input")
+              }
+              title={
+                dictation.recording
+                  ? t("composer.dictation.stop", "Stop and transcribe")
+                  : t("composer.dictation.start", "Start voice input")
+              }
+            >
+              {dictation.recording ? <Square size={12} /> : <Mic size={15} />}
+            </button>
+          ) : null}
+          {dictation.recording ? (
+            <button
+              className={styles.iconButton}
+              type="button"
+              onClick={dictation.cancel}
+              aria-label={t("composer.dictation.cancel", "Discard recording")}
+              title={t("composer.dictation.cancel", "Discard recording")}
+            >
+              <X size={13} />
+            </button>
+          ) : null}
+        </div>
+        <ModelPicker
+          runtime={runtime}
+          project={project}
+          thread={thread}
+          settings={settings}
+          disabled={busy}
+          onChange={onModelChange}
+          onManageProviders={onManageProviders}
+        />
+      </div>
+      {notice || active ? (
+        <p className={styles.hint}>
+          {notice}
+          {active ? (
+            <span>
+              {busyEnter === "queue"
+                ? t("composer.hint.queueSteer", "↵ queue · ⌘↵ steer")
+                : t("composer.hint.steerQueue", "↵ steer · ⌘↵ queue")}
+            </span>
+          ) : null}
+        </p>
+      ) : null}
     </footer>
   );
 }

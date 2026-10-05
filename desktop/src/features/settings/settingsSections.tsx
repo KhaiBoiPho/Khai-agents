@@ -7,7 +7,13 @@
 
 import type { ComponentType } from "react";
 import type { LucideIcon } from "lucide-react";
-import { Bot, Database, Settings as SettingsIcon, SlidersHorizontal } from "lucide-react";
+import {
+  Cpu,
+  Plug,
+  Puzzle,
+  Settings as SettingsIcon,
+  SquareStack,
+} from "lucide-react";
 
 import type {
   ConfigScope,
@@ -16,12 +22,18 @@ import type {
   SettingsSnapshot,
 } from "../../generated/app-server";
 import type { ClientRuntime } from "../../rpc/contracts";
+import { McpPage } from "../mcp/McpPage";
 import { GeneralSection } from "./sections/GeneralSection";
 import { ModelsSection } from "./sections/ModelsSection";
 import { PluginsSection } from "./sections/PluginsSection";
 import { PresetsSection } from "./sections/PresetsSection";
 
-export type SettingsSectionId = "general" | "models" | "plugins" | "agent-presets";
+export type SettingsSectionId =
+  | "general"
+  | "agent-presets"
+  | "models"
+  | "mcp"
+  | "plugins";
 
 /** Everything a section may need; each uses the subset it cares about. */
 export interface SettingsSectionProps {
@@ -49,6 +61,11 @@ export interface SettingsSection {
   component: ComponentType<SettingsSectionProps>;
 }
 
+function McpSection({ runtime, project }: SettingsSectionProps) {
+  return <McpPage runtime={runtime} project={project} />;
+}
+
+// Order and names follow cdesktop's settings rail.
 const SECTIONS: readonly SettingsSection[] = [
   {
     id: "general",
@@ -59,28 +76,36 @@ const SECTIONS: readonly SettingsSection[] = [
     component: GeneralSection,
   },
   {
-    id: "models",
+    id: "agent-presets",
     order: 10,
-    labelKey: "settings.section.models",
-    label: "Models",
-    icon: Database,
+    labelKey: "settings.section.agents",
+    label: "Agents",
+    icon: Cpu,
+    component: PresetsSection,
+  },
+  {
+    id: "models",
+    order: 20,
+    labelKey: "settings.section.providers",
+    label: "Providers",
+    icon: SquareStack,
     component: ModelsSection,
   },
   {
-    id: "plugins",
-    order: 15,
-    labelKey: "settings.section.plugins",
-    label: "Plugins",
-    icon: SlidersHorizontal,
-    component: PluginsSection,
+    id: "mcp",
+    order: 30,
+    labelKey: "settings.section.mcp",
+    label: "MCP Servers",
+    icon: Plug,
+    component: McpSection,
   },
   {
-    id: "agent-presets",
-    order: 20,
-    labelKey: "settings.section.presets",
-    label: "Agent presets",
-    icon: Bot,
-    component: PresetsSection,
+    id: "plugins",
+    order: 40,
+    labelKey: "settings.section.plugins",
+    label: "Plugins",
+    icon: Puzzle,
+    component: PluginsSection,
   },
 ];
 

@@ -10,7 +10,6 @@ export function BrowserShell() {
     resolve(value: string | null): void;
   } | null>(null);
   const [path, setPath] = useState("");
-  const [notice, setNotice] = useState<string | null>(null);
   const [runtime] = useState(
     () =>
       new BrowserRuntime({
@@ -44,24 +43,16 @@ export function BrowserShell() {
   };
   return (
     <div className={styles.shell}>
-      <header className={styles.bar}>
-        <span>Khai-Agents · Local service</span>
-        <span>{notice}</span>
-        <button
-          onClick={() =>
+      <div className={styles.app}>
+        <App
+          runtime={runtime}
+          onSignOut={() =>
             void runtime
               .logout()
-              .then(() =>
-                setNotice("Signed out · run deepcode web for a fresh link"),
-              )
-              .catch((error) => setNotice(String(error)))
+              .catch(() => undefined)
+              .finally(() => location.reload())
           }
-        >
-          Sign out
-        </button>
-      </header>
-      <div className={styles.app}>
-        <App runtime={runtime} />
+        />
       </div>
       {picker && (
         <div className={styles.backdrop}>

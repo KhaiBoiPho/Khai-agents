@@ -1,10 +1,4 @@
-import {
-  Check,
-  ChevronDown,
-  Cpu,
-  RefreshCw,
-  Search,
-} from "lucide-react";
+import { Check, Search, Settings } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import type {
@@ -31,8 +25,16 @@ interface ModelPickerProps {
     reasoningEffort: string | null,
     contextWindow: number | null,
   ): void;
+  onManageProviders?: () => void;
 }
 
+const MODELS_PER_GROUP = 60;
+
+/**
+ * Model and effort picker after cdesktop's: a text trigger ("model · effort")
+ * opening a searchable list grouped by connection, with an effort strip and a
+ * link to the provider settings. Every choice applies immediately.
+ */
 export function ModelPicker({
   runtime,
   project,
@@ -40,83 +42,60 @@ export function ModelPicker({
   settings,
   disabled,
   onChange,
+  onManageProviders,
 }: ModelPickerProps) {
   const rootRef = useRef<HTMLDivElement | null>(null);
-  const {
-    catalog: connectionCatalog,
-    models: listModels,
-  } = useConnectionCatalog(runtime, project?.id ?? null);
+  const { catalog: connectionCatalog, models: listModels } =
+    useConnectionCatalog(runtime, project?.id ?? null);
   const [open, setOpen] = useState(false);
-  const [connectionId, setConnectionId] = useState("");
-  const [modelId, setModelId] = useState("");
-  const [reasoningEffort, setReasoningEffort] = useState("auto");
-  const [contextWindow, setContextWindow] = useState<number | null>(null);
-  const [catalog, setCatalog] = useState<ModelCatalogResult | null>(null);
-  const [refreshingModels, setRefreshingModels] = useState(false);
-  const [modelFailure, setModelFailure] = useState<{
-    connectionId: string;
-    message: string;
-  } | null>(null);
   const [query, setQuery] = useState("");
-  const [manualModel, setManualModel] = useState("");
+  const [catalogs, setCatalogs] = useState<Record<string, ModelCatalogResult>>(
+    {},
+  );
+  const [errors, setErrors] = useState<Record<string, string>>({});
   const defaults = agentDefaults(settings);
   const effectiveModel = thread?.model ?? defaults.model;
+  const usableConnections = useMemo(
+    () =>
+      (connectionCatalog?.connections ?? []).filter(
+        (connection) => connection.enabled && connection.configured,
+      ),
+    [connectionCatalog],
+  );
   const effectiveConnection = resolveConnection(
     connectionCatalog?.connections ?? [],
     thread?.connectionId ?? defaults.connection,
     effectiveModel,
   );
-  const selectedConnectionId = connectionId || effectiveConnection?.id || "";
-  const selectedModel = useMemo(
-    () =>
-      catalog?.connectionId === selectedConnectionId
-        ? catalog.models.find((model) => model.id === modelId) ?? null
-        : null,
-    [catalog, modelId, selectedConnectionId],
-  );
-  const effortOptions = useMemo(
-    () => reasoningOptions(selectedModel),
-    [selectedModel],
-  );
-  const validReasoningEffort = effortOptions.some(
-    (option) => option.value === reasoningEffort,
-  )
-    ? reasoningEffort
-    : "auto";
   const effectiveEffort =
     thread?.reasoningEffort ?? defaults.reasoningEffort ?? "auto";
-  const effectiveContextWindow = thread?.contextWindow ?? null;
-  const contextOptions = useMemo(
-    () =>
-      contextWindowOptions(
-        selectedModel?.contextWindow ?? null,
-        contextWindow,
-      ),
-    [contextWindow, selectedModel?.contextWindow],
-  );
+  const usingDefaults = !thread?.model && !thread?.connectionId;
 
   useEffect(() => {
-    if (!open || !selectedConnectionId) return;
+    if (!open) return;
     let cancelled = false;
-    void listModels(selectedConnectionId)
-      .then((result) => {
-        if (!cancelled) {
-          setCatalog(result);
-          setModelFailure(null);
-        }
-      })
-      .catch((cause) => {
-        if (!cancelled) {
-          setModelFailure({
-            connectionId: selectedConnectionId,
-            message: cause instanceof Error ? cause.message : String(cause),
-          });
-        }
-      });
+    for (const connection of usableConnections) {
+      if (catalogs[connection.id]) continue;
+      void listModels(connection.id)
+        .then((result) => {
+          if (!cancelled) {
+            setCatalogs((current) => ({ ...current, [connection.id]: result }));
+          }
+        })
+        .catch((cause) => {
+          if (!cancelled) {
+            setErrors((current) => ({
+              ...current,
+              [connection.id]:
+                cause instanceof Error ? cause.message : String(cause),
+            }));
+          }
+        });
+    }
     return () => {
       cancelled = true;
     };
-  }, [listModels, open, selectedConnectionId]);
+  }, [catalogs, listModels, open, usableConnections]);
 
   useEffect(() => {
     if (!open) return;
@@ -134,59 +113,49 @@ export function ModelPicker({
     };
   }, [open]);
 
-  const models = useMemo(() => {
-    const normalized = query.trim().toLocaleLowerCase();
+  const currentModel: CatalogModel | null = useMemo(() => {
+    if (!effectiveConnection || !effectiveModel) return null;
     return (
-      catalog?.connectionId === selectedConnectionId ? catalog.models : []
-    )
+      catalogs[effectiveConnection.id]?.models.find(
+        (model) => model.id === effectiveModel,
+      ) ?? null
+    );
+  }, [catalogs, effectiveConnection, effectiveModel]);
+  const effortOptions = reasoningOptions(currentModel);
+
+  const normalized = query.trim().toLocaleLowerCase();
+  const groups = usableConnections.map((connection) => {
+    const result = catalogs[connection.id];
+    const models = (result?.models ?? [])
       .filter(
         (model) =>
           !normalized ||
           model.id.toLocaleLowerCase().includes(normalized) ||
           model.name.toLocaleLowerCase().includes(normalized),
       )
-      .slice(0, 120);
-  }, [catalog, query, selectedConnectionId]);
-  const modelError =
-    modelFailure?.connectionId === selectedConnectionId
-      ? modelFailure.message
-      : null;
-  const loadingModels =
-    refreshingModels ||
-    Boolean(
-      open &&
-        selectedConnectionId &&
-        catalog?.connectionId !== selectedConnectionId &&
-        !modelError,
-    );
+      .slice(0, MODELS_PER_GROUP);
+    return {
+      connection,
+      models,
+      loading: !result && !errors[connection.id],
+      error: errors[connection.id] ?? result?.error ?? null,
+    };
+  });
 
-  const apply = () => {
-    if (!selectedConnectionId || !modelId) return;
-    onChange(
-      selectedConnectionId,
-      modelId,
-      validReasoningEffort,
-      contextWindow,
-    );
+  const pick = (connectionId: string, modelId: string) => {
+    onChange(connectionId, modelId, "auto", null);
     setOpen(false);
     setQuery("");
-    setManualModel("");
   };
 
-  const refresh = async () => {
-    if (!selectedConnectionId) return;
-    setRefreshingModels(true);
-    setModelFailure(null);
-    try {
-      setCatalog(await listModels(selectedConnectionId, true));
-    } catch (cause) {
-      setModelFailure({
-        connectionId: selectedConnectionId,
-        message: cause instanceof Error ? cause.message : String(cause),
-      });
-    } finally {
-      setRefreshingModels(false);
-    }
+  const pickEffort = (effort: string) => {
+    if (!effectiveConnection || !effectiveModel) return;
+    onChange(
+      effectiveConnection.id,
+      effectiveModel,
+      effort,
+      thread?.contextWindow ?? null,
+    );
   };
 
   return (
@@ -194,226 +163,120 @@ export function ModelPicker({
       <button
         type="button"
         className={styles.trigger}
-        onClick={() => {
-          if (!open && !connectionId && effectiveConnection) {
-            setConnectionId(effectiveConnection.id);
-          }
-          if (!open) {
-            setModelId(effectiveModel ?? "");
-            setReasoningEffort(effectiveEffort);
-            setContextWindow(effectiveContextWindow);
-          }
-          setOpen((current) => !current);
-        }}
+        onClick={() => setOpen((current) => !current)}
         disabled={disabled}
         aria-haspopup="dialog"
         aria-expanded={open}
         aria-label="Session model"
-        title="Connection and model for this Session"
+        title={
+          effectiveConnection
+            ? `${effectiveConnection.label} · ${effectiveModel ?? ""}`
+            : "Choose a model"
+        }
       >
-        <Cpu size={12} />
-        <span>
-          <small>{effectiveConnection?.label ?? "Automatic"}</small>
-          <strong>{effectiveModel || "Configured model"}</strong>
-          <em>
-            {effortLabel(effectiveEffort)} ·{" "}
-            {effectiveContextWindow
-              ? `${formatTokens(effectiveContextWindow)} context cap`
-              : "Auto context"}
-          </em>
-        </span>
-        <ChevronDown size={12} />
+        <strong>{shortModelName(currentModel?.name ?? effectiveModel)}</strong>
+        <span>· {effortLabel(effectiveEffort)}</span>
       </button>
 
       {open ? (
         <section
           className={styles.menu}
           role="dialog"
-          aria-label="Choose connection and model"
+          aria-label="Choose model and effort"
         >
-          <header>
-            <div>
-              <strong>Run future Turns with</strong>
-              <span>History stays in this Session when the model changes.</span>
-            </div>
-            <button
-              type="button"
-              onClick={() => void refresh()}
-              disabled={!selectedConnectionId || loadingModels}
-              aria-label="Refresh model catalog"
-            >
-              <RefreshCw size={14} />
-            </button>
-          </header>
-
-          <label className={styles.connectionField}>
-            Connection
-            <select
-              value={selectedConnectionId}
-              onChange={(event) => {
-                setConnectionId(event.target.value);
-                setModelId("");
-                setReasoningEffort("auto");
-                setContextWindow(null);
-                setModelFailure(null);
-                setQuery("");
-              }}
-            >
-              <option value="">Choose a connection</option>
-              {connectionCatalog?.connections.map((connection) => (
-                <option
-                  key={connection.id}
-                  value={connection.id}
-                  disabled={!connection.enabled}
-                >
-                  {connection.label}
-                  {connection.configured ? "" : " · credential needed"}
-                </option>
-              ))}
-            </select>
-          </label>
-
           <label className={styles.search}>
             <Search size={14} />
-            <span>Search models</span>
             <input
               value={query}
               onChange={(event) => setQuery(event.target.value)}
-              placeholder="Search model IDs"
+              placeholder="Search models…"
+              aria-label="Search models"
               autoFocus
             />
           </label>
 
           <div className={styles.models} role="listbox">
-            {models.map((model) => {
-              const selected = model.id === modelId;
-              return (
+            {!normalized ? (
+              <div className={styles.group}>
+                <p className={styles.groupLabel}>Default</p>
                 <button
                   type="button"
                   role="option"
-                  aria-selected={selected}
-                  key={model.id}
+                  aria-selected={usingDefaults}
                   onClick={() => {
-                    setModelId(model.id);
-                    setReasoningEffort("auto");
-                    setContextWindow(null);
+                    onChange(null, null, null, null);
+                    setOpen(false);
                   }}
                 >
-                  <span>
-                    <strong>{model.name}</strong>
-                    <code>{model.id}</code>
-                  </span>
-                  <small>
-                    {formatTokens(model.contextWindow)} context
-                    {model.reasoning ? " · Thinking" : ""}
-                    {selected ? <Check size={12} /> : null}
-                  </small>
+                  <span>Default Model</span>
+                  {usingDefaults ? <Check size={13} /> : null}
                 </button>
-              );
-            })}
-            {loadingModels ? <p>Loading model catalog…</p> : null}
-            {!loadingModels && !models.length ? (
-              <p>
-                {modelError ??
-                  catalog?.error ??
-                  "No matching models. Enter an exact model ID below."}
-              </p>
+              </div>
             ) : null}
+            {groups.map(({ connection, models, loading, error }) => (
+              <div className={styles.group} key={connection.id}>
+                <p className={styles.groupLabel}>{connection.label}</p>
+                {models.map((model) => {
+                  const selected =
+                    !usingDefaults &&
+                    effectiveConnection?.id === connection.id &&
+                    model.id === effectiveModel;
+                  return (
+                    <button
+                      type="button"
+                      role="option"
+                      aria-selected={selected}
+                      key={model.id}
+                      title={model.id}
+                      onClick={() => pick(connection.id, model.id)}
+                    >
+                      <span>{shortModelName(model.name)}</span>
+                      <small>{formatTokens(model.contextWindow)}</small>
+                      {selected ? <Check size={13} /> : null}
+                    </button>
+                  );
+                })}
+                {loading ? <p className={styles.status}>Loading…</p> : null}
+                {!loading && !models.length ? (
+                  <p className={styles.status}>
+                    {error ?? (normalized ? "No matching models" : "No models")}
+                  </p>
+                ) : null}
+              </div>
+            ))}
           </div>
 
-          <section className={styles.effort} aria-label="Thinking effort">
+          <div className={styles.effort} role="radiogroup" aria-label="Effort">
+            <span>Effort</span>
             <div>
-              <strong>Thinking</strong>
-              <span>
-                {selectedModel?.reasoning
-                  ? "Applied to future Turns in this Session."
-                  : "This model does not publish adjustable Thinking levels."}
-              </span>
-            </div>
-            <div role="radiogroup" aria-label="Thinking effort level">
               {effortOptions.map((option) => (
                 <button
                   type="button"
                   role="radio"
-                  aria-checked={validReasoningEffort === option.value}
+                  aria-checked={effectiveEffort === option.value}
                   key={option.value}
-                  onClick={() => setReasoningEffort(option.value)}
+                  disabled={!effectiveModel || !effectiveConnection}
+                  onClick={() => pickEffort(option.value)}
                 >
                   {option.label}
                 </button>
               ))}
             </div>
-          </section>
+          </div>
 
-          <section className={styles.context} aria-label="Context window">
-            <div>
-              <strong>Context</strong>
-              <span>
-                Cap future Turns below the model&apos;s published window. Lower
-                caps compact history sooner.
-              </span>
-            </div>
-            <select
-              aria-label="Context window cap"
-              value={contextWindow ?? ""}
-              disabled={!selectedModel}
-              onChange={(event) =>
-                setContextWindow(
-                  event.target.value ? Number(event.target.value) : null,
-                )
-              }
-            >
-              <option value="">
-                Automatic
-                {selectedModel
-                  ? ` · ${formatTokens(selectedModel.contextWindow)}`
-                  : ""}
-              </option>
-              {contextOptions.map((value) => (
-                <option key={value} value={value}>
-                  {formatTokens(value)}
-                </option>
-              ))}
-            </select>
-          </section>
-
-          <footer>
-            <input
-              value={manualModel}
-              onChange={(event) => setManualModel(event.target.value)}
-              placeholder="Exact model ID"
-              aria-label="Exact model ID"
-            />
+          {onManageProviders ? (
             <button
               type="button"
+              className={styles.manage}
               onClick={() => {
-                setModelId(manualModel.trim());
-                setReasoningEffort("auto");
-                setContextWindow(null);
-              }}
-              disabled={!selectedConnectionId || !manualModel.trim()}
-            >
-              Select
-            </button>
-            <button
-              type="button"
-              className={styles.apply}
-              onClick={apply}
-              disabled={!selectedConnectionId || !modelId}
-            >
-              Apply
-            </button>
-            <button
-              type="button"
-              className={styles.reset}
-              onClick={() => {
-                onChange(null, null, null, null);
                 setOpen(false);
+                onManageProviders();
               }}
             >
-              Use defaults
+              <Settings size={14} />
+              Manage providers →
             </button>
-          </footer>
+          ) : null}
         </section>
       ) : null}
     </div>
@@ -464,7 +327,15 @@ function reasoningOptions(
 function effortLabel(value: string): string {
   if (value === "auto") return "Auto";
   if (value === "none") return "Off";
+  if (value === "medium") return "Med";
+  if (value === "xhigh") return "XHigh";
   return value.charAt(0).toLocaleUpperCase() + value.slice(1);
+}
+
+/** `models/gemini-3.6-flash` and `nvidia/nemotron-…` read as their last part. */
+function shortModelName(value: string | null | undefined): string {
+  if (!value) return "Default Model";
+  return value.split("/").at(-1) ?? value;
 }
 
 function resolveConnection(
@@ -491,16 +362,4 @@ function formatTokens(value: number): string {
   if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}M`;
   if (value >= 1_000) return `${Math.round(value / 1_000)}K`;
   return String(value);
-}
-
-function contextWindowOptions(
-  published: number | null,
-  current: number | null,
-): number[] {
-  if (!published) return [];
-  const options = [32_000, 64_000, 128_000, 256_000, 512_000, 1_000_000].filter(
-    (value) => value < published,
-  );
-  if (current && current <= published) options.push(current);
-  return [...new Set(options)].sort((left, right) => left - right);
 }

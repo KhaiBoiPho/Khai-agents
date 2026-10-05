@@ -72,9 +72,10 @@ const ZH_CN: Record<string, string> = {
   // Settings dialog shell
   "settings.title": "设置",
   "settings.section.general": "通用",
-  "settings.section.models": "模型",
+  "settings.section.providers": "提供商",
+  "settings.section.mcp": "MCP 服务器",
   "settings.section.plugins": "插件",
-  "settings.section.presets": "智能体预设",
+  "settings.section.agents": "智能体",
   "settings.writeTo": "写入到",
   "settings.scope.user": "用户配置",
   "settings.scope.project": "当前项目",
