@@ -1,0 +1,172 @@
+import {
+  ChevronRight,
+  CornerDownLeft,
+  Folder,
+  FolderPlus,
+  Laptop,
+  Sparkle,
+} from "lucide-react";
+import { useMemo, useState } from "react";
+
+import type { Project } from "../../generated/app-server";
+import { isRecoveredHistoryProject } from "../../app/projectPresentation";
+import { MOCK_ACCOUNT } from "../../mocks/preview";
+import styles from "./HomeView.module.css";
+
+interface HomeViewProps {
+  projects: Project[];
+  selectedProjectId: string | null;
+  busy: boolean;
+  onOpenProject(projectId: string): void;
+  onAddFolder(): void;
+  onStart(projectId: string, prompt: string): void;
+}
+
+/**
+ * Landing view when no thread is open: a greeting, recent projects, and a
+ * composer that starts a new thread in the chosen folder.
+ */
+export function HomeView({
+  projects,
+  selectedProjectId,
+  busy,
+  onOpenProject,
+  onAddFolder,
+  onStart,
+}: HomeViewProps) {
+  const recent = useMemo(
+    () =>
+      [...projects]
+        .filter((project) => !isRecoveredHistoryProject(project))
+        .sort((left, right) => right.lastOpenedAt.localeCompare(left.lastOpenedAt)),
+    [projects],
+  );
+  const [projectId, setProjectId] = useState(
+    selectedProjectId ?? recent[0]?.id ?? "",
+  );
+  const [prompt, setPrompt] = useState("");
+  const target = projects.find((project) => project.id === projectId) ?? null;
+  const canStart =
+    Boolean(target) && target?.trustState === "trusted" && !busy && Boolean(prompt.trim());
+
+  const start = () => {
+    if (!canStart || !target) return;
+    onStart(target.id, prompt.trim());
+    setPrompt("");
+  };
+
+  return (
+    <div className={styles.home}>
+      <div className={styles.column}>
+        <h2 className={styles.greeting}>
+          <Sparkle size={22} className={styles.mark} aria-hidden="true" />
+          Welcome back, {MOCK_ACCOUNT.name}
+        </h2>
+
+        <section className={styles.projects} aria-label="Projects">
+          <h3>Projects</h3>
+          {recent.length ? (
+            recent.slice(0, 8).map((project) => (
+              <button
+                type="button"
+                key={project.id}
+                className={styles.projectRow}
+                onClick={() => onOpenProject(project.id)}
+                title={project.canonicalPath}
+              >
+                <span className={styles.dot} aria-hidden="true" />
+                <span className={styles.projectName}>{project.displayName}</span>
+                <span className={styles.when}>{relativeTime(project.lastOpenedAt)}</span>
+                <ChevronRight size={15} />
+              </button>
+            ))
+          ) : (
+            <button type="button" className={styles.projectRow} onClick={onAddFolder}>
+              <FolderPlus size={15} />
+              <span className={styles.projectName}>Open a local folder</span>
+            </button>
+          )}
+        </section>
+      </div>
+
+      <div className={styles.composerArea}>
+        <div className={styles.chips}>
+          <span className={styles.chip}>
+            <Laptop size={13} />
+            Local
+          </span>
+          <label className={styles.chip}>
+            <Folder size={13} />
+            <select
+              value={projectId}
+              onChange={(event) => setProjectId(event.target.value)}
+              aria-label="Folder for the new chat"
+            >
+              {recent.map((project) => (
+                <option key={project.id} value={project.id}>
+                  {project.displayName}
+                </option>
+              ))}
+            </select>
+          </label>
+          <button
+            type="button"
+            className={styles.chipButton}
+            onClick={onAddFolder}
+            disabled={busy}
+            aria-label="Open another folder"
+            title="Open another folder"
+          >
+            <FolderPlus size={14} />
+          </button>
+        </div>
+        <div className={styles.box}>
+          <textarea
+            value={prompt}
+            onChange={(event) => setPrompt(event.target.value)}
+            onKeyDown={(event) => {
+              if (
+                event.key === "Enter" &&
+                !event.shiftKey &&
+                !event.nativeEvent.isComposing
+              ) {
+                event.preventDefault();
+                start();
+              }
+            }}
+            placeholder="Describe a task or ask a question"
+            rows={1}
+            aria-label="New chat prompt"
+          />
+          <button
+            type="button"
+            onClick={start}
+            disabled={!canStart}
+            aria-label="Start chat"
+            title="Start chat"
+          >
+            <CornerDownLeft size={16} />
+          </button>
+        </div>
+        {target && target.trustState !== "trusted" ? (
+          <p className={styles.hint}>
+            Trust {target.displayName} before starting a chat in it.
+          </p>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+function relativeTime(iso: string): string {
+  const then = Date.parse(iso);
+  if (Number.isNaN(then)) return "";
+  const minutes = Math.max(0, Math.round((Date.now() - then) / 60_000));
+  if (minutes < 1) return "just now";
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.round(hours / 24);
+  if (days < 30) return `${days}d ago`;
+  return new Date(then).toLocaleDateString();
+}

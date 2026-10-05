@@ -644,3 +644,156 @@
 .account {
   margin: 6px 0 0;
 }
+
+/* Desktop-app layout: icon row, search, primary nav, then projects as quiet
+   group headings with their chats beneath. */
+.iconRow {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin: 0 0 8px;
+}
+
+.iconRow button {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  place-items: center;
+  border-radius: var(--radius-sm);
+  color: var(--text-tertiary);
+}
+
+.iconRow button:hover {
+  background: var(--surface-hover);
+  color: var(--text-primary);
+}
+
+.search {
+  min-height: 30px;
+  margin: 0 0 8px;
+  border-color: var(--border-subtle);
+}
+
+.primaryNav {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  margin: 0 0 18px;
+}
+
+.primaryNav button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 5px 8px;
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+  text-align: left;
+}
+
+.primaryNav button svg {
+  color: var(--text-tertiary);
+}
+
+.primaryNav button:hover:not(:disabled),
+.primaryNav button[data-active="true"] {
+  background: var(--surface-hover);
+  color: var(--text-primary);
+}
+
+.primaryNav .newButton {
+  background: var(--surface-selected);
+  color: var(--text-primary);
+}
+
+.primaryNav .newButton svg {
+  color: var(--text-primary);
+}
+
+.projectGroup {
+  margin-bottom: 12px;
+}
+
+.groupHeader {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 0 2px 2px 0;
+}
+
+.groupName {
+  display: inline-flex;
+  min-width: 0;
+  flex: 1;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border-radius: var(--radius-sm);
+  color: var(--text-tertiary);
+  font-size: var(--text-xs);
+  text-align: left;
+}
+
+.groupName span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.groupName:hover,
+.groupName[data-active="true"] {
+  color: var(--text-secondary);
+}
+
+.groupChevron {
+  flex-shrink: 0;
+  transition: transform 140ms ease;
+}
+
+.groupChevron[data-expanded="true"] {
+  transform: rotate(90deg);
+}
+
+.groupAdd {
+  display: grid;
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+  place-items: center;
+  border-radius: var(--radius-sm);
+  color: var(--text-tertiary);
+  opacity: 0;
+}
+
+.groupHeader:hover .groupAdd,
+.groupAdd:focus-visible {
+  opacity: 1;
+}
+
+.groupAdd:hover:not(:disabled) {
+  background: var(--surface-hover);
+  color: var(--text-primary);
+}
+
+.threadList {
+  margin: 0;
+  padding: 0;
+  border-left: 0;
+}
+
+.addFolder {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+  padding: 5px 8px;
+  border-radius: var(--radius-sm);
+  color: var(--text-tertiary);
+  font-size: var(--text-xs);
+}
+
+.addFolder:hover:not(:disabled) {
+  background: var(--surface-hover);
+  color: var(--text-primary);
+}

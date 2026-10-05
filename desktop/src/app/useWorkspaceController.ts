@@ -81,6 +81,11 @@ export interface WorkspaceController {
   selectProject(projectId: string): Promise<void>;
   trustProject(): Promise<void>;
   createThread(mode?: ThreadMode, title?: string): Promise<Thread | undefined>;
+  createThreadIn(
+    projectId: string,
+    mode?: ThreadMode,
+    title?: string,
+  ): Promise<Thread | undefined>;
   forkThread(): Promise<void>;
   selectThread(threadId: string): Promise<void>;
   renameThread(threadId: string, title: string): Promise<void>;
@@ -412,6 +417,40 @@ export function useWorkspaceController(runtime: ClientRuntime): WorkspaceControl
         return result.thread;
       }),
     [replayThread, runtime, selectedProject, withBusy],
+  );
+
+  /** Start a thread in any project, switching to it first if needed. */
+  const createThreadIn = useCallback(
+    (projectId: string, mode: ThreadMode = "code", title?: string) =>
+      withBusy(async () => {
+        if (projectId !== state.selectedProjectId) {
+          dispatch({ type: "select-project", projectId });
+          selectedThreadRef.current = null;
+          eventStreamRef.current?.stop();
+          localStorage.setItem(PROJECT_KEY, projectId);
+          await loadThreads(projectId, null);
+          await loadSettings(projectId);
+        }
+        const result = await runtime.request("thread/start", {
+          projectId,
+          title: title ?? (mode === "paper" ? "New Paper2Code run" : "New task"),
+          mode,
+        });
+        dispatch({ type: "thread-upsert", thread: result.thread });
+        dispatch({ type: "select-thread", threadId: result.thread.id });
+        selectedThreadRef.current = result.thread.id;
+        localStorage.setItem(THREAD_KEY, result.thread.id);
+        await replayThread(result.thread.id);
+        return result.thread;
+      }),
+    [
+      loadSettings,
+      loadThreads,
+      replayThread,
+      runtime,
+      state.selectedProjectId,
+      withBusy,
+    ],
   );
 
   const forkThread = useCallback(
@@ -954,6 +993,7 @@ export function useWorkspaceController(runtime: ClientRuntime): WorkspaceControl
       selectProject,
       trustProject,
       createThread,
+      createThreadIn,
       forkThread,
       selectThread,
       renameThread,
@@ -987,6 +1027,7 @@ export function useWorkspaceController(runtime: ClientRuntime): WorkspaceControl
     }),
     [
       createThread,
+      createThreadIn,
       archiveThread,
       deleteThread,
       forkThread,

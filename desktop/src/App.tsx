@@ -19,6 +19,7 @@ import {
   type ComposerLaunchIntent,
 } from "./features/execution/Composer";
 import { DesktopSidebar } from "./features/navigation/DesktopSidebar";
+import { HomeView } from "./features/home/HomeView";
 import { ConversationSplitter } from "./features/thread/ConversationSplitter";
 import { useTranscriptMode } from "./features/thread/transcriptMode";
 import type { ClientRuntime } from "./rpc/contracts";
@@ -100,6 +101,7 @@ export function App({
     useState<ComposerLaunchIntent | null>(null);
   const { state, selectedProject, selectedThread } = controller;
   const [sidebarHidden, setSidebarHidden] = useState(readSidebarHidden);
+  const [homeOpen, setHomeOpen] = useState(false);
   useEffect(() => {
     try {
       localStorage.setItem(SIDEBAR_KEY, sidebarHidden ? "1" : "0");
@@ -173,8 +175,11 @@ export function App({
             ? "Create a thread to begin."
             : null;
   const showingThreads = ui.destination === "threads";
+  // Home replaces the thread view when asked for, or when nothing is open.
+  const showHome =
+    showingThreads && Boolean(selectedProject) && (homeOpen || !selectedThread);
   const inspectorVisible = Boolean(
-    showingThreads && selectedThread && ui.inspectorOpen,
+    showingThreads && !showHome && selectedThread && ui.inspectorOpen,
   );
 
   return (
@@ -186,10 +191,28 @@ export function App({
       {sidebarHidden ? null : (
       <DesktopSidebar
         onHide={() => setSidebarHidden(true)}
+        homeOpen={showHome}
+        onShowHome={() => setHomeOpen(true)}
+        onOpenArtifacts={
+          selectedThread
+            ? () => {
+                setHomeOpen(false);
+                ui.openInspector("artifacts");
+              }
+            : undefined
+        }
+        onCreateThreadIn={(projectId) => {
+          void (async () => {
+            if (await ui.confirmDiscardInspectorDraft()) {
+              const created = await controller.createThreadIn(projectId);
+              if (created) setHomeOpen(false);
+            }
+          })();
+        }}
         projects={state.projects}
         threads={state.threads}
         selectedProjectId={state.selectedProjectId}
-        selectedThreadId={state.selectedThreadId}
+        selectedThreadId={showHome ? null : state.selectedThreadId}
         query={ui.sessionQuery}
         busy={state.busy}
         runtime={state.runtime}
@@ -216,14 +239,9 @@ export function App({
             }
           })();
         }}
-        onCreateThread={() => {
-          void (async () => {
-            if (await ui.confirmDiscardInspectorDraft()) {
-              await controller.createThread();
-            }
-          })();
-        }}
+        onCreateThread={() => setHomeOpen(true)}
         onSelectThread={(threadId) => {
+          setHomeOpen(false);
           if (threadId === state.selectedThreadId) return;
           void (async () => {
             if (await ui.confirmDiscardInspectorDraft()) {
@@ -273,7 +291,42 @@ export function App({
           onRestart={() => void controller.restartRuntime()}
           onDismissError={controller.dismissError}
         />
-        {showingThreads ? (
+        {showHome ? (
+          <>
+            <header className={styles.titleSlot}>
+              <h1 id="thread-title">Home</h1>
+            </header>
+            <section className={styles.threadViewport}>
+              <HomeView
+                projects={state.projects}
+                selectedProjectId={state.selectedProjectId}
+                busy={state.busy}
+                onOpenProject={(projectId) => {
+                  void (async () => {
+                    if (projectId !== state.selectedProjectId) {
+                      await controller.selectProject(projectId);
+                    }
+                    setHomeOpen(false);
+                  })();
+                }}
+                onAddFolder={() => void controller.openProject()}
+                onStart={(projectId, prompt) => {
+                  void (async () => {
+                    const created = await controller.createThreadIn(projectId);
+                    if (!created) return;
+                    setComposerIntent({
+                      threadId: created.id,
+                      prompt,
+                      skillIds: [],
+                      autoSend: true,
+                    });
+                    setHomeOpen(false);
+                  })();
+                }}
+              />
+            </section>
+          </>
+        ) : showingThreads ? (
           <>
             <header className={styles.titleSlot}>
               <h1 id="thread-title">
@@ -498,7 +551,7 @@ export function App({
             />
           </Suspense>
         )}
-        {showingThreads && selectedThread ? <ConversationSplitter /> : null}
+        {showingThreads && !showHome && selectedThread ? <ConversationSplitter /> : null}
       </section>
 
       {inspectorVisible ? (

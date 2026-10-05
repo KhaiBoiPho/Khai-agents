@@ -1,19 +1,18 @@
 import {
-  ChevronDown,
+  BriefcaseBusiness,
   ChevronRight,
   ChevronsUpDown,
   CircleGauge,
   CircleHelp,
-  Folder,
-  FolderClock,
+  FolderClosed,
   FolderOpen,
   Languages,
   LogOut,
   PanelLeftClose,
-  SquarePen,
   Plus,
   Search,
   Settings,
+  Shapes,
   ShieldAlert,
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -46,6 +45,10 @@ interface DesktopSidebarProps {
   /** Present only where the shell can end the browser session. */
   onSignOut?: () => void;
   onHide(): void;
+  homeOpen: boolean;
+  onShowHome(): void;
+  onOpenArtifacts?: () => void;
+  onCreateThreadIn(projectId: string): void;
   onQueryChange(query: string): void;
   onOpenProject(): void;
   onSelectProject(projectId: string): void;
@@ -97,6 +100,10 @@ export function DesktopSidebar({
   onOpenSettings,
   onSignOut,
   onHide,
+  homeOpen,
+  onShowHome,
+  onOpenArtifacts,
+  onCreateThreadIn,
   onQueryChange,
   onOpenProject,
   onSelectProject,
@@ -191,83 +198,63 @@ export function DesktopSidebar({
 
   return (
     <aside className={styles.sidebar} aria-label="Projects and Sessions">
-      <div className={styles.topRow}>
+      <div className={styles.iconRow}>
         <button
           type="button"
-          className={styles.brandButton}
-          onClick={() => onOpenSettings()}
-          title="Khai-Agents settings"
+          onClick={onHide}
+          aria-label="Hide sidebar"
+          title="Hide sidebar (Ctrl+B)"
         >
-          <strong>Khai-Agents</strong>
-          <ChevronDown size={14} />
+          <PanelLeftClose size={16} />
         </button>
-        <span className={styles.topActions}>
-          <button
-            type="button"
-            onClick={() => {
-              setSearchOpen((open) => !open || Boolean(query));
-              requestAnimationFrame(() => searchRef.current?.focus());
-            }}
-            aria-label={t("sidebar.searchSessions", "Search Sessions")}
-            title={`${t("sidebar.searchSessions", "Search Sessions")} (Ctrl+K)`}
-          >
-            <Search size={16} />
-          </button>
-          <button
-            type="button"
-            onClick={onHide}
-            aria-label="Hide sidebar"
-            title="Hide sidebar (Ctrl+B)"
-          >
-            <PanelLeftClose size={16} />
-          </button>
-        </span>
       </div>
 
-      {searchOpen || query ? (
-        <label className={styles.search}>
-          <Search size={15} strokeWidth={1.8} aria-hidden="true" />
-          <span className={styles.srOnly}>{t("sidebar.searchSessions", "Search Sessions")}</span>
-          <input
-            ref={searchRef}
-            value={query}
-            onChange={(event) => onQueryChange(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === "Escape") {
-                onQueryChange("");
-                setSearchOpen(false);
-                event.currentTarget.blur();
-              }
-            }}
-            placeholder={t("sidebar.searchSessions", "Search Sessions")}
-            spellCheck={false}
-          />
-        </label>
-      ) : null}
+      <label className={styles.search}>
+        <Search size={14} strokeWidth={1.8} aria-hidden="true" />
+        <span className={styles.srOnly}>{t("sidebar.searchSessions", "Search Sessions")}</span>
+        <input
+          ref={searchRef}
+          value={query}
+          onChange={(event) => onQueryChange(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === "Escape") {
+              onQueryChange("");
+              event.currentTarget.blur();
+            }
+          }}
+          placeholder={t("sidebar.search", "Search")}
+          spellCheck={false}
+        />
+      </label>
 
-      <button
-        className={styles.newChat}
-        type="button"
-        onClick={onCreateThread}
-        disabled={busy || !canCreateThread}
-        title="New chat (Ctrl+N)"
-      >
-        <SquarePen size={16} />
-        {t("sidebar.newChat", "New chat")}
-      </button>
-
-      <div className={styles.sectionHeading}>
-        <span>{t("sidebar.projects", "Projects")}</span>
+      <nav className={styles.primaryNav} aria-label="Main">
         <button
           type="button"
-          onClick={onOpenProject}
-          disabled={busy}
-          aria-label="Open project folder"
-          title="Open project folder"
+          className={styles.newButton}
+          onClick={onCreateThread}
+          disabled={busy || !canCreateThread}
+          title="New chat (Ctrl+N)"
         >
-          <Plus size={16} />
+          <Plus size={15} />
+          {t("sidebar.new", "New")}
         </button>
-      </div>
+        <button type="button" data-active={homeOpen} onClick={onShowHome}>
+          <FolderClosed size={15} />
+          {t("sidebar.projects", "Projects")}
+        </button>
+        <button
+          type="button"
+          onClick={onOpenArtifacts}
+          disabled={!onOpenArtifacts}
+        >
+          <Shapes size={15} />
+          {t("sidebar.artifacts", "Artifacts")}
+        </button>
+        <button type="button" onClick={() => onOpenSettings("skills")}>
+          <BriefcaseBusiness size={15} />
+          {t("sidebar.customize", "Customize")}
+        </button>
+      </nav>
 
       <nav className={styles.projectList} aria-label="Session history">
         {projects.length === 0 ? (
@@ -291,46 +278,51 @@ export function DesktopSidebar({
               Boolean(normalizedQuery) || disclosure.isExpanded(group.key);
             return (
               <section className={styles.projectGroup} key={group.key}>
-                <button
-                  type="button"
-                  className={styles.projectButton}
-                  data-active={group.active}
-                  data-static={!project || undefined}
-                  aria-expanded={expanded}
-                  aria-controls={`project-sessions-${group.key}`}
-                  onClick={() => {
-                    if (project && project.id !== selectedProjectId) {
-                      disclosure.expand(group.key);
-                      onSelectProject(project.id);
-                    } else {
-                      disclosure.toggle(group.key);
-                    }
-                  }}
-                  title={project?.canonicalPath ?? group.description}
-                >
-                  <ChevronRight
-                    size={14}
-                    className={styles.disclosure}
-                    aria-hidden="true"
-                  />
-                  {project ? (
-                    group.active ? (
-                      <FolderOpen size={16} />
-                    ) : (
-                      <Folder size={16} />
-                    )
-                  ) : (
-                    <FolderClock size={16} />
-                  )}
-                  <strong>{group.displayName}</strong>
-                  {project?.trustState === "untrusted" ? (
-                    <ShieldAlert
-                      size={14}
-                      className={styles.untrusted}
-                      aria-label="Project not trusted"
+                <div className={styles.groupHeader}>
+                  <button
+                    type="button"
+                    className={styles.groupName}
+                    data-active={group.active}
+                    aria-expanded={expanded}
+                    aria-controls={`project-sessions-${group.key}`}
+                    onClick={() => {
+                      if (project && project.id !== selectedProjectId) {
+                        disclosure.expand(group.key);
+                        onSelectProject(project.id);
+                      } else {
+                        disclosure.toggle(group.key);
+                      }
+                    }}
+                    title={project?.canonicalPath ?? group.description}
+                  >
+                    <span>{group.displayName}</span>
+                    {project?.trustState === "untrusted" ? (
+                      <ShieldAlert
+                        size={12}
+                        className={styles.untrusted}
+                        aria-label="Project not trusted"
+                      />
+                    ) : null}
+                    <ChevronRight
+                      size={13}
+                      className={styles.groupChevron}
+                      data-expanded={expanded}
+                      aria-hidden="true"
                     />
+                  </button>
+                  {project ? (
+                    <button
+                      type="button"
+                      className={styles.groupAdd}
+                      onClick={() => onCreateThreadIn(project.id)}
+                      disabled={busy || !projectCanExecute(project)}
+                      aria-label={`New chat in ${group.displayName}`}
+                      title={`New chat in ${group.displayName}`}
+                    >
+                      <Plus size={14} />
+                    </button>
                   ) : null}
-                </button>
+                </div>
 
                 <ProjectSessions
                   id={`project-sessions-${group.key}`}
@@ -351,6 +343,10 @@ export function DesktopSidebar({
             );
           })
         )}
+        <button className={styles.addFolder} type="button" onClick={onOpenProject} disabled={busy}>
+          <Plus size={13} />
+          {t("sidebar.addFolder", "Add folder")}
+        </button>
       </nav>
 
       <AccountMenu

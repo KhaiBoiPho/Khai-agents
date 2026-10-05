@@ -1,0 +1,175 @@
+.home {
+  display: flex;
+  height: 100%;
+  flex-direction: column;
+  padding: 48px 24px 16px;
+  overflow-y: auto;
+}
+
+.column {
+  width: min(760px, 100%);
+  flex: 1;
+  margin: 0 auto;
+}
+
+.greeting {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 40px;
+  font-size: var(--text-xl);
+  font-weight: var(--weight-regular);
+}
+
+.mark {
+  color: var(--signal);
+}
+
+.projects h3 {
+  margin: 0 0 10px;
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+}
+
+.projectRow {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 4px;
+  padding: 9px 12px;
+  border-radius: var(--radius-md);
+  background: var(--surface-sidebar);
+  color: var(--text-primary);
+  font-size: var(--text-sm);
+  text-align: left;
+}
+
+.projectRow:hover {
+  background: var(--surface-hover);
+}
+
+.projectRow svg {
+  color: var(--text-tertiary);
+}
+
+.dot {
+  width: 5px;
+  height: 5px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: var(--text-tertiary);
+}
+
+.projectName {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.when {
+  color: var(--text-tertiary);
+  font-size: var(--text-xs);
+}
+
+.composerArea {
+  width: min(820px, 100%);
+  margin: 24px auto 0;
+}
+
+.chips {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.chip,
+.chipButton {
+  display: inline-flex;
+  height: 28px;
+  align-items: center;
+  gap: 6px;
+  padding: 0 10px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-hover);
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+}
+
+.chip select {
+  min-height: 0;
+  padding: 0 18px 0 0;
+  border: 0;
+  background-color: transparent;
+  background-position: right 0 center;
+  color: inherit;
+  font-size: var(--text-sm);
+}
+
+.chipButton {
+  width: 28px;
+  justify-content: center;
+  padding: 0;
+}
+
+.chipButton:hover:not(:disabled) {
+  background: var(--surface-selected);
+  color: var(--text-primary);
+}
+
+.box {
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+  padding-right: 9px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  background: var(--surface-sidebar);
+}
+
+.box:focus-within {
+  border-color: var(--border-emphasis);
+}
+
+.box textarea {
+  min-height: 48px;
+  max-height: 190px;
+  flex: 1;
+  resize: none;
+  padding: 13px 14px;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--text-primary);
+  font-size: var(--text-base);
+  line-height: 1.5;
+}
+
+.box textarea::placeholder {
+  color: var(--text-tertiary);
+}
+
+.box button {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  margin-bottom: 10px;
+  place-items: center;
+  border-radius: var(--radius-sm);
+  color: var(--text-tertiary);
+}
+
+.box button:hover:not(:disabled) {
+  background: var(--surface-hover);
+  color: var(--text-primary);
+}
+
+.hint {
+  margin: 8px 2px 0;
+  color: var(--attention);
+  font-size: var(--text-xs);
+}

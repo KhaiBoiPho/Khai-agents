@@ -255,3 +255,30 @@
     animation: none;
   }
 }
+
+/* Flat chat rows under a project heading. */
+.row[data-active="true"] {
+  border-color: transparent;
+  background: var(--surface-selected);
+  box-shadow: none;
+}
+
+.row:hover {
+  background: var(--surface-hover);
+}
+
+.sessionButton {
+  min-height: 28px;
+  gap: 10px;
+  padding: 3px 2px 3px 10px;
+}
+
+.copy strong {
+  font-size: var(--text-sm);
+  font-weight: var(--weight-regular);
+}
+
+.beacon {
+  width: 6px;
+  height: 6px;
+}

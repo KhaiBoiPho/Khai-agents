@@ -113,6 +113,8 @@ export interface ComposerLaunchIntent {
   threadId: string;
   prompt: string;
   skillIds: string[];
+  /** Send the prompt as soon as the composer mounts (home-screen start). */
+  autoSend?: boolean;
 }
 
 export function Composer({
@@ -243,6 +245,15 @@ export function Composer({
     textareaRef.current?.focus();
     onLaunchIntentConsumed();
   }, [initialLaunch, onLaunchIntentConsumed]);
+
+  // A home-screen start sends once the new thread can actually execute: the
+  // composer mounts while the create call is still marked busy.
+  const autoSendRef = useRef(initialLaunch?.autoSend ?? false);
+  useEffect(() => {
+    if (!autoSendRef.current || busy || !canExecute || !prompt.trim()) return;
+    autoSendRef.current = false;
+    void submit();
+  });
 
   /**
    * Insert a transcript at the caret.
