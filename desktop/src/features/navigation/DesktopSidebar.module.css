@@ -916,3 +916,11 @@
   font-weight: var(--weight-bold);
   letter-spacing: -0.01em;
 }
+
+/* The brand mark is a logo, not a photo: keep its shape. */
+.brandLogo {
+  width: 26px;
+  height: 26px;
+  border-radius: 0;
+  object-fit: contain;
+}
