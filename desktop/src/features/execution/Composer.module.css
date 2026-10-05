@@ -1022,3 +1022,24 @@
     var(--surface-canvas) 40px
   );
 }
+
+.trusted {
+  color: var(--success);
+}
+
+.trustButton {
+  display: inline-flex;
+  height: 28px;
+  align-items: center;
+  gap: 6px;
+  padding: 0 10px;
+  border-radius: var(--radius-sm);
+  background: var(--attention-soft);
+  color: var(--attention);
+  font-size: var(--text-sm);
+  white-space: nowrap;
+}
+
+.trustButton:hover:not(:disabled) {
+  filter: brightness(1.1);
+}

@@ -231,3 +231,37 @@
     box-shadow: none;
   }
 }
+
+/* The header bar is gone: its grid row stays as a zero-height slot that
+   keeps the accessible thread title, and Review is a corner icon. */
+.titleSlot {
+  height: 0;
+  overflow: hidden;
+}
+
+.titleSlot h1 {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+}
+
+.reviewToggle {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 15;
+  display: grid;
+  width: 30px;
+  height: 30px;
+  place-items: center;
+  border-radius: var(--radius-sm);
+  color: var(--text-tertiary);
+}
+
+.reviewToggle:hover,
+.reviewToggle[data-active="true"] {
+  background: var(--surface-hover);
+  color: var(--text-primary);
+}

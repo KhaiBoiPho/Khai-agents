@@ -4,6 +4,8 @@ import {
   CornerDownLeft,
   Folder,
   FolderPlus,
+  FolderX,
+  GitFork,
   Github,
   Laptop,
   Mic,
@@ -12,6 +14,8 @@ import {
   Plus,
   Puzzle,
   ScrollText,
+  ShieldAlert,
+  ShieldCheck,
   SquareSlash,
   Sparkles,
   Square,
@@ -51,6 +55,7 @@ import {
 import styles from "./Composer.module.css";
 import { useDictation } from "./useDictation";
 import { usePromptDraft } from "./usePromptDraft";
+import { isRecoveredHistoryProject } from "../../app/projectPresentation";
 import { ModelPicker } from "./ModelPicker";
 import { ContextRing } from "./ContextRing";
 
@@ -98,6 +103,10 @@ interface ComposerProps {
   onManageProviders?: () => void;
   onOpenProject?: () => void;
   onOpenSettings?: (section: string) => void;
+  hasActiveWork?: boolean;
+  onTrustProject?: () => void;
+  onForkThread?: () => void;
+  onCreatePaperThread?: () => void;
 }
 
 export interface ComposerLaunchIntent {
@@ -130,7 +139,13 @@ export function Composer({
   onManageProviders,
   onOpenProject,
   onOpenSettings,
+  hasActiveWork = false,
+  onTrustProject,
+  onForkThread,
+  onCreatePaperThread,
 }: ComposerProps) {
+  const recoveredHistory = isRecoveredHistoryProject(project);
+  const trusted = project?.trustState === "trusted" && !recoveredHistory;
   const active = executingTurn !== null;
   const { busyEnter } = useComposerBehavior();
   const { t } = useTranslation();
@@ -419,9 +434,29 @@ export function Composer({
           className={styles.chip}
           title={thread?.workspacePath ?? project?.canonicalPath ?? undefined}
         >
-          <Folder size={13} />
-          {project?.displayName ?? "Pick a folder…"}
+          {recoveredHistory ? <FolderX size={13} /> : <Folder size={13} />}
+          {recoveredHistory
+            ? "Folder unavailable"
+            : project?.displayName ?? "Pick a folder…"}
+          {trusted ? (
+            <ShieldCheck
+              size={13}
+              className={styles.trusted}
+              aria-label="Trusted folder"
+            />
+          ) : null}
         </span>
+        {project?.trustState === "untrusted" && !recoveredHistory && onTrustProject ? (
+          <button
+            type="button"
+            className={styles.trustButton}
+            onClick={onTrustProject}
+            disabled={busy}
+          >
+            <ShieldAlert size={13} />
+            Trust folder
+          </button>
+        ) : null}
         {onOpenProject ? (
           <button
             type="button"
@@ -667,6 +702,11 @@ export function Composer({
               textareaRef.current?.focus();
             }}
             onSkills={() => setSkillPickerOpen(true)}
+            onForkThread={trusted ? onForkThread : undefined}
+            onCreatePaperThread={
+              trusted && thread?.mode !== "paper" ? onCreatePaperThread : undefined
+            }
+            threadActionsDisabled={busy || hasActiveWork}
             onConnectors={
               onOpenSettings ? () => onOpenSettings("mcp") : undefined
             }
@@ -827,6 +867,9 @@ interface PlusMenuProps {
   onSkills(): void;
   onConnectors?: () => void;
   onPlugins?: () => void;
+  onForkThread?: () => void;
+  onCreatePaperThread?: () => void;
+  threadActionsDisabled: boolean;
 }
 
 /** The "+" menu: everything that adds context or capability to a prompt. */
@@ -841,6 +884,9 @@ function PlusMenu({
   onSkills,
   onConnectors,
   onPlugins,
+  onForkThread,
+  onCreatePaperThread,
+  threadActionsDisabled,
 }: PlusMenuProps) {
   const { open, setOpen, rootRef } = usePopover();
   const run = (action?: () => void) => () => {
@@ -902,6 +948,30 @@ function PlusMenu({
             <button type="button" role="menuitem" onClick={run(onPlugins)}>
               <Puzzle size={15} />
               Add plugins
+            </button>
+          ) : null}
+          {onForkThread || onCreatePaperThread ? <hr /> : null}
+          {onForkThread ? (
+            <button
+              type="button"
+              role="menuitem"
+              onClick={run(onForkThread)}
+              disabled={threadActionsDisabled}
+              title="Fork into an isolated worktree"
+            >
+              <GitFork size={15} />
+              Fork thread
+            </button>
+          ) : null}
+          {onCreatePaperThread ? (
+            <button
+              type="button"
+              role="menuitem"
+              onClick={run(onCreatePaperThread)}
+              disabled={threadActionsDisabled}
+            >
+              <ScrollText size={15} />
+              New Paper2Code thread
             </button>
           ) : null}
         </div>

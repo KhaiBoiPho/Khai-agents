@@ -1,4 +1,10 @@
-import { FolderOpen, MessageSquarePlus, PanelLeftOpen } from "lucide-react";
+import {
+  FolderOpen,
+  MessageSquarePlus,
+  PanelLeftOpen,
+  PanelRight,
+  PanelRightClose,
+} from "lucide-react";
 import { lazy, Suspense, useEffect, useState } from "react";
 
 import { projectCanExecute } from "./app/projectPresentation";
@@ -14,7 +20,6 @@ import {
 } from "./features/execution/Composer";
 import { DesktopSidebar } from "./features/navigation/DesktopSidebar";
 import { ConversationSplitter } from "./features/thread/ConversationSplitter";
-import { ThreadHeader } from "./features/thread/ThreadHeader";
 import { useTranscriptMode } from "./features/thread/transcriptMode";
 import type { ClientRuntime } from "./rpc/contracts";
 import type { SkillInfo } from "./generated/app-server";
@@ -270,30 +275,24 @@ export function App({
         />
         {showingThreads ? (
           <>
-            <ThreadHeader
-              project={selectedProject}
-              thread={selectedThread}
-              runtime={state.runtime}
-              busy={state.busy}
-              inspectorOpen={inspectorVisible}
-              hasActiveWork={hasPendingTurn || activeWorkflow}
-              onTrustProject={() => void controller.trustProject()}
-              onForkThread={() => {
-                void (async () => {
-                  if (await ui.confirmDiscardInspectorDraft()) {
-                    await controller.forkThread();
-                  }
-                })();
-              }}
-              onCreatePaperThread={() => {
-                void (async () => {
-                  if (await ui.confirmDiscardInspectorDraft()) {
-                    await controller.createThread("paper");
-                  }
-                })();
-              }}
-              onToggleInspector={() => void ui.toggleInspector()}
-            />
+            <header className={styles.titleSlot}>
+              <h1 id="thread-title">
+                {selectedThread?.title ?? selectedProject?.displayName ?? "Khai-Agents"}
+              </h1>
+            </header>
+            {selectedThread ? (
+              <button
+                type="button"
+                className={styles.reviewToggle}
+                data-active={inspectorVisible}
+                onClick={() => void ui.toggleInspector()}
+                aria-pressed={inspectorVisible}
+                aria-label={inspectorVisible ? "Close review panel" : "Open review panel"}
+                title={inspectorVisible ? "Close review panel" : "Open review panel"}
+              >
+                {inspectorVisible ? <PanelRightClose size={17} /> : <PanelRight size={17} />}
+              </button>
+            ) : null}
 
             <section className={styles.threadViewport}>
               {!selectedProject ? (
@@ -452,6 +451,22 @@ export function App({
                 launchIntent={composerIntent}
                 onLaunchIntentConsumed={() => setComposerIntent(null)}
                 onManageProviders={() => ui.openSettings("models")}
+                hasActiveWork={hasPendingTurn || activeWorkflow}
+                onTrustProject={() => void controller.trustProject()}
+                onForkThread={() => {
+                  void (async () => {
+                    if (await ui.confirmDiscardInspectorDraft()) {
+                      await controller.forkThread();
+                    }
+                  })();
+                }}
+                onCreatePaperThread={() => {
+                  void (async () => {
+                    if (await ui.confirmDiscardInspectorDraft()) {
+                      await controller.createThread("paper");
+                    }
+                  })();
+                }}
                 onOpenSettings={(section) => ui.openSettings(section)}
                 onOpenProject={() => {
                   void (async () => {
