@@ -173,3 +173,38 @@
   color: var(--attention);
   font-size: var(--text-xs);
 }
+
+/* Match the compact thread composer. */
+.home {
+  padding-bottom: 8px;
+}
+
+.composerArea {
+  width: min(720px, 100%);
+}
+
+.chip,
+.chipButton {
+  height: 24px;
+  font-size: var(--text-xs);
+}
+
+.chipButton {
+  width: 24px;
+}
+
+.chip select {
+  font-size: var(--text-xs);
+}
+
+.box textarea {
+  min-height: 40px;
+  padding: 9px 12px;
+  font-size: var(--text-sm);
+}
+
+.box button {
+  width: 26px;
+  height: 26px;
+  margin-bottom: 7px;
+}

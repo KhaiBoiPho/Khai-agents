@@ -797,3 +797,16 @@
   background: var(--surface-hover);
   color: var(--text-primary);
 }
+
+.iconRow {
+  justify-content: space-between;
+  padding-left: 6px;
+}
+
+.brandName {
+  overflow: hidden;
+  font-size: var(--text-base);
+  font-weight: var(--weight-semibold);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

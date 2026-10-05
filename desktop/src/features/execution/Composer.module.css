@@ -1043,3 +1043,48 @@
 .trustButton:hover:not(:disabled) {
   filter: brightness(1.1);
 }
+
+/* Compact composer, closer to the bottom edge. The width token is narrowed
+   for the composer only; the transcript keeps its own column. */
+.region {
+  --conversation-width: min(720px, 100%);
+  padding: 22px 20px 8px;
+}
+
+.chips {
+  margin-bottom: 6px;
+}
+
+.chip,
+.chipButton,
+.trustButton {
+  height: 24px;
+  font-size: var(--text-xs);
+}
+
+.chipButton {
+  width: 24px;
+}
+
+.composer textarea {
+  min-height: 40px;
+  padding: 9px 12px;
+  font-size: var(--text-sm);
+}
+
+.sendButton,
+.stopButton {
+  width: 26px;
+  height: 26px;
+  margin-bottom: 7px;
+}
+
+.toolbar {
+  min-height: 26px;
+  margin-top: 4px;
+}
+
+.iconButton {
+  width: 26px;
+  height: 26px;
+}

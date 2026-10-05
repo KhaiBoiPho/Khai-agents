@@ -159,3 +159,27 @@
   flex: 0 0 auto;
   color: var(--success);
 }
+
+/* One line, "Agent Default", sized like the composer's other controls. */
+.trigger {
+  min-height: 0;
+  gap: 6px;
+  padding: 4px 7px;
+}
+
+.trigger > span:not(.robotIcon) {
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+}
+
+.trigger small {
+  font: inherit;
+  font-size: var(--text-sm);
+  color: var(--text-tertiary);
+}
+
+.trigger strong {
+  font-size: var(--text-sm);
+  font-weight: var(--weight-regular);
+}

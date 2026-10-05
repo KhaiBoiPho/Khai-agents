@@ -199,6 +199,7 @@ export function DesktopSidebar({
   return (
     <aside className={styles.sidebar} aria-label="Projects and Sessions">
       <div className={styles.iconRow}>
+        <strong className={styles.brandName}>Khai-Agents</strong>
         <button
           type="button"
           onClick={onHide}
