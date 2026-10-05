@@ -104,10 +104,6 @@ export function DiagnosticsCard({
               value={diagnostics.diagnostics.platform}
             />
             <Diagnostic
-              label="Automations"
-              value={String(diagnostics.diagnostics.automationCount)}
-            />
-            <Diagnostic
               label={t("settings.diagnostics.noProject", "Project config")}
               value={
                 diagnostics.diagnostics.projectConfigPath ??

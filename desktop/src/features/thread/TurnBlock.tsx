@@ -415,7 +415,7 @@ function AssistantMessage({ item }: { item: Item }) {
       data-status={item.status}
     >
       <span className={styles.srOnly}>
-        {phase === "commentary" ? "DeepCode progress update" : "DeepCode response"}
+        {phase === "commentary" ? "Khai-Agents progress update" : "Khai-Agents response"}
       </span>
       <div
         className={styles.messageBody}

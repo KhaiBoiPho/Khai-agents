@@ -1,7 +1,6 @@
 import type { Project, SkillInfo, Thread } from "../../generated/app-server";
 import type { DesktopDestination } from "../../app/useDesktopUi";
 import type { ClientRuntime } from "../../rpc/contracts";
-import { AutomationsPage } from "../automations/AutomationsPage";
 import { SkillsPage } from "../extensions/SkillsPage";
 import { PluginsPage } from "../plugins/PluginsPage";
 import { McpPage } from "../mcp/McpPage";
@@ -23,17 +22,6 @@ export function ManagementWorkspace({
   onOpenThread,
   onCreateSkill,
 }: ManagementWorkspaceProps) {
-  if (destination === "automations") {
-    return (
-      <AutomationsPage
-        key={project?.id ?? "global"}
-        runtime={runtime}
-        project={project}
-        onThreadCreated={onThreadCreated}
-        onOpenThread={onOpenThread}
-      />
-    );
-  }
   if (destination === "skills") {
     return (
       <SkillsPage

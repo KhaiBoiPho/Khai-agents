@@ -589,7 +589,7 @@ export function useWorkspaceController(runtime: ClientRuntime): WorkspaceControl
         preset === "full_access" &&
         !(await confirmAction(
           "Full access lets tools run without approval and outside the workspace " +
-            "sandbox for this Session. DeepCode may read, modify, or execute " +
+            "sandbox for this Session. Khai-Agents may read, modify, or execute " +
             "files anywhere your account can access.",
           {
             title: "Enable Full access?",

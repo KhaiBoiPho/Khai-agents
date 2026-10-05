@@ -205,6 +205,7 @@ def test_invalid_policy_entry_fails_closed():
         ("zhipu", "aggregator"),
         ("dashscope", "aggregator"),
         ("minimax", "aggregator"),
+        ("nvidia", "aggregator"),
         ("ollama", "local"),
         ("vllm", "local"),
     ],

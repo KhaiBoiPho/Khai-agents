@@ -263,6 +263,23 @@ PROVIDERS: tuple[ProviderSpec, ...] = (
         requires_api_base=True,
     ),
     ProviderSpec(
+        name="nvidia",
+        keywords=("nvidia",),
+        env_key="NVIDIA_API_KEY",
+        display_name="NVIDIA NIM",
+        backend="openai_compat",
+        is_gateway=True,
+        # NVIDIA runs its own deployments of other vendors' open models
+        # (``moonshotai/kimi-k3``, ``meta/llama-...``): somebody else's
+        # endpoint behind a first-party-looking wire format, not a router.
+        endpoint_class="aggregator",
+        detect_by_key_prefix="nvapi-",
+        detect_by_base_keyword="api.nvidia.com",
+        default_api_base="https://integrate.api.nvidia.com/v1",
+        # Ids are ``vendor/model`` and the vendor part is required by NIM, so
+        # the prefix must survive.
+    ),
+    ProviderSpec(
         name="anthropic",
         keywords=("anthropic", "claude"),
         env_key="ANTHROPIC_API_KEY",
@@ -350,6 +367,14 @@ PROVIDERS: tuple[ProviderSpec, ...] = (
         detect_by_base_keyword="11434",
         default_api_base="http://localhost:11434/v1",
     ),
+)
+
+
+# Templates offered in the provider pickers and connection lists. The rest of
+# ``PROVIDERS`` stays registered so existing code paths keep resolving.
+LISTED_PROVIDER_NAMES: frozenset[str] = frozenset({"gemini", "nvidia"})
+LISTED_PROVIDERS: tuple[ProviderSpec, ...] = tuple(
+    spec for spec in PROVIDERS if spec.name in LISTED_PROVIDER_NAMES
 )
 
 

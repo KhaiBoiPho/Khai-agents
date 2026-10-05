@@ -10,7 +10,6 @@ import {
   Search,
   Settings,
   ShieldAlert,
-  Sparkles,
   WandSparkles,
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -191,8 +190,7 @@ export function DesktopSidebar({
           </svg>
         </span>
         <span className={styles.brandCopy}>
-          <strong>DeepCode</strong>
-          <small>{t("sidebar.localAgent", "Local agent")}</small>
+          <strong>Khai-Agents</strong>
         </span>
       </div>
 
@@ -230,7 +228,7 @@ export function DesktopSidebar({
         </>
       ) : null}
 
-      <nav className={styles.destinations} aria-label="DeepCode destinations">
+      <nav className={styles.destinations} aria-label="Khai-Agents destinations">
         <button
           type="button"
           data-active={destination === "threads"}
@@ -238,14 +236,6 @@ export function DesktopSidebar({
         >
           <MessageSquare size={16} />
           {t("sidebar.threads", "Threads")}
-        </button>
-        <button
-          type="button"
-          data-active={destination === "automations"}
-          onClick={() => onDestination("automations")}
-        >
-          <Sparkles size={16} />
-          {t("sidebar.automations", "Automations")}
         </button>
         <button
           type="button"
@@ -378,14 +368,6 @@ export function DesktopSidebar({
         )}
       </nav>
 
-      <footer className={styles.footer}>
-        <Sparkles size={14} aria-hidden="true" />
-        <span>
-          <strong>{runtime.phase === "ready" ? t("sidebar.agentReady", "Local agent ready") : runtime.phase}</strong>
-          <small>{t("sidebar.sharedHistory", "Shared Session history")}</small>
-        </span>
-        <span className={styles.runtimeDot} data-phase={runtime.phase} aria-hidden="true" />
-      </footer>
     </aside>
   );
 }

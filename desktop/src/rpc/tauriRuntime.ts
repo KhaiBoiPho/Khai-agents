@@ -73,7 +73,7 @@ export function normalizeUpdaterError(error: unknown): DesktopRuntimeError {
 export function configureNativeDialogs(): void {
   setConfirmHandler((message, options) =>
     confirm(message, {
-      title: options.title ?? "DeepCode",
+      title: options.title ?? "Khai-Agents",
       kind: options.kind ?? "warning",
       okLabel: options.confirmLabel ?? "Continue",
       cancelLabel: options.cancelLabel ?? "Cancel",

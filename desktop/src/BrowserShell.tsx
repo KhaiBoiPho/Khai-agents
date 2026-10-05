@@ -45,7 +45,7 @@ export function BrowserShell() {
   return (
     <div className={styles.shell}>
       <header className={styles.bar}>
-        <span>DeepCode · Local service</span>
+        <span>Khai-Agents · Local service</span>
         <span>{notice}</span>
         <button
           onClick={() =>
@@ -77,7 +77,7 @@ export function BrowserShell() {
           >
             <h2 id="directory-title">Open a project on the service machine</h2>
             <p>
-              Enter the folder path on the machine running DeepCode. It will be
+              Enter the folder path on the machine running Khai-Agents. It will be
               opened as untrusted until you choose to trust it.
             </p>
             <label htmlFor="server-folder">Project folder</label>

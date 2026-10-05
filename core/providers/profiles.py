@@ -22,7 +22,7 @@ from core.providers.reasoning import (
     declared_reasoning_capabilities,
     resolve_reasoning_effort,
 )
-from core.providers.registry import PROVIDERS, ProviderSpec, find_by_model, find_by_name
+from core.providers.registry import LISTED_PROVIDERS, ProviderSpec, find_by_model, find_by_name
 from core.providers.revisions import ProviderRevisionStore, credential_digest
 
 if TYPE_CHECKING:
@@ -133,7 +133,7 @@ class ConnectionResolver:
                 continue
             if include_unconfigured or connection.is_usable:
                 resolved.append(connection)
-        for spec in PROVIDERS:
+        for spec in LISTED_PROVIDERS:
             if spec.name in explicit_ids:
                 continue
             connection = self._legacy_connection(spec)

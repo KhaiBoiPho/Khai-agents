@@ -275,7 +275,7 @@ export function ConnectionSettings({
           <p>Step 1 · Connect a provider</p>
           <h2 id="connections-title">AI providers</h2>
           <span>
-            Add the service that supplies your models. DeepCode keeps API keys
+            Add the service that supplies your models. Khai-Agents keeps API keys
             in user-private storage and shares the connection with CLI and
             Desktop.
           </span>
@@ -318,7 +318,7 @@ export function ConnectionSettings({
               chooseTemplate("custom");
             }}
             disabled={busy || saving}
-            title="Declare an OpenAI-compatible or Anthropic endpoint DeepCode does not ship"
+            title="Declare an OpenAI-compatible or Anthropic endpoint Khai-Agents does not ship"
           >
             <Plus size={14} />
             Add a custom provider

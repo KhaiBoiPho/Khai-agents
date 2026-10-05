@@ -99,7 +99,7 @@ export class BrowserRuntime implements ClientRuntime {
       if (response.status === 401)
         throw new BrowserRuntimeError(
           "AUTH_REQUIRED",
-          "Run deepcode web in your terminal to open a new browser access link. No DeepCode account is needed.",
+          "Run deepcode web in your terminal to open a new browser access link. No Khai-Agents account is needed.",
         );
       throw new BrowserRuntimeError(
         "HTTP_ERROR",
@@ -564,7 +564,7 @@ export class BrowserRuntime implements ClientRuntime {
     this.dispose();
     this.emitStatus(
       "stopped",
-      "Run deepcode web in your terminal to open a new browser access link. No DeepCode account is needed.",
+      "Run deepcode web in your terminal to open a new browser access link. No Khai-Agents account is needed.",
       "AUTH_REQUIRED",
     );
   }

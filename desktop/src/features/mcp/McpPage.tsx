@@ -232,7 +232,7 @@ export function McpPage({
         <header>
           <div>
             <p className={styles.eyebrow}>Configured servers</p>
-            <h2>Available to DeepCode</h2>
+            <h2>Available to Khai-Agents</h2>
           </div>
           <span>{servers.length} configured</span>
         </header>

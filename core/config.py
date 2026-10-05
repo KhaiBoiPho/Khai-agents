@@ -91,9 +91,9 @@ class _Base(BaseModel):
 class AgentDefaults(_Base):
     """Default LLM generation settings shared by all phases."""
 
-    connection: str | None = None
+    connection: str | None = "gemini"
     provider: str = "auto"  # "auto" or registry name (e.g. "openai", "anthropic")
-    model: str = "openai/gpt-4o-mini"
+    model: str = "models/gemini-3.6-flash"
     max_tokens: int = 8192
     temperature: float = 0.1
     reasoning_effort: str | None = None
@@ -319,6 +319,7 @@ class ProvidersConfig(_Base):
     requesty: ProviderConfig = Field(default_factory=ProviderConfig)
     opper: ProviderConfig = Field(default_factory=ProviderConfig)
     bedrock: ProviderConfig = Field(default_factory=ProviderConfig)
+    nvidia: ProviderConfig = Field(default_factory=ProviderConfig)
     anthropic: ProviderConfig = Field(default_factory=ProviderConfig)
     openai: ProviderConfig = Field(default_factory=ProviderConfig)
     deepseek: ProviderConfig = Field(default_factory=ProviderConfig)

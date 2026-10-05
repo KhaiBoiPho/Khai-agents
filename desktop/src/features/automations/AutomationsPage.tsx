@@ -210,8 +210,8 @@ export function AutomationsPage({
             <strong>{project.displayName}</strong>
             <span>
               {automations.inventory?.schedulerActive
-                ? "Scheduler active · scheduled work runs while a compatible DeepCode runtime is active"
-                : "Scheduler unavailable · start a scheduler-enabled DeepCode runtime to run scheduled work"}
+                ? "Scheduler active · scheduled work runs while a compatible Khai-Agents runtime is active"
+                : "Scheduler unavailable · start a scheduler-enabled Khai-Agents runtime to run scheduled work"}
             </span>
           </div>
           {!canExecute ? (

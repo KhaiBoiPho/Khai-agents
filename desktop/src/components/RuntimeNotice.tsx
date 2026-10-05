@@ -27,7 +27,7 @@ export function RuntimeNotice({
   const code = runtime.errorCode ?? error?.code;
   const authRequired = reconnectOnly && code === "AUTH_REQUIRED";
   const message = authRequired
-    ? t("runtime.browserAuthHelp", "Run deepcode web in your terminal to open a new browser access link. No DeepCode account is needed.")
+    ? t("runtime.browserAuthHelp", "Run deepcode web in your terminal to open a new browser access link. No Khai-Agents account is needed.")
     : (runtime.errorCode ? runtime.message : error?.message) ?? runtime.message ?? t("runtime.offline", "The local App Server is unavailable.");
   return (
     <div className={styles.notice} role="alert">

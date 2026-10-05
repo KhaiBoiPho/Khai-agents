@@ -31,7 +31,7 @@ from core.providers.credentials import CredentialStore
 from core.providers.profiles import ConnectionResolver, validate_connection_id
 from core.providers.oauth import ProviderOAuthManager
 from core.providers.reasoning import infer_reasoning_capabilities
-from core.providers.registry import PROVIDERS, find_by_name
+from core.providers.registry import LISTED_PROVIDERS, find_by_name
 
 _PROFILE_FIELDS = {
     "id",
@@ -100,7 +100,7 @@ class LLMConfigurationService:
                     "requiresApiBase": spec.requires_api_base,
                     "local": spec.is_local,
                 }
-                for spec in PROVIDERS
+                for spec in LISTED_PROVIDERS
             ],
             "configPath": str(self.config_store.path),
             "credentialPath": str(self.credentials.path),

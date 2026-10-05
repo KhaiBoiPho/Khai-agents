@@ -127,7 +127,7 @@ export function ThreadConversation({
             </span>
             <h2>Start with a task.</h2>
             <p>
-              Describe the outcome, the constraints, and how DeepCode should
+              Describe the outcome, the constraints, and how Khai-Agents should
               verify the result.
             </p>
             <small>

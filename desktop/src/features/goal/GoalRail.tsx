@@ -331,7 +331,7 @@ export function GoalRail({
             <textarea
               value={objective}
               onChange={(event) => setObjective(event.target.value)}
-              placeholder={t("goal.describeOutcome", "Describe the complete outcome DeepCode should achieve.")}
+              placeholder={t("goal.describeOutcome", "Describe the complete outcome Khai-Agents should achieve.")}
               rows={4}
               autoFocus
             />

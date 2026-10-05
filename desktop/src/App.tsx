@@ -227,10 +227,9 @@ export function App({ runtime }: { runtime: ClientRuntime }) {
             <section className={styles.threadViewport}>
               {!selectedProject ? (
                 <div className={styles.startState}>
-                  <p className={styles.startEyebrow}>Local coding agent</p>
                   <h2>Open a folder to begin.</h2>
                   <p>
-                    Continue the same Sessions from DeepCode CLI, with tools,
+                    Continue the same Sessions from Khai-Agents CLI, with tools,
                     approvals, changes, and tests kept in one local workspace.
                   </p>
                   <div className={styles.startActions}>
@@ -257,7 +256,7 @@ export function App({ runtime }: { runtime: ClientRuntime }) {
                   </p>
                   <h2>No Sessions here yet.</h2>
                   <p>
-                    Start with a clear outcome and a way to verify it. DeepCode
+                    Start with a clear outcome and a way to verify it. Khai-Agents
                     will keep the conversation and execution trail together.
                   </p>
                   <div className={styles.startActions}>

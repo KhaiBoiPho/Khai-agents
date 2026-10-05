@@ -24,7 +24,7 @@ export type Locale = (typeof LOCALES)[number]["value"];
 const ZH_CN: Record<string, string> = {
   "provider.signInAuth": "使用 OpenRouter 登录",
   "provider.account": "账户",
-  "provider.loginExplanation": "OpenRouter 登录会返回由用户管理的 API key，不提供刷新令牌。请在运行 DeepCode 的机器上登录。",
+  "provider.loginExplanation": "OpenRouter 登录会返回由用户管理的 API key，不提供刷新令牌。请在运行 Khai-Agents 的机器上登录。",
   "provider.cancelLogin": "取消登录",
   "provider.disconnectConfirm": "在本机断开此账户？之后的模型请求将停止。远端密钥请在 OpenRouter 设置页撤销。",
   "provider.disconnect": "断开账户",
@@ -142,7 +142,7 @@ const ZH_CN: Record<string, string> = {
   "settings.updates.installing": "安装中…",
   "settings.updates.upToDate": "当前已是最新版本。",
   "settings.updates.available":
-    "DeepCode {{version}} 可用。安装前会验证软件包签名。",
+    "Khai-Agents {{version}} 可用。安装前会验证软件包签名。",
   "settings.updates.idle":
     "仅在手动请求时检查更新。开发版本可能未配置发布通道。",
   "settings.updates.checkingNote": "正在检查签名发布通道。",
@@ -220,7 +220,7 @@ const ZH_CN: Record<string, string> = {
   "runtime.restart": "重启服务",
   "runtime.reconnect": "重新连接",
   "runtime.browserAuthRequired": "需要授权浏览器访问",
-  "runtime.browserAuthHelp": "请在终端运行 deepcode web，打开新生成的浏览器访问链接。无需 DeepCode 账号。",
+  "runtime.browserAuthHelp": "请在终端运行 deepcode web，打开新生成的浏览器访问链接。无需 Khai-Agents 账号。",
   "service.title": "后台服务",
   "service.stop": "停止后台服务",
   "service.detach": "关闭 Desktop 只断开当前窗口；任务和定时工作会继续在共享后台运行。",
@@ -266,7 +266,7 @@ const ZH_CN: Record<string, string> = {
   "goal.goalDescription":
     "目标 {{id}} 附属于此会话。普通后续对话引导工作方向,而不重写目标。",
   "goal.closeEditor": "关闭目标编辑器",
-  "goal.describeOutcome": "描述 DeepCode 应达成的完整目标。",
+  "goal.describeOutcome": "描述 Khai-Agents 应达成的完整目标。",
   // Inspector
   "inspector.label": "检查器",
   "inspector.views": "检查器视图",

@@ -414,7 +414,7 @@ export function Composer({
           placeholder={
             active
               ? "Send guidance or corrections to the active Turn…"
-              : "Ask DeepCode to build, inspect, or verify…"
+              : "Ask Khai-Agents to build, inspect, or verify…"
           }
           rows={1}
           disabled={!editable}
@@ -756,7 +756,7 @@ export function Composer({
           deliveryNotice ??
           dictationStatus ??
           disabledReason ??
-          "DeepCode may ask before sensitive tools run."}
+          "Khai-Agents may ask before sensitive tools run."}
         <span>
           {active
             ? busyEnter === "queue"
