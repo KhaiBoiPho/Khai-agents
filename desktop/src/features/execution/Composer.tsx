@@ -2,7 +2,7 @@ import {
   Atom,
   Check,
   ChevronDown,
-  CornerDownLeft,
+  ArrowUp,
   Folder,
   FolderPlus,
   FolderX,
@@ -59,6 +59,7 @@ import { useDictation } from "./useDictation";
 import { usePromptDraft } from "./usePromptDraft";
 import { Dropdown } from "../../components/Dropdown";
 import { isRecoveredHistoryProject } from "../../app/projectPresentation";
+import { isChatsProject } from "../../app/chats";
 import mascotUrl from "../../assets/khai-mascot.png";
 import { MOCK_ACCOUNT } from "../../mocks/preview";
 import { ModelPicker } from "./ModelPicker";
@@ -156,7 +157,9 @@ export function Composer({
   onCreatePaperThread,
 }: ComposerProps) {
   const recoveredHistory = isRecoveredHistoryProject(project);
-  const trusted = project?.trustState === "trusted" && !recoveredHistory;
+  const plainChat = isChatsProject(project);
+  const trusted =
+    project?.trustState === "trusted" && !recoveredHistory && !plainChat;
   const active = executingTurn !== null;
   const { busyEnter } = useComposerBehavior();
   const { t } = useTranslation();
@@ -481,7 +484,9 @@ export function Composer({
               {recoveredHistory ? <FolderX size={13} /> : <Folder size={13} />}
               {recoveredHistory
                 ? "Folder unavailable"
-                : project?.displayName ?? "Pick a folder…"}
+                : plainChat
+                  ? "No folder"
+                  : project?.displayName ?? "Pick a folder…"}
               {trusted ? (
                 <ShieldCheck
                   size={13}
@@ -495,7 +500,9 @@ export function Composer({
             {
               title: "Recent",
               items: [...projects]
-                .filter((entry) => !isRecoveredHistoryProject(entry))
+                .filter(
+                  (entry) => !isRecoveredHistoryProject(entry) && !isChatsProject(entry),
+                )
                 .sort((left, right) =>
                   right.lastOpenedAt.localeCompare(left.lastOpenedAt),
                 )
@@ -751,7 +758,7 @@ export function Composer({
               aria-label="Run turn"
               title="Send"
             >
-              <CornerDownLeft size={16} />
+              <ArrowUp size={16} strokeWidth={2.4} />
             </button>
           )}
         </div>

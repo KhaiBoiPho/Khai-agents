@@ -6200,6 +6200,11 @@
         "directory/list": {
           "$ref": "#/$defs/DirectoryListParams"
         },
+        "chats/workspace": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {}
+        },
         "file/read": {
           "$ref": "#/$defs/FileReadParams"
         },
@@ -6367,6 +6372,7 @@
         "event/replay",
         "file/list",
         "directory/list",
+        "chats/workspace",
         "file/read",
         "file/write",
         "git/status",
@@ -7177,6 +7183,18 @@
             "entries"
           ]
         },
+        "chats/workspace": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "project": {
+              "$ref": "#/$defs/Project"
+            }
+          },
+          "required": [
+            "project"
+          ]
+        },
         "file/read": {
           "type": "object",
           "additionalProperties": false,
@@ -7495,6 +7513,7 @@
         "event/replay",
         "file/list",
         "directory/list",
+        "chats/workspace",
         "file/read",
         "file/write",
         "git/status",

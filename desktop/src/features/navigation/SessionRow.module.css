@@ -282,3 +282,13 @@
   width: 6px;
   height: 6px;
 }
+
+.mark {
+  flex-shrink: 0;
+  color: var(--text-tertiary);
+}
+
+/* Room for pin and favorite marks after the title. */
+.sessionButton {
+  grid-template-columns: 9px minmax(0, 1fr) auto auto;
+}

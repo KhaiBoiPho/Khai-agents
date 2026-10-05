@@ -86,6 +86,7 @@ export interface WorkspaceController {
     mode?: ThreadMode,
     title?: string,
   ): Promise<Thread | undefined>;
+  ensureChatsProject(): Promise<Project>;
   forkThread(): Promise<void>;
   selectThread(threadId: string): Promise<void>;
   renameThread(threadId: string, title: string): Promise<void>;
@@ -418,6 +419,13 @@ export function useWorkspaceController(runtime: ClientRuntime): WorkspaceControl
       }),
     [replayThread, runtime, selectedProject, withBusy],
   );
+
+  /** The hidden project that holds plain chats, created on first use. */
+  const ensureChatsProject = useCallback(async () => {
+    const result = await runtime.request("chats/workspace", {});
+    dispatch({ type: "project-upsert", project: result.project });
+    return result.project;
+  }, [runtime]);
 
   /** Start a thread in any project, switching to it first if needed. */
   const createThreadIn = useCallback(
@@ -994,6 +1002,7 @@ export function useWorkspaceController(runtime: ClientRuntime): WorkspaceControl
       trustProject,
       createThread,
       createThreadIn,
+      ensureChatsProject,
       forkThread,
       selectThread,
       renameThread,
@@ -1028,6 +1037,7 @@ export function useWorkspaceController(runtime: ClientRuntime): WorkspaceControl
     [
       createThread,
       createThreadIn,
+      ensureChatsProject,
       archiveThread,
       deleteThread,
       forkThread,

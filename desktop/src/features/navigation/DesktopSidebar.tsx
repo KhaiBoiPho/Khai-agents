@@ -12,7 +12,8 @@ import {
   Plus,
   Search,
   Settings,
-  Shapes,
+  FileText,
+  NotebookPen,
   ShieldAlert,
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -25,6 +26,8 @@ import type { Project, Thread } from "../../generated/app-server";
 import type { DesktopDestination } from "../../app/useDesktopUi";
 import type { SidecarStatus } from "../../rpc/contracts";
 import { SessionRow } from "./SessionRow";
+import { groupByDay, isChatsProject } from "../../app/chats";
+import { useThreadMarks } from "../../app/threadMarks";
 import { useProjectDisclosure } from "./useProjectDisclosure";
 import { useTranslation } from "react-i18next";
 
@@ -47,7 +50,8 @@ interface DesktopSidebarProps {
   onHide(): void;
   homeOpen: boolean;
   onShowHome(): void;
-  onOpenArtifacts?: () => void;
+  activePage?: "documents" | "notes" | null;
+  onOpenPage(page: "documents" | "notes"): void;
   onCreateThreadIn(projectId: string): void;
   onQueryChange(query: string): void;
   onOpenProject(): void;
@@ -102,7 +106,8 @@ export function DesktopSidebar({
   onHide,
   homeOpen,
   onShowHome,
-  onOpenArtifacts,
+  activePage = null,
+  onOpenPage,
   onCreateThreadIn,
   onQueryChange,
   onOpenProject,
@@ -128,7 +133,9 @@ export function DesktopSidebar({
         .map((project) => project.id),
     );
     const regularGroups: SidebarProjectGroup[] = projects
-      .filter((project) => !recoveredProjectIds.has(project.id))
+      .filter(
+        (project) => !recoveredProjectIds.has(project.id) && !isChatsProject(project),
+      )
       .map((project) => {
         const projectThreads = threads
           .filter((thread) => thread.projectId === project.id)
@@ -168,6 +175,48 @@ export function DesktopSidebar({
     }
     return regularGroups;
   }, [normalizedQuery, projects, selectedProjectId, t, threads]);
+  const marks = useThreadMarks();
+  const chatsProjectIds = new Set(
+    projects.filter((project) => isChatsProject(project)).map((project) => project.id),
+  );
+  const visibleThreads = threads.filter((thread) =>
+    !normalizedQuery ||
+    thread.title.toLocaleLowerCase().includes(normalizedQuery),
+  );
+  const pinnedThreads = marks.pinned
+    .map((id) => visibleThreads.find((thread) => thread.id === id))
+    .filter((thread): thread is Thread => Boolean(thread));
+  const favoriteThreads = marks.favorites
+    .map((id) => visibleThreads.find((thread) => thread.id === id))
+    .filter(
+      (thread): thread is Thread =>
+        Boolean(thread) && !marks.pinned.includes(thread!.id),
+    );
+  const chatDays = groupByDay(
+    visibleThreads.filter(
+      (thread) =>
+        chatsProjectIds.has(thread.projectId) && !marks.pinned.includes(thread.id),
+    ),
+  );
+  const row = (thread: Thread) => (
+    <SessionRow
+      key={thread.id}
+      thread={thread}
+      active={thread.id === selectedThreadId}
+      busy={busy}
+      onSelect={onSelectThread}
+      onRename={onRenameThread}
+      onArchive={onArchiveThread}
+      onDelete={async (threadId) => {
+        await onDeleteThread(threadId);
+        marks.forget(threadId);
+      }}
+      pinned={marks.pinned.includes(thread.id)}
+      favorite={marks.favorites.includes(thread.id)}
+      onTogglePin={marks.togglePin}
+      onToggleFavorite={marks.toggleFavorite}
+    />
+  );
   const activeGroupKey =
     projectGroups.find((group) => group.active)?.key ?? null;
   const disclosure = useProjectDisclosure(activeGroupKey);
@@ -245,11 +294,19 @@ export function DesktopSidebar({
         </button>
         <button
           type="button"
-          onClick={onOpenArtifacts}
-          disabled={!onOpenArtifacts}
+          data-active={activePage === "documents"}
+          onClick={() => onOpenPage("documents")}
         >
-          <Shapes size={15} />
-          {t("sidebar.artifacts", "Artifacts")}
+          <FileText size={15} />
+          {t("sidebar.documents", "Documents")}
+        </button>
+        <button
+          type="button"
+          data-active={activePage === "notes"}
+          onClick={() => onOpenPage("notes")}
+        >
+          <NotebookPen size={15} />
+          {t("sidebar.notes", "Notes")}
         </button>
         <button type="button" onClick={() => onOpenSettings("skills")}>
           <BriefcaseBusiness size={15} />
@@ -258,6 +315,18 @@ export function DesktopSidebar({
       </nav>
 
       <nav className={styles.projectList} aria-label="Session history">
+        {pinnedThreads.length ? (
+          <section className={styles.chatSection}>
+            <p className={styles.chatHeading}>Pinned</p>
+            {pinnedThreads.map(row)}
+          </section>
+        ) : null}
+        {favoriteThreads.length ? (
+          <section className={styles.chatSection}>
+            <p className={styles.chatHeading}>Favorites</p>
+            {favoriteThreads.map(row)}
+          </section>
+        ) : null}
         {projects.length === 0 ? (
           <button className={styles.emptyProject} type="button" onClick={onOpenProject}>
             <FolderOpen size={18} />
@@ -348,6 +417,12 @@ export function DesktopSidebar({
           <Plus size={13} />
           {t("sidebar.addFolder", "Add folder")}
         </button>
+        {chatDays.map((day) => (
+          <section className={styles.chatSection} key={day.label}>
+            <p className={styles.chatHeading}>{day.label}</p>
+            {day.threads.map(row)}
+          </section>
+        ))}
       </nav>
 
       <AccountMenu
@@ -512,6 +587,7 @@ function ProjectSessions({
   onDeleteThread,
 }: ProjectSessionsProps) {
   const [showAll, setShowAll] = useState(false);
+  const marks = useThreadMarks();
   const { t } = useTranslation();
 
   if (!expanded) return null;
@@ -547,7 +623,14 @@ function ProjectSessions({
             onSelect={onSelectThread}
             onRename={onRenameThread}
             onArchive={onArchiveThread}
-            onDelete={onDeleteThread}
+            onDelete={async (threadId) => {
+              await onDeleteThread(threadId);
+              marks.forget(threadId);
+            }}
+            pinned={marks.pinned.includes(thread.id)}
+            favorite={marks.favorites.includes(thread.id)}
+            onTogglePin={marks.togglePin}
+            onToggleFavorite={marks.toggleFavorite}
           />
         ))
       )}

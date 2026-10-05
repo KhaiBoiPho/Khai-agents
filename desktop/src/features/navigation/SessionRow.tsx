@@ -3,6 +3,9 @@ import {
   Check,
   MoreHorizontal,
   Pencil,
+  Pin,
+  PinOff,
+  Star,
   Trash2,
   X,
 } from "lucide-react";
@@ -24,6 +27,10 @@ interface SessionRowProps {
   onRename(threadId: string, title: string): Promise<void>;
   onArchive(threadId: string): Promise<void>;
   onDelete(threadId: string): Promise<void>;
+  pinned?: boolean;
+  favorite?: boolean;
+  onTogglePin?: (threadId: string) => void;
+  onToggleFavorite?: (threadId: string) => void;
 }
 
 type RowMode = "closed" | "menu" | "rename" | "archive" | "delete";
@@ -36,6 +43,10 @@ export function SessionRow({
   onRename,
   onArchive,
   onDelete,
+  pinned = false,
+  favorite = false,
+  onTogglePin,
+  onToggleFavorite,
 }: SessionRowProps) {
   const rootRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
@@ -137,6 +148,8 @@ export function SessionRow({
             <span className={styles.copy}>
               <strong>{thread.title}</strong>
             </span>
+            {favorite ? <Star size={12} className={styles.mark} /> : null}
+            {pinned ? <Pin size={12} className={styles.mark} /> : null}
           </button>
           <button
             className={styles.moreButton}
@@ -154,6 +167,32 @@ export function SessionRow({
 
       {mode === "menu" ? (
         <div className={styles.menu} role="menu" aria-label={`Actions for ${thread.title}`}>
+          {onTogglePin ? (
+            <button
+              type="button"
+              role="menuitem"
+              onClick={() => {
+                setMode("closed");
+                onTogglePin(thread.id);
+              }}
+            >
+              {pinned ? <PinOff size={14} /> : <Pin size={14} />}
+              {pinned ? "Unpin" : "Pin"}
+            </button>
+          ) : null}
+          {onToggleFavorite ? (
+            <button
+              type="button"
+              role="menuitem"
+              onClick={() => {
+                setMode("closed");
+                onToggleFavorite(thread.id);
+              }}
+            >
+              <Star size={14} />
+              {favorite ? "Remove from favorites" : "Add to favorites"}
+            </button>
+          ) : null}
           <button
             type="button"
             role="menuitem"

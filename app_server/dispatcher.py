@@ -310,6 +310,7 @@ class Dispatcher:
             rpc_methods.EVENT_REPLAY: self._event_replay,
             rpc_methods.FILE_LIST: self._file_list,
             rpc_methods.DIRECTORY_LIST: self._directory_list,
+            rpc_methods.CHATS_WORKSPACE: self._chats_workspace,
             rpc_methods.FILE_READ: self._file_read,
             rpc_methods.FILE_WRITE: self._file_write,
             rpc_methods.GIT_STATUS: self._git_status,
@@ -1639,6 +1640,27 @@ class Dispatcher:
             "parent": str(target.parent) if target.parent != target else None,
             "entries": entries[:500],
         }
+
+    def _chats_workspace(self, params: Params) -> dict[str, Any]:
+        """The project that holds plain chats, created on first use.
+
+        Chats that are not about a folder still need a workspace, so they
+        live in an empty private directory under the DeepCode home. It is
+        trusted because nothing else is in it.
+        """
+        params.only()
+        from core.config import deepcode_home
+
+        directory = deepcode_home() / "chats"
+        directory.mkdir(parents=True, exist_ok=True)
+        project = self.application.projects.add(
+            str(directory), display_name="Chats", trust_state=TrustState.TRUSTED
+        )
+        if project.trust_state != TrustState.TRUSTED:
+            project = self.application.projects.update(
+                project.id, trust_state=TrustState.TRUSTED
+            )
+        return {"project": project_view(project)}
 
     def _file_read(self, params: Params) -> dict[str, Any]:
         params.only("threadId", "path", "maxBytes")

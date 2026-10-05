@@ -20,6 +20,8 @@ import {
 } from "./features/execution/Composer";
 import { DesktopSidebar } from "./features/navigation/DesktopSidebar";
 import { HomeView } from "./features/home/HomeView";
+import { DocumentsPage } from "./features/pages/DocumentsPage";
+import { NotesPage } from "./features/pages/NotesPage";
 import { useTranscriptMode } from "./features/thread/transcriptMode";
 import type { ClientRuntime } from "./rpc/contracts";
 import type { SkillInfo } from "./generated/app-server";
@@ -101,6 +103,7 @@ export function App({
   const { state, selectedProject, selectedThread } = controller;
   const [sidebarHidden, setSidebarHidden] = useState(readSidebarHidden);
   const [homeOpen, setHomeOpen] = useState(false);
+  const [page, setPage] = useState<"documents" | "notes" | null>(null);
   useEffect(() => {
     try {
       localStorage.setItem(SIDEBAR_KEY, sidebarHidden ? "1" : "0");
@@ -176,9 +179,11 @@ export function App({
   const showingThreads = ui.destination === "threads";
   // Home replaces the thread view when asked for, or when nothing is open.
   const showHome =
-    showingThreads && Boolean(selectedProject) && (homeOpen || !selectedThread);
+    showingThreads &&
+    page === null &&
+    (homeOpen || !selectedThread || !selectedProject);
   const inspectorVisible = Boolean(
-    showingThreads && !showHome && selectedThread && ui.inspectorOpen,
+    showingThreads && !showHome && page === null && selectedThread && ui.inspectorOpen,
   );
 
   return (
@@ -191,27 +196,30 @@ export function App({
       <DesktopSidebar
         onHide={() => setSidebarHidden(true)}
         homeOpen={showHome}
-        onShowHome={() => setHomeOpen(true)}
-        onOpenArtifacts={
-          selectedThread
-            ? () => {
-                setHomeOpen(false);
-                ui.openInspector("artifacts");
-              }
-            : undefined
-        }
+        onShowHome={() => {
+          setPage(null);
+          setHomeOpen(true);
+        }}
+        activePage={page}
+        onOpenPage={(next) => {
+          setHomeOpen(false);
+          setPage(next);
+        }}
         onCreateThreadIn={(projectId) => {
           void (async () => {
             if (await ui.confirmDiscardInspectorDraft()) {
               const created = await controller.createThreadIn(projectId);
-              if (created) setHomeOpen(false);
+              if (created) {
+                setHomeOpen(false);
+                setPage(null);
+              }
             }
           })();
         }}
         projects={state.projects}
         threads={state.threads}
         selectedProjectId={state.selectedProjectId}
-        selectedThreadId={showHome ? null : state.selectedThreadId}
+        selectedThreadId={showHome || page ? null : state.selectedThreadId}
         query={ui.sessionQuery}
         busy={state.busy}
         runtime={state.runtime}
@@ -238,9 +246,13 @@ export function App({
             }
           })();
         }}
-        onCreateThread={() => setHomeOpen(true)}
+        onCreateThread={() => {
+          setPage(null);
+          setHomeOpen(true);
+        }}
         onSelectThread={(threadId) => {
           setHomeOpen(false);
+          setPage(null);
           if (threadId === state.selectedThreadId) return;
           void (async () => {
             if (await ui.confirmDiscardInspectorDraft()) {
@@ -290,7 +302,16 @@ export function App({
           onRestart={() => void controller.restartRuntime()}
           onDismissError={controller.dismissError}
         />
-        {showHome ? (
+        {page ? (
+          <>
+            <header className={styles.titleSlot}>
+              <h1 id="thread-title">{page === "notes" ? "Notes" : "Documents"}</h1>
+            </header>
+            <section className={styles.threadViewport}>
+              {page === "notes" ? <NotesPage /> : <DocumentsPage />}
+            </section>
+          </>
+        ) : showHome ? (
           <>
             <header className={styles.titleSlot}>
               <h1 id="thread-title">Home</h1>
@@ -311,7 +332,9 @@ export function App({
                 onAddFolder={() => void controller.openProject()}
                 onStart={(projectId, prompt) => {
                   void (async () => {
-                    const created = await controller.createThreadIn(projectId);
+                    const target =
+                      projectId ?? (await controller.ensureChatsProject()).id;
+                    const created = await controller.createThreadIn(target);
                     if (!created) return;
                     setComposerIntent({
                       threadId: created.id,

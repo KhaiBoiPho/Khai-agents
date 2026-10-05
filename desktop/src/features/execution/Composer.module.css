@@ -1162,3 +1162,31 @@
   border-radius: 50%;
   pointer-events: none;
 }
+
+/* Round filled send button. */
+.sendButton {
+  width: 30px;
+  height: 30px;
+  margin-bottom: 6px;
+  border-radius: 50%;
+  background: var(--text-primary);
+  color: var(--text-inverse);
+}
+
+.sendButton:hover:not(:disabled) {
+  background: var(--text-secondary);
+  color: var(--text-inverse);
+}
+
+.sendButton:disabled {
+  opacity: 0.3;
+}
+
+.stopButton {
+  width: 30px;
+  height: 30px;
+  margin-bottom: 6px;
+  border-radius: 50%;
+  background: var(--text-primary);
+  color: var(--text-inverse);
+}

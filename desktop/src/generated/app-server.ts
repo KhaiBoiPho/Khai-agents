@@ -171,6 +171,7 @@ export interface MethodParams {
   "event/replay": EventReplayParams;
   "file/list": FileListParams;
   "directory/list": DirectoryListParams;
+  "chats/workspace": {};
   "file/read": FileReadParams;
   "file/write": FileWriteParams;
   "git/status": ThreadReadParams;
@@ -870,6 +871,9 @@ export interface MethodResults {
     path: string;
     parent: string | null;
     entries: DirectoryEntry[];
+  };
+  "chats/workspace": {
+    project: Project;
   };
   "file/read": {
     file: FileContent;

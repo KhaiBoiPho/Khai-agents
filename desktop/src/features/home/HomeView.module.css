@@ -208,3 +208,21 @@
   height: 26px;
   margin-bottom: 7px;
 }
+
+.box button {
+  width: 30px;
+  height: 30px;
+  margin-bottom: 6px;
+  border-radius: 50%;
+  background: var(--text-primary);
+  color: var(--text-inverse);
+}
+
+.box button:hover:not(:disabled) {
+  background: var(--text-secondary);
+  color: var(--text-inverse);
+}
+
+.box button:disabled {
+  opacity: 0.3;
+}

@@ -3,6 +3,8 @@ import {
   BookOpen,
   CheckCircle2,
   ChevronDown,
+  ChevronsDownUp,
+  ChevronsUpDown,
   ChevronRight,
   Clock3,
   Cpu,
@@ -18,7 +20,7 @@ import {
   TerminalSquare,
   Wrench,
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState, type RefObject } from "react";
 
 import type {
   Approval,
@@ -378,9 +380,9 @@ function ExplorationGroup({
       <summary>
         <Search size={14} aria-hidden="true" />
         <span>
-          <strong>Explored project context</strong>
+          <strong>{activityTitle(group.items)}</strong>
           <small>
-            {completed}/{group.items.length} activities
+            {completed}/{group.items.length} done
           </small>
         </span>
         <ChevronDown size={14} aria-hidden="true" />
@@ -402,6 +404,55 @@ function ExplorationGroup({
       </div>
     </details>
   );
+}
+
+/** Close or open every activity block of one turn at once. */
+function CollapseAll({ rootRef }: { rootRef: RefObject<HTMLElement | null> }) {
+  const [collapsed, setCollapsed] = useState(false);
+  return (
+    <button
+      type="button"
+      className={styles.collapseAll}
+      onClick={() => {
+        const next = !collapsed;
+        rootRef.current
+          ?.querySelectorAll("details")
+          .forEach((details) => {
+            details.open = !next;
+          });
+        setCollapsed(next);
+      }}
+      title={collapsed ? "Expand all activity" : "Collapse all activity"}
+    >
+      {collapsed ? <ChevronsUpDown size={13} /> : <ChevronsDownUp size={13} />}
+      {collapsed ? "Expand all" : "Collapse all"}
+    </button>
+  );
+}
+
+/** "Ran 5 commands", "Read 2 files · ran 3 commands", and so on. */
+function activityTitle(items: readonly Item[]): string {
+  const counts = new Map<string, number>();
+  for (const item of items) {
+    const key =
+      item.kind === "command_execution"
+        ? "command"
+        : item.kind === "file_change" || item.kind === "diff"
+          ? "edit"
+          : item.kind === "test_result"
+            ? "test"
+            : "tool";
+    counts.set(key, (counts.get(key) ?? 0) + 1);
+  }
+  const phrase = (key: string, n: number) => {
+    const plural = n === 1 ? "" : "s";
+    if (key === "command") return `ran ${n} command${plural}`;
+    if (key === "edit") return `edited ${n} file${plural}`;
+    if (key === "test") return `ran ${n} test${plural}`;
+    return `used ${n} tool${plural}`;
+  };
+  const text = [...counts.entries()].map(([key, n]) => phrase(key, n)).join(" · ");
+  return text.charAt(0).toUpperCase() + text.slice(1);
 }
 
 function AssistantMessage({ item }: { item: Item }) {
@@ -463,6 +514,7 @@ export function TurnBlock({
       ? [{ id: `${group.id}-prompt`, text: group.turn.prompt, skills: [] }]
       : [];
   const orderedItems = timelineItems(group);
+  const turnRef = useRef<HTMLElement | null>(null);
   const lastExecutionItem =
     [...orderedItems]
       .reverse()
@@ -477,7 +529,11 @@ export function TurnBlock({
       : group.turn?.errorMessage;
 
   return (
-    <section className={styles.turnBlock} data-status={group.turn?.status}>
+    <section
+      className={styles.turnBlock}
+      data-status={group.turn?.status}
+      ref={turnRef}
+    >
       {userMessages.map((message) => (
         <article className={styles.userMessage} data-queued={queued} key={message.id}>
           <div className={styles.userBubble}>
@@ -525,7 +581,10 @@ export function TurnBlock({
         </div>
       ) : null}
 
-      <RunStatus group={group} />
+      <div className={styles.runHeader}>
+        <RunStatus group={group} />
+        {lastExecutionItem ? <CollapseAll rootRef={turnRef} /> : null}
+      </div>
 
       <div className={styles.timeline}>
         {group.timeline.map((entry) => {

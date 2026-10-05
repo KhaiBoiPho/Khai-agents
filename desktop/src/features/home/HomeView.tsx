@@ -1,6 +1,6 @@
 import {
   ChevronRight,
-  CornerDownLeft,
+  ArrowUp,
   Folder,
   FolderPlus,
   Laptop,
@@ -10,6 +10,7 @@ import { useMemo, useState } from "react";
 
 import type { Project } from "../../generated/app-server";
 import { isRecoveredHistoryProject } from "../../app/projectPresentation";
+import { isChatsProject } from "../../app/chats";
 import { MOCK_ACCOUNT } from "../../mocks/preview";
 import { Dropdown } from "../../components/Dropdown";
 import styles from "./HomeView.module.css";
@@ -20,7 +21,8 @@ interface HomeViewProps {
   busy: boolean;
   onOpenProject(projectId: string): void;
   onAddFolder(): void;
-  onStart(projectId: string, prompt: string): void;
+  /** A null project starts a plain chat. */
+  onStart(projectId: string | null, prompt: string): void;
 }
 
 /**
@@ -38,21 +40,23 @@ export function HomeView({
   const recent = useMemo(
     () =>
       [...projects]
-        .filter((project) => !isRecoveredHistoryProject(project))
+        .filter(
+          (project) => !isRecoveredHistoryProject(project) && !isChatsProject(project),
+        )
         .sort((left, right) => right.lastOpenedAt.localeCompare(left.lastOpenedAt)),
     [projects],
   );
-  const [projectId, setProjectId] = useState(
-    selectedProjectId ?? recent[0]?.id ?? "",
-  );
+  // "" means no folder: a plain chat.
+  const [projectId, setProjectId] = useState("");
+  void selectedProjectId;
   const [prompt, setPrompt] = useState("");
   const target = projects.find((project) => project.id === projectId) ?? null;
   const canStart =
-    Boolean(target) && target?.trustState === "trusted" && !busy && Boolean(prompt.trim());
+    (!target || target.trustState === "trusted") && !busy && Boolean(prompt.trim());
 
   const start = () => {
-    if (!canStart || !target) return;
-    onStart(target.id, prompt.trim());
+    if (!canStart) return;
+    onStart(target?.id ?? null, prompt.trim());
     setPrompt("");
   };
 
@@ -103,10 +107,21 @@ export function HomeView({
             trigger={
               <>
                 <Folder size={13} />
-                {target?.displayName ?? "Pick a folder…"}
+                {target?.displayName ?? "No folder"}
               </>
             }
             sections={[
+              {
+                items: [
+                  {
+                    id: "none",
+                    label: "No folder",
+                    description: "A plain chat",
+                    selected: projectId === "",
+                    onSelect: () => setProjectId(""),
+                  },
+                ],
+              },
               {
                 title: "Recent",
                 items: recent.slice(0, 8).map((project) => ({
@@ -159,7 +174,7 @@ export function HomeView({
             aria-label="Start chat"
             title="Start chat"
           >
-            <CornerDownLeft size={16} />
+            <ArrowUp size={16} strokeWidth={2.4} />
           </button>
         </div>
         {target && target.trustState !== "trusted" ? (

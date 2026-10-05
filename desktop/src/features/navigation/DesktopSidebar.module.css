@@ -810,3 +810,17 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* Plain-chat history, pinned and favorite sections. */
+.chatSection {
+  display: flex;
+  flex-direction: column;
+  margin-top: 14px;
+}
+
+.chatHeading {
+  margin: 0 0 3px;
+  padding: 0 8px;
+  color: var(--text-tertiary);
+  font-size: var(--text-xs);
+}
