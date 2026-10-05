@@ -31,6 +31,7 @@ import type { SidecarStatus } from "../../rpc/contracts";
 import { SessionRow } from "./SessionRow";
 import { isChatsProject } from "../../app/chats";
 import { useThreadMarks } from "../../app/threadMarks";
+import logoUrl from "../../assets/khai-logo.png";
 import { useProjectDisclosure } from "./useProjectDisclosure";
 import { useTranslation } from "react-i18next";
 
@@ -260,7 +261,10 @@ export function DesktopSidebar({
   return (
     <aside className={styles.sidebar} aria-label="Projects and Sessions">
       <div className={styles.iconRow}>
-        <strong className={styles.brandName}>Khai-Agents</strong>
+        <span className={styles.brand}>
+          <img src={logoUrl} alt="" className={styles.brandLogo} />
+          <strong className={styles.brandName}>Khai-Agents</strong>
+        </span>
         <span className={styles.topActions}>
           <button
             type="button"
