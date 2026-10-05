@@ -19,4 +19,4 @@ tiktoken==0.12.0
 # Packaging toolchain.
 pip==26.2
 pyinstaller==6.21.0
-pyinstaller-hooks-contrib==2026.6
+pyinstaller-hooks-contrib==2026.8
