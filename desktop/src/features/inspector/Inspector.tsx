@@ -36,10 +36,11 @@ interface InspectorProps {
   onClose(): void;
 }
 
+// Artifacts moved out of the review panel; documents collect under
+// Documents in the sidebar instead.
 const tabs: DesktopInspectorTab[] = [
   "changes",
   "files",
-  "artifacts",
   "tests",
   "terminal",
   "details",
