@@ -309,6 +309,10 @@ class SessionRuntimeRegistry:
         session_id: str,
         *,
         execution_profile: ExecutionProfile | None = None,
+        instructions: str | None = None,
+        workspace: str | None = None,
+        execution_security_profile: ExecutionSecurityProfile | None = None,
+        permission_mode_override: ExecutionPermissionMode | None = None,
     ) -> dict[str, Any]:
         """Summarize the resident model context in place (`/compact`).
 
@@ -318,9 +322,40 @@ class SessionRuntimeRegistry:
 
         ``execution_profile`` is the Thread's *current* resolved selection;
         when given, a stale idle runtime is rebuilt first (see
-        :meth:`_refresh_idle_runtime`).
+        :meth:`_refresh_idle_runtime`). When no runtime is resident (a fresh
+        process, or an evicted Session) and ``workspace`` is given, one is
+        built from canonical history exactly like a Turn's would be, so
+        `/compact` works right after a restart. ``instructions`` is optional
+        user focus for the summary (`/compact <focus>`).
         """
         runtime = self._runtimes.get(session_id)
+        if runtime is None and workspace is not None:
+            canonical = self.store.get_session(session_id)
+            if canonical is None:
+                raise ThreadNotFoundError(f"session not found: {session_id}")
+            agent_preset = AgentPresetSnapshot.from_metadata(
+                canonical.metadata.get(PRESET_METADATA_KEY)
+            )
+            model = execution_profile.model_id if execution_profile else None
+            runtime = self._create(
+                canonical,
+                workspace=workspace,
+                model=model,
+                execution_profile=execution_profile,
+                execution_security_profile=execution_security_profile,
+                permission_mode_override=permission_mode_override,
+                agent_preset=agent_preset,
+                runtime_key=self._runtime_key(
+                    workspace=workspace,
+                    model=model,
+                    execution_profile=execution_profile,
+                    execution_security_profile=execution_security_profile,
+                    permission_mode_override=permission_mode_override,
+                    agent_preset=agent_preset,
+                ),
+            )
+            self._runtimes[session_id] = runtime
+            await self._evict_idle()
         if runtime is None:
             raise ConflictError(
                 "No resident context to compact — this Session's context is "
@@ -330,13 +365,32 @@ class SessionRuntimeRegistry:
             raise ConflictError(f"session runtime is active: {session_id}")
         if execution_profile is not None:
             runtime = await self._refresh_idle_runtime(runtime, execution_profile)
+        canonical = self.store.get_session(session_id)
+        if (
+            canonical is not None
+            and runtime.canonical_message_count != len(canonical.messages)
+        ):
+            # Same rule as acquire: another process appended; visible history
+            # wins over a stale resident copy.
+            runtime.agent.load_history(self._visible_history(canonical))
+            runtime.canonical_message_count = len(canonical.messages)
         compact = getattr(runtime.agent, "compact", None)
         if not callable(compact):
             raise ConflictError(
                 "This Session's runtime does not support manual compaction."
             )
-        report = await compact()
-        self.persist_kernel_history(session_id, runtime.agent.history)
+        # Held for the whole summarization round-trip: a Turn acquiring the
+        # Session meanwhile would race the history rewrite.
+        runtime.active = True
+        try:
+            report = (
+                await compact(instructions=instructions)
+                if instructions and _accepts_keyword(compact, "instructions")
+                else await compact()
+            )
+            self.persist_kernel_history(session_id, runtime.agent.history)
+        finally:
+            runtime.active = False
         return report
 
     async def discard(self, session_id: str) -> None:

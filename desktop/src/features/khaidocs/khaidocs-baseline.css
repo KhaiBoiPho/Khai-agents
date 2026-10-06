@@ -1,0 +1,95 @@
+/* The parts of Mantine's baseline.css KhaiDocs relies on, scoped to the
+   KhaiDocs root so they never reach the rest of the app. */
+
+.khaidocs-root {
+  position: relative;
+  height: 100%;
+  overflow: hidden;
+  color-scheme: var(--mantine-color-scheme);
+  background-color: var(--mantine-color-body);
+  color: var(--mantine-color-text);
+  font-family: var(--mantine-font-family);
+  font-size: var(--mantine-font-size-md);
+  line-height: var(--mantine-line-height);
+  -webkit-font-smoothing: var(--mantine-webkit-font-smoothing);
+  -moz-osx-font-smoothing: var(--mantine-moz-font-smoothing);
+}
+
+.khaidocs-root *,
+.khaidocs-root *::before,
+.khaidocs-root *::after {
+  box-sizing: border-box;
+}
+
+.khaidocs-root :where(input, button, textarea, select) {
+  font: inherit;
+}
+
+.khaidocs-root :where(button, select) {
+  text-transform: none;
+}
+
+/* Docmost's shell pins its header and navbar with position: fixed. Layout
+   containment makes this box their containing block, so they sit inside the
+   page area instead of over the app's sidebar; the same goes for modals,
+   which portal into this box (see theme.ts). */
+.khaidocs-root {
+  contain: layout paint;
+}
+
+/* Viewport units inside Docmost and Mantine size things to the whole window.
+   As a size container, the root gives its descendants cqh/cqw units that
+   measure the KhaiDocs area instead; the overrides below swap them in. */
+.khaidocs-root {
+  container-type: size;
+}
+
+.khaidocs-root .mantine-AppShell-navbar,
+.khaidocs-root .mantine-AppShell-aside {
+  height: calc(
+    100cqh - var(--app-shell-header-offset, 0rem) - var(--app-shell-footer-offset, 0rem)
+  );
+}
+
+.khaidocs-root .mantine-AppShell-main {
+  min-height: 100cqh;
+}
+
+.khaidocs-root .mantine-Modal-root {
+  --modal-y-offset: 5cqh;
+  --modal-x-offset: 5cqw;
+}
+
+.khaidocs-root .mantine-Modal-content {
+  max-height: var(--modal-content-max-height, calc(100cqh - var(--modal-y-offset) * 2));
+}
+
+.khaidocs-root .mantine-Modal-root[data-full-screen] .mantine-Modal-content {
+  --modal-content-height: 100cqh;
+}
+
+.khaidocs-notice {
+  display: grid;
+  height: 100%;
+  place-items: center;
+  padding: 32px;
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+  text-align: center;
+}
+
+.khaidocs-notice code {
+  padding: 1px 5px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-inset);
+  font-family: var(--font-mono);
+}
+
+/* Inside the app's Settings window KhaiDocs is a section among others: it
+   sizes to its content and scrolls with the dialog. */
+.khaidocs-root[data-view="settings"] {
+  height: auto;
+  overflow: visible;
+  contain: none;
+  background-color: transparent;
+}

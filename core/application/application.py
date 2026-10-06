@@ -44,6 +44,7 @@ from core.application.skill_service import SkillService
 from core.application.terminal_service import TerminalService
 from core.application.test_service import TestService
 from core.application.thread_service import ThreadService
+from core.application.thread_titler import ThreadTitler
 from core.application.turn_service import TurnService
 from core.application.workflow_adapter import WorkflowRunner
 from core.application.workflow_service import WorkflowService
@@ -215,6 +216,9 @@ class DeepCodeApplication:
         self.turns.add_admission_guard(self.automations.ensure_turn_admitted)
         self.goals.add_continuation_guard(self.automations.ensure_goal_continuable)
         self.turns.add_settled_listener(self.automations.on_turn_settled)
+        # Summarize each Session's first exchange into its title, off-path.
+        self.titler = ThreadTitler(database, self.threads, self.llm)
+        self.turns.add_settled_listener(self.titler.on_turn_settled)
 
     def legacy_importer(self, store: SessionStore) -> LegacySessionImporter:
         return LegacySessionImporter(
@@ -373,6 +377,7 @@ class DeepCodeApplication:
                 exc.add_note(f"DeepCode shutdown stage: {stage}")
                 errors.append(exc)
 
+        self.titler.close()
         attempt("event relay", self.event_relay.close)
         attempt("execution coordinator quiesce", self.execution_coordinator.quiesce)
         attempt("automation scheduler", self.automation_scheduler.close)

@@ -1,0 +1,36 @@
+# Khai-Agents RAG storage: Postgres (documents, chunks, full-text index) and
+# Qdrant (embedding vectors). Started automatically by the service
+# (core/rag/stack.py); set KHAI_RAG_BACKEND=sqlite to use the local fallback.
+# Ports are bound to localhost only and chosen not to collide with other
+# Postgres/Qdrant instances on the machine.
+name: khai-rag
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: khai
+      POSTGRES_PASSWORD: khai-rag-local
+      POSTGRES_DB: khai_rag
+    ports:
+      - "127.0.0.1:5442:5432"
+    volumes:
+      - pg-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U khai -d khai_rag"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  qdrant:
+    image: qdrant/qdrant:v1.15.4
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:6343:6333"
+    volumes:
+      - qdrant-data:/qdrant/storage
+
+volumes:
+  pg-data:
+  qdrant-data:

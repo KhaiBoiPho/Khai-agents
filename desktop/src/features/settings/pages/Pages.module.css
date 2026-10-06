@@ -123,11 +123,6 @@
 }
 
 /* Customize pages */
-.brandIcon {
-  width: 16px;
-  height: 16px;
-}
-
 .connectorName {
   display: inline-flex;
   align-items: center;

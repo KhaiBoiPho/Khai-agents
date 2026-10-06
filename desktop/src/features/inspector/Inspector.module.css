@@ -4,20 +4,23 @@
   min-width: 0;
   /* Not a flat 54px: the row holds text, and text now tracks --font-size-base,
      so a fixed height would clip the tabs at the larger end of the slider. */
-  grid-template-rows: minmax(54px, auto) minmax(0, 1fr);
+  grid-template-rows: minmax(44px, auto) minmax(0, 1fr);
   overflow: hidden;
   background: var(--surface-raised);
+  container-type: inline-size;
 }
 
+/* Segmented tabs after Claude Desktop's side panel: icon + label, the
+   selected one lifted onto the panel surface. */
 .tabs {
   display: flex;
   min-width: 0;
   align-items: center;
-  gap: 4px;
-  padding: 7px 46px 7px 10px;
+  gap: 2px;
+  padding: 6px 76px 6px 8px;
   overflow-x: auto;
   border-bottom: 1px solid var(--border-subtle);
-  background: color-mix(in srgb, var(--surface-sidebar) 68%, var(--surface-raised));
+  background: var(--surface-sidebar);
   scrollbar-width: none;
 }
 
@@ -26,14 +29,23 @@
 }
 
 .tabs button {
+  display: inline-flex;
+  height: 30px;
   flex: 0 0 auto;
-  min-height: 34px;
-  padding: 0 9px;
+  align-items: center;
+  gap: 6px;
+  padding: 0 10px;
   border: 1px solid transparent;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-md);
   color: var(--text-tertiary);
-  font: var(--text-2xs) var(--font-mono);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-medium);
   text-transform: capitalize;
+}
+
+.tabs button:hover:not([aria-selected="true"]) {
+  background: var(--surface-hover);
+  color: var(--text-secondary);
 }
 
 .tabs button[aria-selected="true"] {
@@ -43,19 +55,57 @@
   box-shadow: var(--shadow-soft);
 }
 
+/* A narrow panel keeps every tab reachable: the others shrink to their
+   icon (the name stays in the tooltip) and only the open one is labelled. */
+@container (max-width: 520px) {
+  .tabs button:not([aria-selected="true"]) > span {
+    display: none;
+  }
+
+  .tabs button:not([aria-selected="true"]) {
+    padding: 0 8px;
+  }
+}
+
+.tabCount {
+  min-width: 17px;
+  padding: 0 5px;
+  border-radius: var(--radius-pill);
+  background: var(--signal-soft);
+  color: var(--signal);
+  font-size: var(--text-micro);
+  font-weight: var(--weight-semibold);
+  line-height: 16px;
+  text-align: center;
+}
+
 .close {
   position: absolute;
   z-index: 4;
-  top: 10px;
-  right: 9px;
+  top: 8px;
+  right: 8px;
   display: grid;
   width: 28px;
   height: 28px;
   place-items: center;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-md);
   color: var(--text-tertiary);
 }
 
+.widen {
+  position: absolute;
+  z-index: 4;
+  top: 8px;
+  right: 40px;
+  display: grid;
+  width: 28px;
+  height: 28px;
+  place-items: center;
+  border-radius: var(--radius-md);
+  color: var(--text-tertiary);
+}
+
+.widen:hover,
 .close:hover {
   background: var(--surface-hover);
   color: var(--text-primary);
@@ -108,18 +158,55 @@
 
 .error {
   position: absolute;
-  z-index: 3;
-  top: 8px;
-  right: 10px;
-  left: 10px;
-  margin: 0;
-  padding: 8px 10px;
-  border: 1px solid color-mix(in srgb, var(--danger) 28%, var(--border-subtle));
-  border-radius: var(--radius-sm);
-  background: var(--danger-soft);
+  z-index: 8;
+  right: 12px;
+  bottom: 12px;
+  left: 12px;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 9px 8px 9px 12px;
+  border: 1px solid color-mix(in srgb, var(--danger) 30%, var(--border-subtle));
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--danger-soft) 85%, var(--surface-raised));
+  box-shadow: var(--shadow-float);
   color: var(--danger);
-  font-size: var(--text-2xs);
+  font-size: var(--text-xs);
   line-height: 1.5;
+  animation: notice-in 200ms var(--ease-spring) backwards;
+}
+
+.error > svg {
+  margin-top: 2px;
+  flex-shrink: 0;
+}
+
+.error p {
+  min-width: 0;
+  flex: 1;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.error button {
+  display: grid;
+  width: 22px;
+  height: 22px;
+  flex-shrink: 0;
+  place-items: center;
+  border-radius: var(--radius-sm);
+  color: inherit;
+}
+
+.error button:hover {
+  background: color-mix(in srgb, var(--danger) 14%, transparent);
+}
+
+@keyframes notice-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
 }
 
 .heading {
@@ -136,8 +223,7 @@
 
 .heading button,
 .outlinedAction,
-.worktreeControl button,
-.fileEditor header button {
+.worktreeControl button {
   min-height: 35px;
   padding: 0 10px;
   border: 1px solid var(--border-strong);
@@ -149,8 +235,7 @@
 
 .heading button:hover:not(:disabled),
 .outlinedAction:hover:not(:disabled),
-.worktreeControl button:hover:not(:disabled),
-.fileEditor header button:hover:not(:disabled) {
+.worktreeControl button:hover:not(:disabled) {
   background: var(--surface-hover);
   color: var(--text-primary);
 }
@@ -220,6 +305,9 @@
 }
 
 .fileDiff > header strong {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -303,108 +391,6 @@
   min-width: 0;
   padding: 0 6px;
   white-space: pre;
-}
-
-.filesView {
-  display: grid;
-  height: 100%;
-  grid-template-rows: minmax(130px, 32%) minmax(0, 1fr);
-  overflow: hidden;
-}
-
-.fileTree {
-  min-height: 0;
-  padding: 8px 0;
-  overflow-y: auto;
-  border-bottom: 1px solid var(--border-subtle);
-  background: var(--surface-sidebar);
-}
-
-.fileTree button {
-  display: flex;
-  width: 100%;
-  min-height: 32px;
-  align-items: center;
-  gap: 6px;
-  padding-right: 8px;
-  border-radius: 0;
-  color: var(--text-secondary);
-  font: var(--text-2xs) var(--font-mono);
-  text-align: left;
-}
-
-.fileTree button:hover:not(:disabled) {
-  background: var(--surface-hover);
-  color: var(--text-primary);
-}
-
-.fileTree button:disabled {
-  color: var(--text-tertiary);
-  cursor: default;
-  opacity: 1;
-}
-
-.treeNotice {
-  margin: 7px 10px;
-  color: var(--text-tertiary);
-  font: var(--text-micro)/1.5 var(--font-mono);
-}
-
-.fileEditor {
-  position: relative;
-  display: grid;
-  min-height: 0;
-  grid-template-rows: minmax(44px, auto) minmax(0, 1fr);
-  background: var(--surface-raised);
-}
-
-.fileEditor > header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  padding: 5px 8px 5px 12px;
-  border-bottom: 1px solid var(--border-subtle);
-  font: var(--text-2xs) var(--font-mono);
-}
-
-.fileEditor > header > span {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.fileEditor > header > div {
-  display: flex;
-  flex: 0 0 auto;
-  align-items: center;
-  gap: 7px;
-}
-
-.fileEditor > header small {
-  color: var(--attention);
-  font-size: var(--text-micro);
-}
-
-.editorLoading {
-  display: grid;
-  place-items: center;
-  color: var(--text-tertiary);
-  font: var(--text-2xs) var(--font-mono);
-}
-
-.editorNotice {
-  position: absolute;
-  z-index: 2;
-  right: 10px;
-  bottom: 10px;
-  margin: 0;
-  padding: 6px 8px;
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-sm);
-  background: color-mix(in srgb, var(--surface-raised) 92%, transparent);
-  color: var(--text-tertiary);
-  font: var(--text-micro) var(--font-mono);
 }
 
 .runStatus {

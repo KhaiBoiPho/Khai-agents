@@ -2,6 +2,7 @@ import type { Thread } from "../../generated/app-server";
 import { confirmAction } from "../../platform/confirmAction";
 import type { CodeWorkbenchController } from "../workbench/useCodeWorkbench";
 import { InspectorEmpty } from "./InspectorEmpty";
+import { FileIcon } from "./FileIcon";
 import styles from "./Inspector.module.css";
 
 interface ChangesPanelProps {
@@ -106,7 +107,10 @@ export function ChangesPanel({
           {workbench.diffs.map((file) => (
             <section key={file.path} className={styles.fileDiff}>
               <header>
-                <strong>{file.path}</strong>
+                <strong>
+                  <FileIcon name={file.path.split("/").at(-1) ?? file.path} size={14} />
+                  {file.path}
+                </strong>
                 <span>
                   <b>+{file.additions}</b> <i>−{file.deletions}</i>
                 </span>

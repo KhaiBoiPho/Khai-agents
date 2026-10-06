@@ -1,0 +1,476 @@
+/* Event editor and series-scope dialog — ported from Yuvomi's Calendar
+   module (MIT, © 2026 ulsklyc). */
+
+.dialog {
+  width: min(560px, calc(100vw - 32px));
+  max-height: calc(100vh - 48px);
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-xl);
+  background: var(--surface-raised);
+  box-shadow: var(--shadow-float);
+  color: var(--text-primary);
+}
+
+.dialog[open] {
+  display: flex;
+  animation: editorIn 220ms var(--ease-spring);
+}
+
+.dialog::backdrop {
+  background: rgb(0 0 0 / 28%);
+  animation: backdropIn 200ms ease;
+}
+
+.small {
+  width: min(380px, calc(100vw - 32px));
+}
+
+.dialogInner {
+  display: flex;
+  width: 100%;
+  min-height: 0;
+  flex-direction: column;
+}
+
+.dialogTitle {
+  margin: 0;
+  padding: 18px 20px 6px;
+  font-size: var(--text-lg);
+  font-weight: var(--weight-semibold);
+}
+
+.small .dialogInner {
+  gap: 8px;
+  padding-bottom: 18px;
+}
+
+.small .dialogInner > :not(.dialogTitle) {
+  margin-inline: 20px;
+}
+
+.form {
+  display: flex;
+  min-height: 0;
+  flex-direction: column;
+  gap: 14px;
+  padding: 10px 20px 16px;
+  overflow: auto;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.label {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-medium);
+}
+
+.label abbr {
+  color: var(--danger);
+  text-decoration: none;
+}
+
+.input {
+  min-height: 32px;
+  padding: 5px 9px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  background: var(--surface-canvas);
+  color: var(--text-primary);
+  font: inherit;
+  font-size: var(--text-sm);
+}
+
+textarea.input {
+  resize: vertical;
+}
+
+.input:focus-visible {
+  border-color: var(--module-calendar);
+  outline: 2px solid color-mix(in srgb, var(--module-calendar) 30%, transparent);
+  outline-offset: 0;
+}
+
+.input[aria-invalid="true"] {
+  border-color: var(--danger);
+}
+
+.hint {
+  margin: 0;
+  color: var(--text-tertiary);
+  font-size: var(--text-xs);
+}
+
+.error {
+  margin: 0;
+  color: var(--danger);
+  font-size: var(--text-xs);
+}
+
+.warn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--attention);
+  font-size: var(--text-xs);
+}
+
+.toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: var(--text-sm);
+  cursor: pointer;
+}
+
+.toggle input {
+  width: 15px;
+  height: 15px;
+  accent-color: var(--module-calendar);
+}
+
+.when {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) 120px;
+  align-items: center;
+  gap: 8px 10px;
+}
+
+.when[data-allday] {
+  grid-template-columns: 44px minmax(0, 1fr);
+}
+
+.fieldset {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.fieldset > legend {
+  margin-bottom: 6px;
+  padding: 0;
+}
+
+.people {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.person {
+  display: inline-flex;
+  min-height: 30px;
+  align-items: center;
+  gap: 6px;
+  padding: 0 10px 0 4px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-pill);
+  font-size: var(--text-sm);
+}
+
+.person:hover {
+  background: var(--surface-hover);
+}
+
+.person[aria-pressed="true"] {
+  border-color: var(--module-calendar);
+  background: color-mix(in srgb, var(--module-calendar) 12%, var(--surface-canvas));
+}
+
+.personAvatar {
+  display: grid;
+  width: 22px;
+  height: 22px;
+  place-items: center;
+  border-radius: 50%;
+  color: #ffffff;
+  font-size: var(--text-micro);
+  font-weight: var(--weight-semibold);
+}
+
+.rruleDetails {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: var(--radius-md);
+  background: var(--surface-inset);
+}
+
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 14px;
+}
+
+.inline {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.interval {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+}
+
+.interval .input {
+  width: 64px;
+  text-align: center;
+}
+
+.weekdays {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.weekday {
+  width: 34px;
+  height: 30px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  background: var(--surface-canvas);
+  font-size: var(--text-xs);
+}
+
+.weekday[aria-pressed="true"] {
+  border-color: var(--module-calendar);
+  background: var(--module-calendar);
+  color: light-dark(#ffffff, #06131a);
+}
+
+/* The start's own weekday, shown chosen until days are picked by hand. */
+.weekday[data-implied] {
+  border-style: dashed;
+  background: color-mix(in srgb, var(--module-calendar) 18%, var(--surface-canvas));
+  color: var(--text-primary);
+}
+
+.reminderRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.reminderRow > select:first-child {
+  min-width: 0;
+  flex: 1;
+}
+
+.amount {
+  width: 70px;
+}
+
+.iconButton {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  flex: none;
+  place-items: center;
+  border-radius: var(--radius-sm);
+  color: var(--text-tertiary);
+}
+
+.iconButton:hover {
+  background: var(--surface-hover);
+  color: var(--text-primary);
+}
+
+.addButton {
+  display: inline-flex;
+  align-self: flex-start;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 8px;
+  border-radius: var(--radius-sm);
+  color: var(--module-calendar);
+  font-size: var(--text-sm);
+}
+
+.addButton:hover {
+  background: color-mix(in srgb, var(--module-calendar) 10%, transparent);
+}
+
+.advanced {
+  border-top: 1px solid var(--border-subtle);
+}
+
+.advanced summary {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 12px 0 4px;
+  cursor: pointer;
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  list-style-position: outside;
+}
+
+.advanced summary small {
+  color: var(--text-tertiary);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-regular);
+}
+
+.advancedBody {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding-top: 10px;
+}
+
+.swatches,
+.icons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.swatch {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 1px rgb(0 0 0 / 10%);
+}
+
+.swatch[aria-checked="true"] {
+  box-shadow:
+    0 0 0 2px var(--surface-raised),
+    0 0 0 4px var(--text-primary);
+}
+
+.inherit {
+  background: conic-gradient(#6c3aed 0 25%, #00668f 0 50%, #ce2a63 0 75%, #157f3d 0);
+}
+
+.iconChoice {
+  display: grid;
+  width: 32px;
+  height: 32px;
+  place-items: center;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  color: var(--text-secondary);
+}
+
+.iconChoice:hover {
+  background: var(--surface-hover);
+}
+
+.iconChoice[aria-checked="true"] {
+  border-color: var(--module-calendar);
+  background: color-mix(in srgb, var(--module-calendar) 12%, var(--surface-canvas));
+  color: var(--text-primary);
+}
+
+.discard {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 0 20px 4px;
+  padding: 10px 12px;
+  border-radius: var(--radius-md);
+  background: var(--attention-soft);
+  font-size: var(--text-sm);
+}
+
+.discard span {
+  flex: 1;
+}
+
+.footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 12px 20px;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.footerActions {
+  display: flex;
+  gap: 8px;
+}
+
+.primary,
+.secondary,
+.dangerOutline {
+  display: inline-flex;
+  min-height: 32px;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 0 14px;
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+}
+
+.primary {
+  background: var(--text-primary);
+  color: var(--text-inverse);
+}
+
+.primary:hover {
+  opacity: 0.88;
+}
+
+.secondary {
+  border: 1px solid var(--border-strong);
+}
+
+.secondary:hover:not(:disabled) {
+  background: var(--surface-hover);
+}
+
+.dangerOutline {
+  border: 1px solid color-mix(in srgb, var(--danger) 50%, transparent);
+  color: var(--danger);
+}
+
+.dangerOutline:hover {
+  background: var(--danger-soft);
+}
+
+.scopeChoices {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+@keyframes editorIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
+  }
+}
+
+@keyframes backdropIn {
+  from {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dialog[open],
+  .dialog::backdrop {
+    animation: none;
+  }
+}

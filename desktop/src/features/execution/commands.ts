@@ -2,10 +2,12 @@ import type { ExecutionAccessPreset } from "../../generated/app-server";
 
 export type ComposerCommand =
   | { type: "new" }
+  | { type: "init" }
   | { type: "paper" }
   | { type: "review" }
   | { type: "fork" }
   | { type: "rename"; title: string }
+  | { type: "compact"; instructions: string | null }
   | { type: "model"; model: string | null }
   | { type: "permission"; accessPreset: ExecutionAccessPreset | null };
 
@@ -17,10 +19,16 @@ export interface CommandDefinition {
 
 export const commandDefinitions: CommandDefinition[] = [
   { name: "new", usage: "/new", description: "Create a code Session" },
+  { name: "init", usage: "/init", description: "Write AGENTS.md describing this project" },
   { name: "paper", usage: "/paper", description: "Create a Paper2Code Session" },
   { name: "review", usage: "/review", description: "Open the Review workbench" },
   { name: "fork", usage: "/fork", description: "Fork into an isolated worktree" },
   { name: "rename", usage: "/rename ", description: "Rename this Session" },
+  {
+    name: "compact",
+    usage: "/compact ",
+    description: "Summarize older turns to free context (optional focus)",
+  },
   { name: "model", usage: "/model ", description: "Set a model or use default" },
   {
     name: "permissions",
@@ -50,12 +58,18 @@ export function parseComposerCommand(value: string): CommandParseResult | null {
 
   switch (name) {
     case "new":
+    case "init":
     case "paper":
     case "review":
     case "fork": {
       const error = requireNoArgument(name, argument);
       return error ?? { ok: true, command: { type: name } };
     }
+    case "compact":
+      return {
+        ok: true,
+        command: { type: "compact", instructions: argument || null },
+      };
     case "rename":
       return argument
         ? { ok: true, command: { type: "rename", title: argument } }
@@ -108,3 +122,23 @@ export function matchingCommands(value: string): CommandDefinition[] {
     definition.name.startsWith(query),
   );
 }
+
+/**
+ * `/init` prompt, adapted from OpenAI Codex's prompt_for_init_command.md
+ * (github.com/openai/codex, Apache-2.0).
+ */
+export const INIT_PROMPT = `Generate a file named AGENTS.md that serves as a contributor and agent guide for this repository.
+Before writing, check whether AGENTS.md already exists at the workspace root. If it does, do not overwrite or modify it; report that it exists and summarize what it covers instead.
+Start by calling repo_map, then read the README, the build manifests and the main entry points so the guide is grounded in the actual code.
+
+Document requirements:
+- Title the document "Repository Guidelines" and use Markdown headings.
+- Keep it concise: 200-400 words. Be short, direct and specific to this repository, with examples (commands, paths, naming patterns).
+
+Recommended sections (omit those that do not apply, add others that do):
+- Project Structure & Module Organization: where source, tests and assets live, and what the main modules do.
+- Build, Test, and Development Commands: the key commands and what each does.
+- Coding Style & Naming Conventions: formatting, linting tools, naming patterns.
+- Testing Guidelines: frameworks, test naming, how to run tests.
+- Commit & Pull Request Guidelines: conventions visible in the git history.
+- Architecture Overview: how the main parts connect, if it helps a newcomer.`;

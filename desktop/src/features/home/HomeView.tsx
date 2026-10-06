@@ -1,16 +1,32 @@
 import {
   ArrowUp,
+  Atom,
+  FileText,
   Folder,
   FolderPlus,
   FolderSearch,
   Globe,
   Laptop,
   ListTodo,
+  Paperclip,
   PenLine,
+  Plug,
+  Plus,
+  Telescope,
+  X,
 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 
-import type { Project } from "../../generated/app-server";
+import type { Project, SettingsSnapshot } from "../../generated/app-server";
+import type { ClientRuntime, PendingFile } from "../../rpc/contracts";
+import {
+  DEEP_EFFORTS,
+  executionTarget,
+  withDeepResearch,
+  withSearch,
+} from "../execution/promptModes";
+import composerStyles from "../execution/Composer.module.css";
+import { ModelPicker, type ModelSelection } from "../execution/ModelPicker";
 import { isRecoveredHistoryProject } from "../../app/projectPresentation";
 import { isChatsProject } from "../../app/chats";
 import mascotUrl from "../../assets/khai-mascot.png";
@@ -19,13 +35,25 @@ import { Dropdown } from "../../components/Dropdown";
 import styles from "./HomeView.module.css";
 
 interface HomeViewProps {
+  runtime: ClientRuntime;
+  settings: SettingsSnapshot | null;
   projects: Project[];
   selectedProjectId: string | null;
   busy: boolean;
   onOpenProject(projectId: string): void;
   onAddFolder(): void;
-  /** A null project starts a plain chat. */
-  onStart(projectId: string | null, prompt: string): void;
+  /**
+   * A null project starts a plain chat; a null model uses the default. Files
+   * are uploaded into the new thread's workspace and listed in the prompt.
+   */
+  onStart(
+    projectId: string | null,
+    prompt: string,
+    model: ModelSelection | null,
+    files: PendingFile[],
+  ): void;
+  onManageProviders?: () => void;
+  onOpenSettings?: (section: string) => void;
 }
 
 /**
@@ -33,12 +61,16 @@ interface HomeViewProps {
  * composer that starts a new thread in the chosen folder.
  */
 export function HomeView({
+  runtime,
+  settings,
   projects,
   selectedProjectId,
   busy,
   onOpenProject,
   onAddFolder,
   onStart,
+  onManageProviders,
+  onOpenSettings,
 }: HomeViewProps) {
   const recent = useMemo(
     () =>
@@ -53,14 +85,61 @@ export function HomeView({
   const [projectId, setProjectId] = useState("");
   void selectedProjectId;
   const [prompt, setPrompt] = useState("");
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  // Grow with the prompt up to nearly half the window before scrolling.
+  useEffect(() => {
+    const textarea = textareaRef.current;
+    if (!textarea) return;
+    textarea.style.height = "0px";
+    const cap = Math.max(190, Math.round(window.innerHeight * 0.45));
+    textarea.style.height = `${Math.min(textarea.scrollHeight, cap)}px`;
+  }, [prompt]);
+  const [model, setModel] = useState<ModelSelection | null>(null);
   const target = projects.find((project) => project.id === projectId) ?? null;
-  const canStart =
-    (!target || target.trustState === "trusted") && !busy && Boolean(prompt.trim());
+  // No trust gate: starting a chat trusts the folder (createThreadIn).
+  const canStart = !busy && Boolean(prompt.trim());
+  const [files, setFiles] = useState<PendingFile[]>([]);
+  const [fileError, setFileError] = useState<string | null>(null);
+  const [searchOn, setSearchOn] = useState(false);
+  const [researchOn, setResearchOn] = useState(false);
+  const defaults = executionTarget(null, settings);
+  const deepThinkOn = DEEP_EFFORTS.has(
+    (model?.reasoningEffort ?? defaults.effort ?? "").toLocaleLowerCase(),
+  );
+  const toggleDeepThink = () => {
+    const connectionId = model?.connectionId ?? defaults.connection;
+    const modelId = model?.model ?? defaults.model;
+    if (!connectionId || !modelId) return;
+    setModel({
+      connectionId,
+      model: modelId,
+      reasoningEffort: deepThinkOn ? "auto" : "high",
+      contextWindow: model?.contextWindow ?? null,
+    });
+  };
+
+  const addFiles = async () => {
+    setFileError(null);
+    try {
+      const chosen = (await runtime.chooseFiles?.()) ?? [];
+      setFiles((current) => {
+        const seen = new Set(current.map((file) => file.name));
+        return [...current, ...chosen.filter((file) => !seen.has(file.name))].slice(0, 8);
+      });
+    } catch (error) {
+      setFileError(error instanceof Error ? error.message : String(error));
+    }
+  };
 
   const start = () => {
     if (!canStart) return;
-    onStart(target?.id ?? null, prompt.trim());
+    const text = withDeepResearch(
+      withSearch(prompt.trim(), searchOn && !researchOn),
+      researchOn,
+    );
+    onStart(target?.id ?? null, text, model, files);
     setPrompt("");
+    setFiles([]);
   };
 
   return (
@@ -126,7 +205,27 @@ export function HomeView({
           </button>
         </div>
         <div className={styles.box}>
+          {files.length ? (
+            <div className={styles.files} aria-label="Files to attach">
+              {files.map((file) => (
+                <span key={file.name} className={styles.file}>
+                  <FileText size={13} />
+                  <span>{file.name}</span>
+                  <button
+                    type="button"
+                    aria-label={`Remove ${file.name}`}
+                    onClick={() =>
+                      setFiles((current) => current.filter((entry) => entry !== file))
+                    }
+                  >
+                    <X size={12} />
+                  </button>
+                </span>
+              ))}
+            </div>
+          ) : null}
           <textarea
+            ref={textareaRef}
             value={prompt}
             onChange={(event) => setPrompt(event.target.value)}
             onKeyDown={(event) => {
@@ -143,29 +242,86 @@ export function HomeView({
             rows={1}
             aria-label="New chat prompt"
           />
-          <button
-            type="button"
-            onClick={start}
-            disabled={!canStart}
-            aria-label="Start chat"
-            title="Start chat"
-          >
-            <ArrowUp size={16} strokeWidth={2.4} />
-          </button>
+          <div className={styles.toolbar}>
+            <div className={styles.modes}>
+              <HomePlusMenu
+                disabled={busy}
+                canAddFiles={Boolean(runtime.chooseFiles)}
+                onAddFiles={() => void addFiles()}
+                onAddFolder={onAddFolder}
+                onConnectors={onOpenSettings ? () => onOpenSettings("mcp") : undefined}
+              />
+              <button
+                type="button"
+                className={composerStyles.toggle}
+                aria-pressed={deepThinkOn}
+                onClick={toggleDeepThink}
+                disabled={busy || !(model?.model ?? defaults.model)}
+                title="Think longer before answering (high reasoning effort)"
+              >
+                <Atom size={14} />
+                DeepThink
+              </button>
+              <button
+                type="button"
+                className={composerStyles.toggle}
+                aria-pressed={searchOn}
+                onClick={() => setSearchOn((on) => !on)}
+                title="Search the web for this message"
+              >
+                <Globe size={14} />
+                Search
+              </button>
+              <button
+                type="button"
+                className={composerStyles.toggle}
+                aria-pressed={researchOn}
+                onClick={() => setResearchOn((on) => !on)}
+                title="Research the web in depth and write a cited report"
+              >
+                <Telescope size={14} />
+                Deep research
+              </button>
+            </div>
+            <div className={styles.boxTools}>
+              <ModelPicker
+                runtime={runtime}
+                project={target}
+                thread={model}
+                settings={settings}
+                disabled={busy}
+                onChange={(connectionId, modelId, reasoningEffort, contextWindow) =>
+                  setModel(
+                    connectionId || modelId
+                      ? { connectionId, model: modelId, reasoningEffort, contextWindow }
+                      : null,
+                  )
+                }
+                onManageProviders={onManageProviders}
+              />
+              <button
+                type="button"
+                className={styles.send}
+                onClick={start}
+                disabled={!canStart}
+                aria-label="Start chat"
+                title="Start chat"
+              >
+                <ArrowUp size={16} strokeWidth={2.4} />
+              </button>
+            </div>
+          </div>
         </div>
-        {target && target.trustState !== "trusted" ? (
-          <p className={styles.hint}>
-            Trust {target.displayName} before starting a chat in it.
-          </p>
-        ) : null}
+        {fileError ? <p className={styles.hint}>{fileError}</p> : null}
       </div>
       <div className={styles.suggestions}>
-        {SUGGESTIONS.map((suggestion) => {
+        {SUGGESTIONS.map((suggestion, index) => {
           const Icon = suggestion.icon;
           return (
             <button
               type="button"
               key={suggestion.label}
+              style={{ "--stagger": index } as CSSProperties}
               onClick={() => setPrompt(suggestion.prompt)}
             >
               <Icon size={16} />
@@ -174,6 +330,84 @@ export function HomeView({
           );
         })}
       </div>
+    </div>
+  );
+}
+
+interface HomePlusMenuProps {
+  disabled: boolean;
+  canAddFiles: boolean;
+  onAddFiles(): void;
+  onAddFolder(): void;
+  onConnectors?: () => void;
+}
+
+/** The Home "+" menu: add files or a folder before the chat exists. */
+function HomePlusMenu({
+  disabled,
+  canAddFiles,
+  onAddFiles,
+  onAddFolder,
+  onConnectors,
+}: HomePlusMenuProps) {
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    if (!open) return;
+    const close = (event: MouseEvent) => {
+      if (!rootRef.current?.contains(event.target as Node)) setOpen(false);
+    };
+    const escape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("mousedown", close);
+    document.addEventListener("keydown", escape);
+    return () => {
+      document.removeEventListener("mousedown", close);
+      document.removeEventListener("keydown", escape);
+    };
+  }, [open]);
+  const run = (action?: () => void) => () => {
+    setOpen(false);
+    action?.();
+  };
+  return (
+    <div className={composerStyles.popoverRoot} ref={rootRef}>
+      <button
+        className={composerStyles.iconButton}
+        type="button"
+        onClick={() => setOpen((current) => !current)}
+        disabled={disabled}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        aria-label="Add to prompt"
+        title="Add to prompt"
+      >
+        <Plus size={16} />
+      </button>
+      {open ? (
+        <div className={composerStyles.popover} role="menu">
+          <button
+            type="button"
+            role="menuitem"
+            onClick={run(onAddFiles)}
+            disabled={!canAddFiles}
+          >
+            <Paperclip size={15} />
+            Add files
+          </button>
+          <button type="button" role="menuitem" onClick={run(onAddFolder)}>
+            <Folder size={15} />
+            Open folder
+          </button>
+          {onConnectors ? (
+            <button type="button" role="menuitem" onClick={run(onConnectors)}>
+              <Plug size={15} />
+              Connectors
+            </button>
+          ) : null}
+        </div>
+      ) : null}
     </div>
   );
 }

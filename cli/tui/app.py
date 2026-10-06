@@ -450,8 +450,18 @@ class TuiApp:
         if self.reader.interactive:
             self.console.clear()
 
-    async def compact_conversation(self) -> str:
-        report = await self.thread_client.compact_context()
+    async def compact_conversation(self, instructions: str | None = None) -> str:
+        report = (
+            await self.thread_client.compact_context(instructions)
+            if instructions
+            else await self.thread_client.compact_context()
+        )
+        before, after = report.get("tokens_before"), report.get("tokens_after")
+        if isinstance(before, int) and isinstance(after, int):
+            return (
+                f"Compacted: ~{before:,} → ~{after:,} context tokens "
+                f"({report['messages_before']} → {report['messages_after']} messages)."
+            )
         saved = report["chars_before"] - report["chars_after"]
         return (
             f"Compacted: {report['messages_before']} → "

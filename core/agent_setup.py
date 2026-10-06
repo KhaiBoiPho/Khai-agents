@@ -38,20 +38,57 @@ from core.harness.tools import default_coding_tools
 from core.llm_runtime import get_workflow_provider
 from core.providers.catalog import resolve_model_info
 
-SYSTEM_PROMPT = (
-    "You are a coding agent working in a workspace directory. Use the tools "
-    "provided for this turn. Core tools include read, write, edit, apply_patch, "
-    "bash, grep, glob, web_fetch, and update_plan; optional capabilities such "
-    "as Skills, delegation, or goals appear only when enabled. Navigate "
-    "with grep/glob, inspect with read, make targeted changes with edit (or "
-    "write for new files), and use apply_patch when one change spans several "
-    "files or must land all-or-nothing. Run commands/tests with bash. For a "
-    "multi-step task, use update_plan to lay out and track your steps (one "
-    "in_progress at a time), and keep it current as you go. After a write, "
-    "edit, or apply_patch, check the tool result for a 'Diagnostics detected' "
-    "block and fix any reported errors. When the task is done, reply with a "
-    "short summary."
-)
+# Working rules adapted from OpenAI Codex's agent prompt
+# (github.com/openai/codex, codex-rs/core/gpt_5_codex_prompt.md, Apache-2.0),
+# rewritten for this tool set and for explaining code to people learning it.
+SYSTEM_PROMPT = """\
+You are a coding agent working in a workspace directory on the user's machine. \
+Use the tools provided for this turn. Core tools include repo_map, glob, grep, \
+read, edit, write, apply_patch, bash, web_fetch and update_plan; optional \
+capabilities such as Skills, delegation, goals or document search appear only \
+when enabled.
+
+## Understanding code
+- Orient first: the Repository map below (or `repo_map` with focus_files / \
+symbols) shows where the important definitions live. Then use grep to find \
+usages and glob to list files; prefer them to listing directories by hand.
+- Read only what you need: open the relevant section of a large file rather \
+than the whole file, and follow imports and call sites one hop at a time.
+- Ground every claim in the code you read. If you have not read it, say so \
+instead of guessing.
+
+## Explaining code
+- Lead with the answer in one or two sentences, then the structure: what each \
+part does, how data and control flow between parts, and where to start reading.
+- Cite code as `path:line` (one location per reference, no ranges). Quote only \
+short snippets that make the point.
+- For a whole project: purpose, tech stack, entry points, the main modules and \
+how they connect, the key flows, and a suggested reading order.
+- Match the user's language and level; define jargon the first time it appears.
+
+## Editing
+- Make targeted changes with edit (write for new files); use apply_patch when \
+one change spans several files or must land all-or-nothing.
+- The worktree may contain the user's own changes. Never revert or overwrite \
+changes you did not make; if something unexpected changed, stop and ask.
+- Never run destructive commands (git reset --hard, git checkout --, rm -rf on \
+user data) unless the user asked for exactly that.
+- After write, edit or apply_patch, check the result for a "Diagnostics \
+detected" block and fix any reported errors. Run the relevant tests with bash \
+when they exist.
+
+## Planning and reviews
+- For multi-step work use update_plan (one step in_progress at a time) and keep \
+it current; skip it for simple tasks.
+- When asked for a review, lead with findings ordered by severity, each with a \
+`path:line` reference; then open questions; keep any summary short. If you \
+find nothing, say so and name remaining risks or testing gaps.
+
+## Final message
+Be concise and factual. Lead with the outcome, reference files instead of \
+pasting large blocks, and suggest natural next steps as a short numbered list \
+when there are any.
+"""
 
 
 # Tools callable from inside code mode (C5b): file / shell / search — the ones
@@ -157,6 +194,22 @@ def _compose_tool_filters(*filters: Any) -> Any:
         return names
 
     return chained
+
+
+def _document_search_tool(workspace: Any, runtime: Any) -> Any:
+    """``search_documents`` over this workspace, embedding through the
+    OpenRouter connection (key from Settings or ``OPENROUTER_API_KEY``)."""
+
+    from core.harness.tools.documents import SearchDocumentsTool
+    from core.rag.service import openrouter_embedder_factory
+
+    def resolve_key() -> str | None:
+        resolver = getattr(runtime, "connection_resolver", None)
+        if resolver is None:
+            return None
+        return resolver.resolve_connection("openrouter").api_key
+
+    return SearchDocumentsTool(workspace, openrouter_embedder_factory(resolve_key))
 
 
 def _wire_tool_permissions(tool_registry: Any, engine: Any) -> None:
@@ -369,9 +422,16 @@ def build_agent_session(
 
     if skill_runtime is None:
         skill_runtime = SkillRuntime(workspace)
+    from core.harness.tools.documents import DOCUMENT_SEARCH_PREAMBLE
+
+    from core.codemap import repo_map_section
+
     addenda = [
         collaboration_preamble(engine.mode),
         system_preamble(workspace),
+        DOCUMENT_SEARCH_PREAMBLE,
+        # Orientation before the first tool call (Aider-style repo map).
+        repo_map_section(workspace),
     ]
     addendum = "\n\n".join(a for a in addenda if a)
     full_system_prompt = f"{system_prompt}\n\n{addendum}" if addendum else system_prompt
@@ -423,6 +483,10 @@ def build_agent_session(
         goal_runtime=goal_runtime,
         execution_security_profile=resolved_security_profile,
     )
+    tool_registry.register(_document_search_tool(workspace, active_runtime))
+    from core.harness.tools.codemap import RepoMapTool
+
+    tool_registry.register(RepoMapTool(str(workspace)))
     for extra_tool in extra_tools:
         tool_registry.register(extra_tool)
     _wire_code_mode(

@@ -146,8 +146,7 @@
   color: var(--text-primary);
 }
 
-.menu,
-.confirmation {
+.menu {
   position: absolute;
   z-index: 30;
   top: calc(100% + 6px);
@@ -180,57 +179,6 @@
 
 .menu .deleteAction {
   color: var(--danger);
-}
-
-.confirmation {
-  width: 248px;
-  padding: 14px;
-}
-
-.confirmation p {
-  display: grid;
-  gap: 3px;
-  margin: 0;
-  color: var(--text-primary);
-  font-size: var(--text-sm);
-  font-weight: var(--weight-bold);
-}
-
-.confirmation p span {
-  color: var(--text-tertiary);
-  font-size: var(--text-2xs);
-  font-weight: var(--weight-regular);
-  line-height: 1.4;
-}
-
-.confirmation > div {
-  display: flex;
-  justify-content: flex-end;
-  gap: 7px;
-  margin-top: 13px;
-}
-
-.confirmation button {
-  min-height: 34px;
-  padding: 0 11px;
-  border-radius: var(--radius-sm);
-  color: var(--text-secondary);
-  font-size: var(--text-2xs);
-}
-
-.confirmation button:hover:not(:disabled) {
-  background: var(--surface-hover);
-}
-
-.confirmation .confirmArchive,
-.confirmation .confirmDelete {
-  background: var(--danger);
-  color: var(--text-on-accent);
-}
-
-.confirmation .confirmArchive:hover:not(:disabled),
-.confirmation .confirmDelete:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--danger) 86%, black);
 }
 
 .srOnly {
@@ -302,4 +250,24 @@
   grid-template-columns: auto minmax(0, 1fr) auto auto;
   gap: 8px;
   padding-left: 8px;
+}
+
+/* Chat titles are the sidebar's primary text (see DesktopSidebar's
+   hierarchy note); the status dot only shows when it says something. */
+.row {
+  color: var(--text-primary);
+}
+
+.copy strong {
+  font-size: var(--text-sm);
+  font-weight: var(--weight-regular);
+  line-height: 1.35;
+}
+
+.row[data-active="true"] .copy strong {
+  font-weight: var(--weight-medium);
+}
+
+.beacon[data-status="idle"] {
+  visibility: hidden;
 }

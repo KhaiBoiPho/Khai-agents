@@ -28,6 +28,14 @@ describe("Composer commands", () => {
       ok: true,
       command: { type: "rename", title: "Architecture review" },
     });
+    expect(parseComposerCommand("/compact")).toEqual({
+      ok: true,
+      command: { type: "compact", instructions: null },
+    });
+    expect(parseComposerCommand("/compact  keep the API decisions ")).toEqual({
+      ok: true,
+      command: { type: "compact", instructions: "keep the API decisions" },
+    });
   });
 
   it("returns actionable errors and filtered suggestions", () => {
@@ -39,6 +47,9 @@ describe("Composer commands", () => {
     expect(matchingCommands("/re").map((command) => command.name)).toEqual([
       "review",
       "rename",
+    ]);
+    expect(matchingCommands("/comp").map((command) => command.name)).toEqual([
+      "compact",
     ]);
     expect(matchingCommands("normal prompt")).toEqual([]);
   });

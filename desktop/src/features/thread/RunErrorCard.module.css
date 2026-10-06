@@ -1,0 +1,139 @@
+.card {
+  --tone: var(--danger);
+  display: flex;
+  gap: 12px;
+  margin: 10px 7px 4px 0;
+  padding: 12px 14px;
+  border: 1px solid color-mix(in srgb, var(--tone) 22%, var(--border-subtle));
+  border-radius: var(--radius-md, 10px);
+  background: color-mix(in srgb, var(--tone) 5%, var(--surface-canvas));
+  animation: errorIn 200ms var(--ease-spring, ease-out);
+}
+
+.card[data-tone="warning"] {
+  --tone: light-dark(#b45309, #f0a640);
+}
+
+.icon {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  flex-shrink: 0;
+  place-items: center;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--tone) 13%, transparent);
+  color: var(--tone);
+}
+
+.body {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.titleRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  min-height: 22px;
+}
+
+.titleRow strong {
+  color: var(--text-primary);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold, 600);
+}
+
+.code {
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--tone) 10%, transparent);
+  color: var(--tone);
+  font: 500 var(--text-micro, 10.5px) var(--font-mono);
+  letter-spacing: 0.02em;
+}
+
+.hint {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: var(--text-xs);
+  line-height: 1.55;
+}
+
+.detail {
+  margin: 6px 0 0;
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-inset, var(--surface-code));
+  color: var(--text-secondary);
+  font: var(--text-2xs) / 1.55 var(--font-mono);
+  overflow-wrap: anywhere;
+  animation: errorIn 160ms ease-out;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.actions button {
+  display: inline-flex;
+  height: 28px;
+  align-items: center;
+  gap: 5px;
+  padding: 0 10px;
+  border-radius: var(--radius-sm);
+  font-size: var(--text-xs);
+  transition: background 120ms ease, color 120ms ease;
+}
+
+.primary {
+  border: 1px solid var(--border-strong, var(--border-subtle));
+  background: var(--surface-canvas);
+  color: var(--text-primary);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 5%);
+}
+
+.primary:hover:not(:disabled) {
+  background: var(--surface-hover);
+}
+
+.primary:disabled {
+  opacity: 0.55;
+}
+
+.ghost {
+  color: var(--text-tertiary);
+}
+
+.ghost:hover {
+  background: var(--surface-hover);
+  color: var(--text-primary);
+}
+
+.chevron {
+  transition: transform 160ms ease;
+}
+
+.chevron[data-open] {
+  transform: rotate(180deg);
+}
+
+@keyframes errorIn {
+  from {
+    opacity: 0;
+    transform: translateY(3px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .card,
+  .detail {
+    animation: none;
+  }
+}

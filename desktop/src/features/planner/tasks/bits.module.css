@@ -1,0 +1,171 @@
+/* Badges shared by the list row, the board card and the detail panel. */
+
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.meta,
+.priority {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 4px;
+  color: var(--text-tertiary);
+  font-size: var(--text-xs);
+  white-space: nowrap;
+}
+
+.ellipsis {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.meta[data-tone="overdue"] {
+  color: var(--danger);
+  font-weight: var(--weight-semibold);
+}
+
+.meta[data-tone="today"] {
+  color: var(--attention);
+  font-weight: var(--weight-semibold);
+}
+
+/* Priority hues sit outside the theme tokens; light-dark() keeps each one
+   readable on the light and the dark themes alike. */
+.priority[data-priority="urgent"] {
+  --priority: light-dark(#b42318, #ff8a7a);
+}
+
+.priority[data-priority="high"] {
+  --priority: light-dark(#b4400e, #fdab6d);
+}
+
+.priority[data-priority="medium"] {
+  --priority: light-dark(#8a5a00, #f5c451);
+}
+
+.priority[data-priority="low"] {
+  --priority: light-dark(#5f6b7a, #9aa6b5);
+}
+
+.priorityDot {
+  width: 7px;
+  height: 7px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: var(--priority);
+}
+
+.priority[data-priority="urgent"] .priorityDot {
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--priority) 25%, transparent);
+}
+
+.tag {
+  --tag: light-dark(#4b5563, #b6bfcc);
+  display: inline-flex;
+  max-width: 140px;
+  align-items: center;
+  padding: 0 7px;
+  overflow: hidden;
+  border-radius: var(--radius-pill);
+  background: color-mix(in srgb, var(--tag) 13%, transparent);
+  color: var(--tag);
+  font-size: var(--text-xs);
+  line-height: 18px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+button.tag:hover {
+  background: color-mix(in srgb, var(--tag) 22%, transparent);
+}
+
+button.tag[aria-pressed="true"] {
+  box-shadow: inset 0 0 0 1px var(--tag);
+}
+
+.tag[data-hue="0"] {
+  --tag: light-dark(#1d6b8f, #7cc4e8);
+}
+
+.tag[data-hue="1"] {
+  --tag: light-dark(#7a3fb0, #c7a2ef);
+}
+
+.tag[data-hue="2"] {
+  --tag: light-dark(#a3365f, #f19cbc);
+}
+
+.tag[data-hue="3"] {
+  --tag: light-dark(#2f7a44, #86d39b);
+}
+
+.tag[data-hue="4"] {
+  --tag: light-dark(#8c5a14, #e7bd73);
+}
+
+.tag[data-hue="5"] {
+  --tag: light-dark(#455a99, #a3b3ea);
+}
+
+.tagMore {
+  color: var(--text-tertiary);
+  font-size: var(--text-xs);
+}
+
+.stack {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+}
+
+.stack > * + * {
+  margin-left: -6px;
+}
+
+.avatar,
+.avatarMore {
+  display: inline-grid;
+  flex-shrink: 0;
+  place-items: center;
+  border-radius: 50%;
+  box-shadow: 0 0 0 2px var(--surface-canvas);
+  color: #fff;
+  font-weight: var(--weight-semibold);
+  line-height: 1;
+}
+
+.avatarMore {
+  background: var(--surface-selected);
+  color: var(--text-secondary);
+  font-size: var(--text-micro);
+}
+
+.progress {
+  display: block;
+  width: 64px;
+  height: 4px;
+  overflow: hidden;
+  border-radius: var(--radius-pill);
+  background: var(--surface-selected);
+}
+
+.progress > span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--module-tasks);
+  transform-origin: left;
+  transition: transform 280ms var(--ease-spring);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .progress > span {
+    transition: none;
+  }
+}

@@ -108,6 +108,8 @@ const ZH_CN: Record<string, string> = {
   "settings.appearance.midnight": "午夜 · 深邃冷色",
   "settings.appearance.claude": "Claude · 象牙白与陶土色",
   "settings.appearance.claudeDark": "Claude 深色 · 石板灰与陶土色",
+  "settings.appearance.lagoon": "Lagoon · 纸白与海绿色",
+  "settings.appearance.lagoonDark": "Lagoon 深色 · 夜色与海绿色",
   "settings.appearance.contrast": "高对比度 · AAA",
   "settings.appearance.imported": "导入的主题",
   "settings.appearance.importTheme": "导入 VS Code 主题",
@@ -280,7 +282,7 @@ const ZH_CN: Record<string, string> = {
   "inspector.tab.artifacts": "产物",
   "inspector.tab.tests": "测试",
   "inspector.tab.terminal": "终端",
-  "inspector.tab.details": "详情",
+  "inspector.tab.history": "历史",
 };
 
 function readLocale(): Locale {

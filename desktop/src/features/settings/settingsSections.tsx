@@ -8,6 +8,7 @@
 import type { ComponentType } from "react";
 import type { LucideIcon } from "lucide-react";
 import {
+  BookOpenText,
   Brain,
   BriefcaseBusiness,
   CircleGauge,
@@ -46,6 +47,7 @@ import {
   SkillsSettingsPage,
 } from "./pages/CustomizePages";
 import { GeneralPage } from "./pages/GeneralPage";
+import { KhaiDocsSettingsPage } from "./pages/KhaiDocsSettingsPage";
 import { ModelsSection } from "./sections/ModelsSection";
 
 export type SettingsSectionId =
@@ -55,6 +57,7 @@ export type SettingsSectionId =
   | "usage"
   | "capabilities"
   | "memory"
+  | "khaidocs"
   | "system"
   | "developer"
   | "agent-presets"
@@ -155,6 +158,15 @@ const SECTIONS: readonly SettingsSection[] = [
     component: MemoryPage,
     group: "settings",
     ownsTitle: true,
+  },
+  {
+    id: "khaidocs",
+    order: 6,
+    labelKey: "settings.section.khaidocs",
+    label: "KhaiDocs",
+    icon: BookOpenText,
+    component: KhaiDocsSettingsPage,
+    group: "settings",
   },
   {
     id: "system",

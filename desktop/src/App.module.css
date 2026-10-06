@@ -8,7 +8,7 @@
 }
 
 .shell[data-inspector="true"] {
-  grid-template-columns: 264px minmax(460px, 1fr) minmax(370px, 420px);
+  grid-template-columns: 264px minmax(460px, 1fr) var(--review-width, 440px);
 }
 
 .workspace {
@@ -142,7 +142,7 @@
     z-index: 20;
     top: 8px;
     right: 8px;
-    width: min(430px, calc(100vw - 72px));
+    width: min(var(--review-width, 440px), calc(100vw - 72px));
     height: calc(100% - 16px);
     margin: 0;
     box-shadow: var(--shadow-float);
@@ -196,7 +196,7 @@
 }
 
 .shell[data-sidebar="hidden"][data-inspector="true"] {
-  grid-template-columns: minmax(460px, 1fr) minmax(370px, 420px);
+  grid-template-columns: minmax(460px, 1fr) var(--review-width, 440px);
 }
 
 .showSidebar {
@@ -272,4 +272,85 @@
   gap: 6px;
   padding: 0 10px;
   font-size: var(--text-sm);
+}
+
+/* Thread view: a slim top bar holds the Review toggle so it never sits on
+   top of the transcript. */
+.titleSlot[data-bar="true"] {
+  display: flex;
+  height: 44px;
+  align-items: center;
+  justify-content: flex-end;
+  padding: 0 12px;
+  overflow: visible;
+}
+
+.titleSlot[data-bar="true"] .reviewToggle {
+  position: static;
+}
+
+/* The Review panel always sits beside the chat and never takes more than the
+   space the chat can spare, instead of floating over it on smaller windows. */
+.shell[data-inspector="true"] {
+  grid-template-columns:
+    264px minmax(340px, 1fr)
+    minmax(280px, min(var(--review-width, 440px), calc(100vw - 264px - 380px)));
+}
+
+.shell[data-sidebar="hidden"][data-inspector="true"] {
+  grid-template-columns:
+    minmax(340px, 1fr)
+    minmax(280px, min(var(--review-width, 440px), calc(100vw - 380px)));
+}
+
+@media (max-width: 1180px) {
+  .shell[data-inspector="true"] {
+    grid-template-columns:
+      248px minmax(320px, 1fr)
+      minmax(260px, min(var(--review-width, 440px), 42vw));
+  }
+
+  .shell[data-sidebar="hidden"][data-inspector="true"] {
+    grid-template-columns: minmax(320px, 1fr) minmax(260px, min(var(--review-width, 440px), 45vw));
+  }
+
+  .reviewPane {
+    position: relative;
+    top: auto;
+    right: auto;
+    z-index: auto;
+    width: auto;
+    height: 100%;
+    margin: 0;
+    border: 0;
+    border-left: 1px solid var(--border-subtle);
+    border-radius: 0;
+    box-shadow: none;
+  }
+}
+
+@media (max-width: 920px) {
+  .shell[data-inspector="true"] {
+    grid-template-columns: 228px minmax(280px, 1fr) minmax(240px, 40vw);
+  }
+}
+
+/* Phones: no room for both; the panel floats over the chat. */
+@media (max-width: 720px) {
+  .shell[data-inspector="true"],
+  .shell[data-sidebar="hidden"][data-inspector="true"] {
+    grid-template-columns: 204px minmax(0, 1fr);
+  }
+
+  .reviewPane {
+    position: fixed;
+    z-index: 20;
+    top: 8px;
+    right: 8px;
+    width: calc(100vw - 48px);
+    height: calc(100% - 16px);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-float);
+  }
 }

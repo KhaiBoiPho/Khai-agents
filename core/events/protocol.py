@@ -286,6 +286,12 @@ def describe_tool_activity(
             "Read",
             _first_argument(arguments, "file_path", "path"),
         )
+    if lowered == "search_documents":
+        return ToolActivity(
+            ToolActivityKind.SEARCH,
+            "Search documents",
+            _first_argument(arguments, "query"),
+        )
     if lowered in {"grep", "search"}:
         return ToolActivity(
             ToolActivityKind.SEARCH,

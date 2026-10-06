@@ -1,7 +1,7 @@
 import {
   AlertTriangle,
   BookOpen,
-  CheckCircle2,
+  Check,
   ChevronDown,
   ChevronsDownUp,
   ChevronsUpDown,
@@ -16,6 +16,8 @@ import {
   RotateCcw,
   ScrollText,
   Search,
+  ShieldCheck,
+  ShieldX,
   Sparkles,
   TerminalSquare,
   Wrench,
@@ -28,6 +30,7 @@ import type {
   Item,
 } from "../../generated/app-server";
 import type { DesktopInspectorTab } from "../../app/useDesktopUi";
+import { LiveDot, LoadingDots, PopIn, ShimmerText } from "../../components/Motion";
 import { ApprovalCard } from "../execution/ApprovalCard";
 import { presentItem } from "../execution/itemPresentation";
 import {
@@ -36,7 +39,13 @@ import {
   type ConversationTurn,
   type TimelineActivityGroup,
 } from "./conversationModel";
+import { FileCard } from "../../components/FileCard";
+import { documentSearchView } from "./documentSearch";
+import { DocumentCards } from "./DocumentCards";
+import { turnDocuments } from "./documentFiles";
 import { MarkdownContent } from "./MarkdownContent";
+import { RunErrorCard } from "./RunErrorCard";
+import { describeRunError, isGenericRunError, isProviderErrorText } from "./runErrors";
 import { ReasoningBlock } from "./ReasoningBlock";
 import type { TranscriptMode } from "./transcriptMode";
 import styles from "./ThreadConversation.module.css";
@@ -236,32 +245,40 @@ function ActivityItem({
   }
   if (item.kind === "approval_request" && approval) {
     const pending = approval.status === "pending";
+    if (!pending) {
+      const allowed =
+        approval.status === "approved_once" || approval.status === "approved_session";
+      // A settled approval is history, not a prompt: one quiet row on the rail.
+      return (
+        <div className={styles.runStep} data-status={allowed ? "allowed" : "refused"}>
+          <span className={styles.runStepNode} data-tone={allowed ? "success" : "danger"}>
+            {allowed ? <ShieldCheck size={13} strokeWidth={2} /> : <ShieldX size={13} strokeWidth={2} />}
+          </span>
+          <span className={styles.runStepCopy}>
+            <span className={styles.runStepVerb}>{approvalOutcome(approval.status)}</span>
+            {item.summary ? (
+              <strong className={styles.runStepSubject}>
+                {item.summary.replace(/^Approved:\s*/i, "")}
+              </strong>
+            ) : null}
+          </span>
+        </div>
+      );
+    }
     return (
-      <section
-        className={styles.runApproval}
-        data-pending={pending}
-        data-status={approval.status}
-      >
+      <section className={styles.runApproval} data-status={approval.status}>
         <div className={styles.runApprovalHeading}>
-          {pending ? <AlertTriangle size={16} /> : <CheckCircle2 size={16} />}
+          <AlertTriangle size={15} />
           <span>
-            <strong>
-              {pending ? "Approval required" : approvalOutcome(approval.status)}
-            </strong>
+            <strong>Approval required</strong>
             <small>{item.summary}</small>
           </span>
         </div>
-        {pending ? (
-          <ApprovalCard
-            approval={approval}
-            busy={busy}
-            onRespond={onRespondToApproval}
-          />
-        ) : (
-          <span className={styles.runApprovalDecision}>
-            Decision: {approval.status.replaceAll("_", " ")}
-          </span>
-        )}
+        <ApprovalCard
+          approval={approval}
+          busy={busy}
+          onRespond={onRespondToApproval}
+        />
       </section>
     );
   }
@@ -270,17 +287,36 @@ function ActivityItem({
   const activity = itemActivity(item);
   const body = presentation.body;
   const hasBody = Boolean(body && body.trim() && body.trim() !== item.summary.trim());
+  const running = item.status === "in_progress";
+  const documentSearch = documentSearchView(item);
+  const verb = documentSearch?.verb ?? activity?.label ?? presentation.label;
+  const subject = activity?.subject ?? item.summary;
   const heading = (
     <>
-      <ActivityIcon kind={item.kind} activityKind={activity?.kind} />
-      <span className={styles.runStepCopy}>
-        <strong>
-          {activity?.subject ?? (item.summary || presentation.label)}
-        </strong>
-        <small>{activity?.label ?? presentation.label}</small>
+      <span className={styles.runStepNode}>
+        <ActivityIcon kind={item.kind} activityKind={activity?.kind} />
       </span>
-      <span className={styles.runStepStatus}>
-        {item.status.replaceAll("_", " ")}
+      <span className={styles.runStepCopy}>
+        <span className={styles.runStepVerb}>{verb}</span>
+        {subject && subject !== verb ? (
+          <strong className={styles.runStepSubject}>
+            <ShimmerText active={running}>{subject}</ShimmerText>
+          </strong>
+        ) : null}
+        {documentSearch?.count ? (
+          <span className={styles.runStepVerb}>· {documentSearch.count}</span>
+        ) : null}
+      </span>
+      <span className={styles.runStepStatus} data-status={item.status}>
+        {running ? (
+          <LoadingDots />
+        ) : item.status === "completed" ? (
+          <PopIn>
+            <Check size={13} strokeWidth={2.4} aria-label="Completed" />
+          </PopIn>
+        ) : (
+          item.status.replaceAll("_", " ")
+        )}
       </span>
       {hasBody ? <ChevronRight className={styles.runStepChevron} size={14} /> : null}
     </>
@@ -340,8 +376,14 @@ function RunStatus({ group }: { group: ConversationTurn }) {
 
   return (
     <div className={styles.runStatus} data-status={group.turn?.status}>
-      <Clock3 size={14} aria-hidden="true" />
-      <span>{runLabel(group, now)}</span>
+      {group.turn?.status === "running" ? (
+        <LiveDot />
+      ) : (
+        <Clock3 size={14} aria-hidden="true" />
+      )}
+      <ShimmerText active={group.turn?.status === "running"}>
+        {runLabel(group, now)}
+      </ShimmerText>
     </div>
   );
 }
@@ -378,14 +420,20 @@ function ExplorationGroup({
       open={active || transcriptMode === "verbose"}
     >
       <summary>
-        <Search size={14} aria-hidden="true" />
-        <span>
-          <strong>{activityTitle(group.items)}</strong>
-          <small>
-            {completed}/{group.items.length} done
-          </small>
+        <span className={styles.runStepNode}>
+          <Search size={13} strokeWidth={1.8} aria-hidden="true" />
         </span>
-        <ChevronDown size={14} aria-hidden="true" />
+        <span className={styles.runStepCopy}>
+          <span className={styles.runStepVerb}>{activityTitle(group.items)}</span>
+        </span>
+        <span className={styles.runStepStatus}>
+          {group.items.some((entry) => entry.status === "in_progress") ? (
+            <LoadingDots />
+          ) : (
+            `${completed}/${group.items.length}`
+          )}
+        </span>
+        <ChevronDown className={styles.activityGroupChevron} size={14} aria-hidden="true" />
       </summary>
       <div className={styles.activityGroupItems}>
         {group.items.map((item) => (
@@ -514,6 +562,7 @@ export function TurnBlock({
       ? [{ id: `${group.id}-prompt`, text: group.turn.prompt, skills: [] }]
       : [];
   const orderedItems = timelineItems(group);
+  const documents = turnDocuments(orderedItems);
   const turnRef = useRef<HTMLElement | null>(null);
   const lastExecutionItem =
     [...orderedItems]
@@ -527,18 +576,48 @@ export function TurnBlock({
     group.completion?.payload.stopReason === "application_restarted"
       ? "The previous process stopped. Retry from the same prompt."
       : group.turn?.errorMessage;
+  // The provider's own failure text, from an error item or an assistant
+  // reply that only echoes it; preferred over the generic stop reason.
+  const providerError =
+    orderedItems
+      .map((item) =>
+        item.kind === "error"
+          ? (presentItem(item).body ?? item.summary)
+          : item.kind === "assistant_message" && isProviderErrorText(assistantText(item))
+            ? assistantText(item)
+            : null,
+      )
+      .find((text): text is string => Boolean(text)) ?? null;
+  const runError =
+    providerError ?? (errorMessage && (failed || !isGenericRunError(errorMessage)) ? errorMessage : null);
+  const runErrorView = runError ? describeRunError(runError) : null;
+  // Shown in the error card instead of as raw timeline rows.
+  const isErrorEcho = (item: Item) =>
+    runErrorView !== null &&
+    (item.kind === "error" ||
+      (item.kind === "assistant_message" && isProviderErrorText(assistantText(item))));
 
   return (
     <section
       className={styles.turnBlock}
       data-status={group.turn?.status}
+      data-turn-id={group.turn?.id}
       ref={turnRef}
     >
-      {userMessages.map((message) => (
+      {userMessages.map(({ text, ...rest }) => ({ ...rest, ...splitAttachedFiles(text) })).map((message) => (
         <article className={styles.userMessage} data-queued={queued} key={message.id}>
-          <div className={styles.userBubble}>
-            <MarkdownContent>{message.text}</MarkdownContent>
-          </div>
+          {message.files.length ? (
+            <div className={styles.userFiles} aria-label="Attached files">
+              {message.files.map((path) => (
+                <FileCard key={path} path={path} />
+              ))}
+            </div>
+          ) : null}
+          {message.prompt ? (
+            <div className={styles.userBubble}>
+              <MarkdownContent>{message.prompt}</MarkdownContent>
+            </div>
+          ) : null}
           {message.skills.length ? (
             <div className={styles.userSkills} aria-label="Skills used in this turn">
               {message.skills.map((skill) => (
@@ -604,6 +683,7 @@ export function TurnBlock({
               />
             );
           }
+          if (isErrorEcho(entry.item)) return null;
           if (entry.item.kind === "assistant_message") {
             if (
               transcriptMode === "summary" &&
@@ -636,10 +716,18 @@ export function TurnBlock({
         })}
       </div>
 
-      {errorMessage ? <p className={styles.runError}>{errorMessage}</p> : null}
-      {failed || lastExecutionItem ? (
+      <DocumentCards documents={documents} onOpenInspector={onOpenInspector} />
+
+      {runErrorView ? (
+        <RunErrorCard
+          error={runErrorView}
+          busy={busy}
+          onRetry={failed && turnId ? () => onRetryTurn(turnId) : undefined}
+        />
+      ) : null}
+      {(failed && !runErrorView) || lastExecutionItem ? (
         <div className={styles.runActions}>
-          {failed && turnId ? (
+          {failed && turnId && !runErrorView ? (
             <button
               type="button"
               onClick={() => onRetryTurn(turnId)}
@@ -654,7 +742,7 @@ export function TurnBlock({
               type="button"
               onClick={() => {
                 onSelectItem(lastExecutionItem.id);
-                onOpenInspector("changes");
+                onOpenInspector("details");
               }}
             >
               Review changes
@@ -665,4 +753,21 @@ export function TurnBlock({
       ) : null}
     </section>
   );
+}
+
+const ATTACHED_HEADING = "\n\nAttached workspace context:\n";
+
+/** Splits the composer's attached-file list off a prompt so the files can be
+ * shown as cards instead of a raw path list. */
+function splitAttachedFiles(text: string): { prompt: string; files: string[] } {
+  const at = text.lastIndexOf(ATTACHED_HEADING);
+  if (at < 0) return { prompt: text, files: [] };
+  const lines = text.slice(at + ATTACHED_HEADING.length).split("\n");
+  if (!lines.every((line) => line.startsWith("- "))) return { prompt: text, files: [] };
+  return { prompt: text.slice(0, at), files: lines.map((line) => line.slice(2)) };
+}
+
+function assistantText(item: Item): string {
+  const text = item.payload.text;
+  return typeof text === "string" ? text : item.summary;
 }

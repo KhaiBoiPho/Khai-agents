@@ -4,11 +4,7 @@
  * App Server can supply the real thing.
  */
 
-import {
-  MOCK_ACCOUNT,
-  MOCK_USAGE_LIMITS,
-  percent,
-} from "../../../mocks/preview";
+import { MOCK_ACCOUNT } from "../../../mocks/preview";
 import type { SettingsSectionProps } from "../settingsSections";
 import styles from "./PreviewSections.module.css";
 
@@ -44,42 +40,6 @@ export function AccountSection(_props: SettingsSectionProps) {
         </span>
         <span>{MOCK_ACCOUNT.plan}</span>
       </div>
-    </div>
-  );
-}
-
-export function UsageSection({ settings }: SettingsSectionProps) {
-  const connection =
-    (settings?.agents.defaults as { connection?: string } | undefined)
-      ?.connection ?? "default connection";
-  return (
-    <div className={styles.section}>
-      <h3>
-        Provider limits <PreviewTag />
-      </h3>
-      <p className={styles.note}>
-        Limits for {connection}. Real figures appear once the service reports
-        provider usage.
-      </p>
-      {MOCK_USAGE_LIMITS.map((limit) => {
-        const share = percent(limit.used, limit.total);
-        return (
-          <div className={styles.limit} key={limit.label}>
-            <div className={styles.limitHead}>
-              <strong>{limit.label}</strong>
-              <span>
-                {limit.detail} · {share}%
-              </span>
-            </div>
-            <div className={styles.bar}>
-              <span style={{ width: `${share}%` }} />
-            </div>
-            <small>
-              {limit.used.toLocaleString()} of {limit.total.toLocaleString()}
-            </small>
-          </div>
-        );
-      })}
     </div>
   );
 }

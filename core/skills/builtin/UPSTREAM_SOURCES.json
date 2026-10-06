@@ -6,6 +6,13 @@
       "revision": "f17010c9bb483898c1d9c9f42dde2b3a98889434",
       "path": "skills/frontend-design"
     },
+    "genoffice": {
+      "repository": "https://github.com/genspark-ai/genoffice",
+      "revision": "db347087628281d49e53d009183d2fb506c3a444",
+      "path": "skills/genoffice",
+      "license": "Apache-2.0",
+      "modified": "Adapted for Khai's built-in genoffice MCP tools and session-workspace paths; references/cli-reference.md keeps upstream sections verbatim."
+    },
     "mcp-builder": {
       "repository": "https://github.com/anthropics/skills",
       "revision": "f17010c9bb483898c1d9c9f42dde2b3a98889434",

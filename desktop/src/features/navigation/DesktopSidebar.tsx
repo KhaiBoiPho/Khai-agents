@@ -1,8 +1,12 @@
 import {
+  Blocks,
+  BookOpenText,
   BriefcaseBusiness,
+  CalendarClock,
   CalendarDays,
   ListTodo,
   SquarePen,
+  Trash2,
   ChevronRight,
   ChevronsUpDown,
   CircleGauge,
@@ -29,15 +33,23 @@ import type { Project, Thread } from "../../generated/app-server";
 import type { DesktopDestination } from "../../app/useDesktopUi";
 import type { SidecarStatus } from "../../rpc/contracts";
 import { SessionRow } from "./SessionRow";
-import { isChatsProject } from "../../app/chats";
+import { groupByDay, isChatsProject } from "../../app/chats";
 import { useThreadMarks } from "../../app/threadMarks";
 import logoUrl from "../../assets/khai-logo.png";
 import { useProjectDisclosure } from "./useProjectDisclosure";
 import { useTranslation } from "react-i18next";
 
+import { ConfirmDialog } from "../../components/ConfirmDialog";
 import styles from "./DesktopSidebar.module.css";
 
-export type SidebarPage = "calendar" | "plan" | "documents" | "notes";
+export type SidebarPage =
+  | "calendar"
+  | "plan"
+  | "schedule"
+  | "documents"
+  | "notes"
+  | "khaidocs"
+  | "apps";
 
 interface DesktopSidebarProps {
   projects: Project[];
@@ -62,6 +74,7 @@ interface DesktopSidebarProps {
   onQueryChange(query: string): void;
   onOpenProject(): void;
   onSelectProject(projectId: string): void;
+  onRemoveProject(projectId: string): Promise<void>;
   onCreateThread(): void;
   onSelectThread(threadId: string): void;
   onRenameThread(threadId: string, title: string): Promise<void>;
@@ -118,6 +131,7 @@ export function DesktopSidebar({
   onQueryChange,
   onOpenProject,
   onSelectProject,
+  onRemoveProject,
   onCreateThread,
   onSelectThread,
   onRenameThread,
@@ -127,6 +141,8 @@ export function DesktopSidebar({
   const { t } = useTranslation();
   const searchRef = useRef<HTMLInputElement | null>(null);
   const [searchOpen, setSearchOpen] = useState(false);
+  // Which project row has its remove confirmation open.
+  const [removing, setRemoving] = useState<string | null>(null);
   const normalizedQuery = query.trim().toLocaleLowerCase();
   const selectedProject =
     projects.find((project) => project.id === selectedProjectId) ?? null;
@@ -322,8 +338,11 @@ export function DesktopSidebar({
         </button>
         {navItem("calendar", <CalendarDays size={15} />, t("sidebar.calendar", "Calendar"))}
         {navItem("plan", <ListTodo size={15} />, t("sidebar.plan", "Plan"))}
+        {navItem("schedule", <CalendarClock size={15} />, t("sidebar.schedule", "Schedule"))}
         {navItem("documents", <FileText size={15} />, t("sidebar.documents", "Documents"))}
         {navItem("notes", <NotebookPen size={15} />, t("sidebar.notes", "Notes"))}
+        {navItem("khaidocs", <BookOpenText size={15} />, t("sidebar.khaidocs", "KhaiDocs"))}
+        {navItem("apps", <Blocks size={15} />, t("sidebar.apps", "App Authorization"))}
         <button type="button" onClick={() => onOpenSettings("skills")}>
           <BriefcaseBusiness size={15} />
           {t("sidebar.customize", "Customize")}
@@ -332,7 +351,7 @@ export function DesktopSidebar({
 
       <nav className={styles.projectList} aria-label="Chat history">
         {pinnedThreads.length ? (
-          <section className={styles.chatSection}>
+          <section className={styles.chatSection} data-divided>
             <p className={styles.chatHeading}>Pinned</p>
             {pinnedThreads.map(row)}
           </section>
@@ -399,6 +418,20 @@ export function DesktopSidebar({
                       <button
                         type="button"
                         className={styles.groupAdd}
+                        onClick={() =>
+                          setRemoving(removing === project.id ? null : project.id)
+                        }
+                        disabled={busy}
+                        aria-label={`Remove ${group.displayName}`}
+                        title={`Remove ${group.displayName} from Khai`}
+                      >
+                        <Trash2 size={13} />
+                      </button>
+                    ) : null}
+                    {project ? (
+                      <button
+                        type="button"
+                        className={styles.groupAdd}
                         onClick={() => onCreateThreadIn(project.id)}
                         disabled={busy || !projectCanExecute(project)}
                         aria-label={`New chat in ${group.displayName}`}
@@ -406,6 +439,25 @@ export function DesktopSidebar({
                       >
                         <Plus size={14} />
                       </button>
+                    ) : null}
+                    {project && removing === project.id ? (
+                      <ConfirmDialog
+                        title="Remove project?"
+                        description={
+                          <>
+                            <strong>{group.displayName}</strong> and its chats are removed from
+                            Khai. The folder and its files on disk stay untouched.
+                          </>
+                        }
+                        confirmLabel="Remove"
+                        tone="danger"
+                        busy={busy}
+                        onCancel={() => setRemoving(null)}
+                        onConfirm={() => {
+                          setRemoving(null);
+                          void onRemoveProject(project.id);
+                        }}
+                      />
                     ) : null}
                   </div>
                   <ProjectSessions
@@ -429,16 +481,21 @@ export function DesktopSidebar({
           )}
         </section>
 
-        <section className={styles.chatSection}>
-          <p className={styles.chatHeading}>Recents</p>
-          {recentChats.length ? (
-            recentChats.map(row)
-          ) : (
+        {recentChats.length ? (
+          groupByDay(recentChats).map((group) => (
+            <section className={styles.chatSection} key={group.label}>
+              <p className={styles.chatHeading}>{group.label}</p>
+              {group.threads.map(row)}
+            </section>
+          ))
+        ) : (
+          <section className={styles.chatSection}>
+            <p className={styles.chatHeading}>Recents</p>
             <p className={styles.emptyLine}>
               {normalizedQuery ? "No matching chats" : "No chats yet"}
             </p>
-          )}
-        </section>
+          </section>
+        )}
       </nav>
 
       <AccountMenu

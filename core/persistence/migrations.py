@@ -1323,6 +1323,80 @@ _DROP_SESSION_CONTEXT_WINDOW_V17 = r"""
 ALTER TABLE threads DROP COLUMN context_window;
 """
 
+# A usage ledger that outlives its Thread. Provider-reported usage is already
+# durable as ``turn.usage.recorded`` events, but those cascade away with a
+# deleted Thread, carry no model identity, and can only be aggregated by
+# scanning every Thread's log. The ledger keeps one row per billed provider
+# response (deliberately without foreign keys) and is backfilled from the
+# existing events, attributing each to the model its Turn actually ran.
+_USAGE_LEDGER_V18 = r"""
+CREATE TABLE usage_records (
+    id TEXT PRIMARY KEY,
+    thread_id TEXT NOT NULL,
+    turn_id TEXT,
+    response_ordinal INTEGER,
+    source TEXT NOT NULL CHECK (source IN ('turn', 'compaction')),
+    connection_id TEXT,
+    provider_name TEXT,
+    model_id TEXT,
+    input_tokens INTEGER NOT NULL DEFAULT 0 CHECK (input_tokens >= 0),
+    output_tokens INTEGER NOT NULL DEFAULT 0 CHECK (output_tokens >= 0),
+    cached_input_tokens INTEGER NOT NULL DEFAULT 0 CHECK (cached_input_tokens >= 0),
+    recorded_at TEXT NOT NULL,
+    UNIQUE (turn_id, response_ordinal)
+);
+CREATE INDEX idx_usage_records_time ON usage_records(recorded_at);
+CREATE INDEX idx_usage_records_thread ON usage_records(thread_id, recorded_at);
+INSERT OR IGNORE INTO usage_records (
+    id, thread_id, turn_id, response_ordinal, source, connection_id,
+    provider_name, model_id, input_tokens, output_tokens,
+    cached_input_tokens, recorded_at
+)
+SELECT
+    'usage_' || e.id,
+    e.thread_id,
+    e.turn_id,
+    CAST(json_extract(e.payload_json, '$.responseOrdinal') AS INTEGER),
+    'turn',
+    json_extract(t.execution_profile_json, '$.connectionId'),
+    json_extract(t.execution_profile_json, '$.providerName'),
+    COALESCE(json_extract(t.execution_profile_json, '$.modelId'), th.model),
+    MAX(0, CAST(COALESCE(
+        json_extract(e.payload_json, '$.usage.prompt_tokens'),
+        json_extract(e.payload_json, '$.usage.input_tokens'),
+        0
+    ) AS INTEGER)),
+    MAX(0,
+        CAST(COALESCE(
+            json_extract(e.payload_json, '$.usage.completion_tokens'),
+            json_extract(e.payload_json, '$.usage.output_tokens'),
+            0
+        ) AS INTEGER),
+        CAST(COALESCE(json_extract(e.payload_json, '$.usage.total_tokens'), 0) AS INTEGER)
+        - CAST(COALESCE(
+            json_extract(e.payload_json, '$.usage.prompt_tokens'),
+            json_extract(e.payload_json, '$.usage.input_tokens'),
+            0
+        ) AS INTEGER)
+    ),
+    MAX(0, CAST(COALESCE(
+        json_extract(e.payload_json, '$.usage.cached_tokens'),
+        json_extract(e.payload_json, '$.usage.cache_read_input_tokens'),
+        0
+    ) AS INTEGER)),
+    e.timestamp
+FROM event_log AS e
+LEFT JOIN turns AS t ON t.id = e.turn_id
+LEFT JOIN threads AS th ON th.id = e.thread_id
+WHERE e.type = 'turn.usage.recorded' AND json_valid(e.payload_json);
+"""
+
+_DROP_USAGE_LEDGER_V18 = r"""
+DROP INDEX idx_usage_records_thread;
+DROP INDEX idx_usage_records_time;
+DROP TABLE usage_records;
+"""
+
 MIGRATIONS = (
     Migration(1, "initial_domain", _INITIAL_SCHEMA, _DROP_INITIAL_SCHEMA),
     Migration(
@@ -1420,6 +1494,12 @@ MIGRATIONS = (
         "session_context_window",
         _SESSION_CONTEXT_WINDOW_V17,
         _DROP_SESSION_CONTEXT_WINDOW_V17,
+    ),
+    Migration(
+        18,
+        "usage_ledger",
+        _USAGE_LEDGER_V18,
+        _DROP_USAGE_LEDGER_V18,
     ),
 )
 LATEST_SCHEMA_VERSION = MIGRATIONS[-1].version

@@ -6,7 +6,15 @@ import tseslint from "typescript-eslint";
 
 export default tseslint.config(
   {
-    ignores: ["dist", "src/generated", "src-tauri/target", "src-tauri/gen"],
+    ignores: [
+      "dist",
+      "src/generated",
+      "src-tauri/target",
+      "src-tauri/gen",
+      // Vendored Docmost (KhaiDocs); linted upstream, not against this config.
+      "src/features/khaidocs/docmost",
+      "src/features/khaidocs/editor-ext",
+    ],
   },
   {
     files: ["**/*.{ts,tsx}"],

@@ -105,7 +105,13 @@ export interface ClientRuntime extends RpcTransport {
   pickDirectory(): Promise<string | null>;
   pickFile(threadId?: string): Promise<string | null>;
   pickContextFiles(threadId?: string): Promise<string[]>;
+  /** Pick files before a thread exists (the Home composer)... */
+  chooseFiles?(): Promise<PendingFile[]>;
+  /** ...and put them in the thread's workspace once it does; returns paths. */
+  uploadFiles?(threadId: string, files: PendingFile[]): Promise<string[]>;
   downloadFile?(threadId: string, path: string): Promise<void>;
+  /** A workspace file's raw bytes, for in-app previews of binary documents. */
+  readFileBytes?(threadId: string, path: string): Promise<ArrayBuffer>;
   exportDiagnostics(diagnostics: DiagnosticsSnapshot): Promise<string | null>;
   /** Open a local file in the platform's default application. */
   openPath(path: string): Promise<void>;
@@ -118,4 +124,11 @@ export interface ClientRuntime extends RpcTransport {
   ): Promise<() => void>;
   onStatus(listener: (status: SidecarStatus) => void): Promise<() => void>;
   onLog(listener: (message: string) => void): Promise<() => void>;
+}
+
+/** A file chosen before upload: a browser File, or a native path (desktop). */
+export interface PendingFile {
+  name: string;
+  size: number;
+  source: File | string;
 }

@@ -1,0 +1,96 @@
+.cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 8px;
+  margin: 10px 0 4px;
+  padding: 0;
+  list-style: none;
+}
+
+.card {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 10px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--surface-raised);
+  color: var(--text-primary);
+  text-align: left;
+  transition:
+    border-color 140ms ease,
+    background 140ms ease;
+}
+
+.card:hover {
+  border-color: var(--border-strong);
+  background: var(--surface-hover);
+}
+
+.card:focus-visible {
+  outline: 2px solid var(--border-emphasis);
+  outline-offset: 1px;
+}
+
+.icon {
+  display: inline-flex;
+  width: 34px;
+  height: 34px;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-sm);
+  background: var(--surface-canvas);
+  color: var(--text-secondary);
+}
+
+.icon[data-tone="word"] { color: light-dark(#2b579a, #6b9be0); }
+.icon[data-tone="pdf"] { color: light-dark(#b3261e, #f0726a); }
+.icon[data-tone="slides"] { color: light-dark(#c24e1c, #f0864f); }
+.icon[data-tone="sheet"] { color: light-dark(#2e7d4f, #5fbf86); }
+.icon[data-tone="web"] { color: light-dark(#d1491f, #ef7a50); }
+
+.copy {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.name {
+  overflow: hidden;
+  font-size: var(--text-xs);
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.meta {
+  overflow: hidden;
+  color: var(--text-tertiary);
+  font-size: var(--text-2xs);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.open {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 4px;
+  color: var(--text-tertiary);
+  font-size: var(--text-2xs);
+}
+
+.card:hover .open {
+  color: var(--text-primary);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .card {
+    transition: none;
+  }
+}

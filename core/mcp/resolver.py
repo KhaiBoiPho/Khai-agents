@@ -11,6 +11,7 @@ from typing import Any
 
 from pydantic import ValidationError
 
+from core.mcp.genoffice import builtin_server_definitions
 from core.mcp.models import (
     McpConfigurationError,
     McpRuntimePlan,
@@ -61,11 +62,16 @@ class McpConfigResolver:
         project_raw = _read_layer(project_path)
         diagnostics: list[str] = []
 
-        effective = self._parse_layer(
-            user_raw,
-            source=McpServerSource.USER,
-            config_dir=self.user_config_path.parent,
-            workspace=root,
+        # Built-in servers form the lowest layer: a same-named user or project
+        # entry replaces the whole built-in definition (and can disable it).
+        effective = builtin_servers(root, config_dir=self.user_config_path.parent)
+        effective.update(
+            self._parse_layer(
+                user_raw,
+                source=McpServerSource.USER,
+                config_dir=self.user_config_path.parent,
+                workspace=root,
+            )
         )
         if project_raw:
             if project_trusted:
@@ -155,6 +161,26 @@ class McpConfigResolver:
                 workspace=workspace,
             )
         return result
+
+
+def builtin_servers(
+    workspace: Path,
+    *,
+    config_dir: Path,
+) -> dict[str, ResolvedMcpServer]:
+    """Built-in servers whose binaries resolve on this machine."""
+
+    return {
+        name: ResolvedMcpServer(
+            server_id=name,
+            name=name,
+            source=McpServerSource.BUILTIN,
+            definition=definition,
+            config_dir=config_dir,
+            workspace=workspace,
+        )
+        for name, definition in builtin_server_definitions().items()
+    }
 
 
 def resolve_plugin_servers(
@@ -287,4 +313,4 @@ def _revision(
     return f"sha256:{digest.hexdigest()}"
 
 
-__all__ = ["McpConfigResolver", "resolve_plugin_servers"]
+__all__ = ["McpConfigResolver", "builtin_servers", "resolve_plugin_servers"]

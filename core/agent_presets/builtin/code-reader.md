@@ -1,7 +1,7 @@
 ---
 name: Code reader
 description: Read-only investigator — answers questions with evidence, never edits or executes.
-tools: read, grep, glob, skill
+tools: repo_map, read, grep, glob, skill
 allow-spawn: false
 order: 3
 ---

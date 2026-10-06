@@ -99,3 +99,71 @@
   font-size: var(--text-2xs);
   font-style: normal;
 }
+
+.ring[data-level="high"] {
+  --signal: var(--attention);
+}
+
+.ring[data-level="full"] {
+  --signal: var(--danger);
+}
+
+.ring[data-compacting="true"] {
+  animation: ring-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes ring-pulse {
+  50% {
+    opacity: 0.45;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ring[data-compacting="true"] {
+    animation: none;
+  }
+}
+
+.note,
+.hint {
+  margin: 0;
+  color: var(--text-tertiary);
+  font-size: var(--text-xs);
+  line-height: 1.45;
+}
+
+.hint {
+  color: var(--attention);
+}
+
+.compact {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 4px;
+  padding: 6px 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md, 8px);
+  color: var(--text-primary);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+}
+
+.compact:hover:not(:disabled) {
+  background: var(--surface-hover);
+}
+
+.compact:disabled {
+  color: var(--text-tertiary);
+  cursor: default;
+}
+
+.tip {
+  color: var(--text-tertiary);
+  font-size: var(--text-2xs);
+}
+
+.tip code {
+  font-family: var(--font-mono);
+}

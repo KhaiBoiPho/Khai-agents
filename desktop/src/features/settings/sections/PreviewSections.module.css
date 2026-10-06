@@ -36,9 +36,7 @@
 }
 
 .profile small,
-.row small,
-.note,
-.limit small {
+.row small {
   color: var(--text-tertiary);
   font-size: var(--text-xs);
 }
@@ -76,45 +74,4 @@
 
 .row > span:last-child {
   color: var(--text-secondary);
-}
-
-.note {
-  margin: 0 0 10px;
-}
-
-.limit {
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-  padding: 12px 0;
-  border-bottom: 1px solid var(--border-subtle);
-}
-
-.limitHead {
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
-  font-size: var(--text-sm);
-}
-
-.limitHead strong {
-  font-weight: var(--weight-medium);
-}
-
-.limitHead span {
-  color: var(--text-tertiary);
-}
-
-.bar {
-  height: 5px;
-  overflow: hidden;
-  border-radius: var(--radius-pill);
-  background: var(--border-subtle);
-}
-
-.bar span {
-  display: block;
-  height: 100%;
-  border-radius: inherit;
-  background: var(--signal);
 }

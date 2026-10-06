@@ -135,6 +135,17 @@
     0 12px 32px rgb(0 0 0 / 10%), 0 2px 6px rgb(0 0 0 / 6%);
   --shadow-menu:
     0 12px 28px rgb(0 0 0 / 14%), 0 2px 6px rgb(0 0 0 / 8%);
+
+  /* Fast start, long settle: entrances that land softly. */
+  --ease-spring: cubic-bezier(0.22, 1, 0.36, 1);
+
+  /* Planner module tones, after Yuvomi's module families (MIT, ulsklyc).
+     light-dark() follows each theme's color-scheme, so one declaration
+     serves every palette; each light value clears 4.5:1 on white. */
+  --module-tasks: light-dark(#157f3d, #4ade80);
+  --module-calendar: light-dark(#00668f, #4cb8f0);
+  --module-schedule: light-dark(#00668f, #4cb8f0);
+  --module-notes: light-dark(#42587e, #7e9bcc);
 }
 
 /* System preference. The :not() lets an explicit light choice win here,
@@ -446,6 +457,100 @@
     0 20px 52px rgb(0 0 0 / 38%), 0 3px 10px rgb(0 0 0 / 26%);
   --shadow-menu:
     0 20px 46px rgb(0 0 0 / 48%), 0 3px 10px rgb(0 0 0 / 30%);
+}
+
+/* Lagoon — a cool paper ground, deep ink and a sea-green accent. */
+:root[data-theme="lagoon"] {
+  color-scheme: light;
+  color: #11161c;
+  background: #f6f7f5;
+
+  --surface-shell: #f6f7f5;
+  --surface-canvas: #ffffff;
+  --surface-sidebar: #f6f7f5;
+  --surface-sidebar-strong: #e9ece8;
+  --surface-raised: #fcfcfb;
+  --surface-overlay: rgb(255 255 255 / 92%);
+  --surface-hover: #eef0ed;
+  --surface-selected: #e4e7e3;
+  --surface-user: #eaf2f4;
+  --surface-code: #f0f2ef;
+  --surface-inset: #e9ece8;
+
+  --text-primary: #11161c;
+  --text-secondary: #39424d;
+  --text-tertiary: #5d6773;
+  --text-inverse: #ffffff;
+  --text-on-accent: #ffffff;
+
+  --border-subtle: #dde1dc;
+  --border-strong: #cfd4ce;
+  --border-emphasis: #959c94;
+
+  /* Every text colour clears 4.5:1 on the hover surface. */
+  --signal: #0b6e6e;
+  --signal-strong: #08514f;
+  --signal-soft: rgb(46 196 182 / 20%);
+  --signal-faint: rgb(46 196 182 / 10%);
+  --success: #2a7a46;
+  --success-soft: #e5f2e9;
+  --attention: #8f5a0b;
+  --attention-soft: #fbf0dc;
+  --danger: #b0413b;
+  --danger-soft: #f8ebea;
+
+  --shadow-soft: 0 1px 2px rgb(17 22 28 / 5%);
+  --shadow-float:
+    0 16px 40px rgb(17 22 28 / 10%), 0 2px 6px rgb(17 22 28 / 6%);
+  --shadow-menu:
+    0 16px 36px rgb(17 22 28 / 14%), 0 2px 6px rgb(17 22 28 / 8%);
+}
+
+/* Lagoon Dark — night water, the same accent brightened. */
+:root[data-theme="lagoon-dark"] {
+  color-scheme: dark;
+  color: #eef1f0;
+  background: #0b0f14;
+
+  --surface-shell: #0b0f14;
+  --surface-canvas: #121820;
+  --surface-sidebar: #0e1318;
+  --surface-sidebar-strong: #18202a;
+  --surface-raised: #18202a;
+  --surface-overlay: rgb(18 24 32 / 90%);
+  --surface-hover: #1b232d;
+  --surface-selected: #253039;
+  --surface-user: #1b2a33;
+  --surface-code: #0e1318;
+  --surface-inset: #080b0f;
+
+  --text-primary: #eef1f0;
+  --text-secondary: #b4bcc2;
+  --text-tertiary: #8e979f;
+  --text-inverse: #0b0f14;
+  /* The accent is light here, so what sits on it has to be dark. */
+  --text-on-accent: #0b0f14;
+
+  --border-subtle: #222b34;
+  --border-strong: #303a44;
+  --border-emphasis: #55606a;
+
+  --signal: #3fc1b0;
+  --signal-strong: #6fd6c8;
+  --signal-soft: rgb(63 193 176 / 20%);
+  --signal-faint: rgb(63 193 176 / 10%);
+  --success: #57c17e;
+  --success-soft: rgb(87 193 126 / 16%);
+  --attention: #d9a447;
+  --attention-soft: rgb(217 164 71 / 15%);
+  --danger: #e58a83;
+  --danger-soft: rgb(229 138 131 / 15%);
+
+  --shadow-soft: 0 1px 2px rgb(0 0 0 / 30%);
+  --shadow-float:
+    0 20px 52px rgb(0 0 0 / 42%), 0 3px 10px rgb(0 0 0 / 28%);
+  --shadow-menu:
+    0 20px 46px rgb(0 0 0 / 50%), 0 3px 10px rgb(0 0 0 / 30%);
 }
 
 /* High contrast — every foreground clears 7:1 (WCAG AAA) on its surface.

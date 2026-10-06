@@ -191,7 +191,8 @@ export interface MethodParams {
   "turn/input/read": TurnInputReadParams;
   "thread/execution/read": ThreadReadParams;
   "thread/context/clear": ThreadReadParams;
-  "thread/context/compact": ThreadReadParams;
+  "thread/context/compact": ThreadContextCompactParams;
+  "usage/summary": UsageSummaryParams;
   "turn/list": TurnListParams;
   "model/reasoning": ModelReasoningParams;
   "provider/login/start": ProviderLoginStartParams;
@@ -200,6 +201,9 @@ export interface MethodParams {
   "provider/logout": ProviderLogoutParams;
   "dictation/status": OptionalProjectParams;
   "dictation/transcribe": DictationTranscribeParams;
+  "rag/status": RagStatusParams;
+  "rag/index": RagIndexParams;
+  "documents/list": DocumentListParams;
 }
 export interface InitializeParams {
   protocolVersion: "1.0";
@@ -656,6 +660,20 @@ export interface TurnInputReadParams {
   threadId: string;
   messageId: string;
 }
+export interface ThreadContextCompactParams {
+  threadId: string;
+  /**
+   * Optional focus for the summary, as in `/compact <focus>`.
+   */
+  instructions?: string | null;
+}
+export interface UsageSummaryParams {
+  days?: number;
+  /**
+   * Viewer's offset from UTC; day buckets follow the viewer's calendar.
+   */
+  utcOffsetMinutes?: number;
+}
 export interface TurnListParams {
   threadId: string;
   limit?: number;
@@ -682,6 +700,23 @@ export interface DictationTranscribeParams {
   mimeType: string;
   language?: string | null;
   projectId?: string;
+}
+export interface RagStatusParams {
+  threadId: string;
+}
+export interface RagIndexParams {
+  threadId: string;
+  /**
+   * Re-embed every document, not only new or changed ones.
+   */
+  force?: boolean;
+}
+export interface DocumentListParams {
+  limit?: number;
+  /**
+   * Only the documents of this Thread.
+   */
+  threadId?: string;
 }
 export interface MethodResults {
   initialize: InitializeResult;
@@ -926,7 +961,8 @@ export interface MethodResults {
   "turn/input/read": TurnInputReadResult;
   "thread/execution/read": ThreadExecutionReadResult;
   "thread/context/clear": EmptyParams;
-  "thread/context/compact": JsonObject;
+  "thread/context/compact": ThreadContextCompactResult;
+  "usage/summary": UsageSummaryResult;
   "turn/list": TurnListResult;
   "model/reasoning": ModelReasoningResult;
   "provider/login/start": ProviderLoginFlow;
@@ -935,6 +971,9 @@ export interface MethodResults {
   "provider/logout": ProviderLogoutResult;
   "dictation/status": DictationStatusResult;
   "dictation/transcribe": DictationTranscribeResult;
+  "rag/status": RagStatusResult;
+  "rag/index": RagStatusResult;
+  "documents/list": DocumentListResult;
 }
 export interface InitializeResult {
   protocolVersion: "1.0";
@@ -1815,6 +1854,57 @@ export interface ThreadExecutionReadResult {
   executionProfile: ExecutionProfile;
   securityProfile: ExecutionSecurityProfile;
 }
+/**
+ * Compaction runs in the background; progress and outcome arrive as thread.context.compacting, thread.context.compacted and thread.context.compaction_failed Thread events.
+ */
+export interface ThreadContextCompactResult {
+  status: "started";
+  /**
+   * Carried as payload.compactionId by every thread.context.* event of this run.
+   */
+  compactionId: string;
+}
+export interface UsageSummaryResult {
+  generatedAt: string;
+  utcOffsetMinutes: number;
+  days: UsageDay[];
+  today: UsageTotals;
+  week: UsageTotals;
+  allTime: UsageTotals;
+  models: UsageModel[];
+}
+export interface UsageDay {
+  date: string;
+  inputTokens: number;
+  outputTokens: number;
+  cachedInputTokens: number;
+  requests: number;
+  costUsd: number;
+  unpricedRequests: number;
+}
+export interface UsageTotals {
+  inputTokens: number;
+  outputTokens: number;
+  cachedInputTokens: number;
+  requests: number;
+  /**
+   * Estimated list-price cost of the requests whose model has a catalog price.
+   */
+  costUsd: number;
+  unpricedRequests: number;
+}
+export interface UsageModel {
+  modelId: string | null;
+  providerName: string | null;
+  inputTokens: number;
+  outputTokens: number;
+  cachedInputTokens: number;
+  requests: number;
+  costUsd: number;
+  unpricedRequests: number;
+  inputPricePerMillion: number | null;
+  outputPricePerMillion: number | null;
+}
 export interface TurnListResult {
   turns: Turn[];
   hasMore: boolean;
@@ -1846,6 +1936,68 @@ export interface DictationStatusResult {
 export interface DictationTranscribeResult {
   text: string;
   model: string;
+}
+/**
+ * Document-search (RAG) index state of one Thread workspace.
+ */
+export interface RagStatusResult {
+  state: "idle" | "indexing" | "error" | "unconfigured";
+  /**
+   * An embedding credential (OPENROUTER_API_KEY) is available.
+   */
+  configured: boolean;
+  embeddingModel: string;
+  documents: RagDocumentStatus[];
+  counts: {
+    total: number;
+    indexed: number;
+    pending: number;
+    failed: number;
+  };
+  progress: null | {
+    done: number;
+    total: number;
+    current: string | null;
+  };
+  error: string | null;
+  truncated: boolean;
+  lastIndexedAt: number | null;
+}
+export interface RagDocumentStatus {
+  /**
+   * Workspace-relative POSIX path.
+   */
+  path: string;
+  status: "indexed" | "pending" | "failed";
+  chunks: number;
+  error: string | null;
+  indexedAt: number | null;
+}
+export interface DocumentListResult {
+  documents: DocumentEntry[];
+}
+/**
+ * A file in the Documents library: uploaded into a chat, or written by the agent.
+ */
+export interface DocumentEntry {
+  id: string;
+  name: string;
+  /**
+   * Workspace-relative path in the owning Thread.
+   */
+  path: string;
+  threadId: string;
+  threadTitle: string;
+  projectId: string;
+  projectName: string;
+  source: "uploaded" | "agent";
+  size: number;
+  modifiedAt: string;
+  extension: string;
+  /**
+   * False when the chat the file came from no longer exists.
+   */
+  linked: boolean;
 }
 export interface Notifications {
   "thread.updated": Event;

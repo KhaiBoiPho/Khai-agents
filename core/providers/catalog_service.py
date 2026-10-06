@@ -25,6 +25,20 @@ from core.providers.reasoning import (
 )
 
 
+# Offered for an OpenRouter connection until its live ``/models`` listing has
+# been fetched (ids verified against openrouter.ai/api/v1/models, 2026-10).
+OPENROUTER_DEFAULT_MODELS: tuple[str, ...] = (
+    "google/gemini-3.6-flash",
+    "anthropic/claude-sonnet-5.5",
+    "openai/gpt-5.5",
+    "deepseek/deepseek-v4-pro",
+    "moonshotai/kimi-k3",
+    "z-ai/glm-5.3",
+    "qwen/qwen3-coder-next",
+    "x-ai/grok-4.7",
+)
+
+
 @dataclass(frozen=True, slots=True)
 class CatalogModel:
     id: str
@@ -319,12 +333,15 @@ class ModelCatalogService:
             return tuple(
                 _declared_model(entry) for entry in connection.manual_model_entries
             )
+        if connection.provider_name == "openrouter":
+            # Bare seed ids are not routable on OpenRouter (it wants
+            # ``vendor/model``), so offline it offers a curated starter list.
+            return tuple(_offline_model(model_id) for model_id in OPENROUTER_DEFAULT_MODELS)
         prefix = f"{connection.provider_name}/"
         requested = [
             model_id
             for model_id in known_model_ids()
-            if connection.provider_name == "openrouter"
-            or model_id.startswith(prefix)
+            if model_id.startswith(prefix)
             or _looks_native(model_id, connection.provider_name)
         ]
         return tuple(_offline_model(model_id) for model_id in dict.fromkeys(requested))
@@ -549,4 +566,9 @@ def _safe_error(exc: Exception) -> str:
     return f"{type(exc).__name__}: {exc}"[:300]
 
 
-__all__ = ["CatalogModel", "ModelCatalog", "ModelCatalogService"]
+__all__ = [
+    "OPENROUTER_DEFAULT_MODELS",
+    "CatalogModel",
+    "ModelCatalog",
+    "ModelCatalogService",
+]

@@ -1,0 +1,363 @@
+/* App Authorization: one horizontal card per app — its mark in a frame, the
+   copy in the middle, status over the action on the right. */
+
+.summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px 18px;
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+}
+
+.summary strong {
+  color: var(--text-primary);
+  font-weight: var(--weight-semibold);
+  font-variant-numeric: tabular-nums;
+}
+
+.summary [data-tone="attention"],
+.summary [data-tone="attention"] strong {
+  color: var(--attention);
+}
+
+.summary small {
+  margin-left: auto;
+  color: var(--text-tertiary);
+  font-size: var(--text-xs);
+}
+
+.error {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: var(--radius-md);
+  background: var(--danger-soft);
+  color: var(--danger);
+  font-size: var(--text-sm);
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(320px, 100%), 1fr));
+  gap: 12px;
+}
+
+.card,
+.skeleton {
+  min-height: 92px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-xl);
+}
+
+.card {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px;
+  background: var(--surface-raised);
+  transition:
+    border-color 160ms ease,
+    box-shadow 200ms ease,
+    transform 200ms var(--ease-spring);
+  animation: card-rise 280ms var(--ease-spring) backwards;
+  animation-delay: calc(var(--stagger, 0) * 40ms);
+}
+
+.card:hover {
+  border-color: var(--border-emphasis);
+  box-shadow: var(--shadow-soft);
+  transform: translateY(-1px);
+}
+
+.card[data-status="expired"],
+.card[data-status="failed"] {
+  border-color: color-mix(in srgb, var(--attention) 35%, var(--border-subtle));
+}
+
+.skeleton {
+  background: var(--surface-hover);
+  animation: placeholder-pulse 1.4s ease-in-out infinite;
+}
+
+.logo {
+  display: grid;
+  width: 40px;
+  height: 40px;
+  flex-shrink: 0;
+  place-items: center;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-xl);
+  background: var(--surface-canvas);
+  color: var(--text-primary);
+}
+
+.logo img {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+}
+
+.cardBody {
+  display: grid;
+  min-width: 0;
+  flex: 1;
+  gap: 2px;
+}
+
+.cardBody strong {
+  color: var(--text-primary);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+}
+
+.cardBody p {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: var(--text-xs);
+  line-height: 1.45;
+}
+
+.cardBody small {
+  overflow: hidden;
+  margin-top: 4px;
+  color: var(--text-tertiary);
+  font-size: var(--text-2xs);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cardSide {
+  display: flex;
+  min-width: 92px;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+.state {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--text-tertiary);
+  font-size: var(--text-xs);
+  white-space: nowrap;
+}
+
+.state[data-tone="success"] {
+  color: var(--success);
+  font-weight: var(--weight-semibold);
+}
+
+.state[data-tone="attention"] {
+  color: var(--attention);
+  font-weight: var(--weight-semibold);
+}
+
+.link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 0;
+  color: var(--signal);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+}
+
+.link:hover {
+  color: var(--signal-strong);
+}
+
+.link[data-tone="quiet"] {
+  color: var(--text-tertiary);
+  font-weight: var(--weight-regular);
+}
+
+.link[data-tone="quiet"]:hover {
+  color: var(--danger);
+}
+
+/* Consent sheet */
+.dialog {
+  width: min(420px, calc(100vw - 32px));
+  padding: 26px 24px 20px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-xl);
+  background: var(--surface-raised);
+  box-shadow: var(--shadow-menu);
+  color: var(--text-primary);
+}
+
+.dialog[open] {
+  animation: sheet-pop 300ms cubic-bezier(0.23, 1, 0.32, 1) backwards;
+}
+
+.dialog::backdrop {
+  background: rgb(0 0 0 / 32%);
+  backdrop-filter: blur(2px);
+}
+
+.dialog h2 {
+  margin: 14px 0 6px;
+  font-size: var(--text-lg);
+  font-weight: var(--weight-semibold);
+  text-align: center;
+}
+
+.close {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  display: grid;
+  width: 28px;
+  height: 28px;
+  place-items: center;
+  border-radius: var(--radius-sm);
+  color: var(--text-tertiary);
+}
+
+.close:hover {
+  background: var(--surface-hover);
+  color: var(--text-primary);
+}
+
+.handshake {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  color: var(--text-tertiary);
+}
+
+.dialogLead {
+  margin: 0 0 14px;
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+  line-height: 1.5;
+  text-align: center;
+}
+
+.scopes {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 12px 14px;
+  border-radius: var(--radius-md);
+  background: var(--surface-inset);
+  list-style: none;
+  font-size: var(--text-sm);
+}
+
+.scopes li {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.scopes svg {
+  margin-top: 2px;
+  flex-shrink: 0;
+  color: var(--success);
+}
+
+.keyField {
+  display: grid;
+  gap: 6px;
+  margin-top: 14px;
+  font-size: var(--text-xs);
+  font-weight: var(--weight-medium);
+}
+
+.keyField input {
+  padding: 8px 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  outline: 0;
+  background: var(--surface-canvas);
+  color: var(--text-primary);
+  font: var(--text-sm) var(--font-mono);
+}
+
+.keyField input:focus {
+  border-color: var(--signal);
+  box-shadow: 0 0 0 3px var(--signal-soft);
+}
+
+.secure {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin: 12px 0 0;
+  color: var(--text-tertiary);
+  font-size: var(--text-xs);
+}
+
+.secure svg {
+  margin-top: 1px;
+  flex-shrink: 0;
+}
+
+.dialogActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 20px;
+}
+
+.ghost,
+.connect {
+  min-height: 32px;
+  padding: 0 14px;
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+}
+
+.ghost {
+  color: var(--text-secondary);
+}
+
+.ghost:hover {
+  background: var(--surface-hover);
+  color: var(--text-primary);
+}
+
+.connect {
+  background: var(--text-primary);
+  color: var(--text-inverse);
+}
+
+.connect:hover:not(:disabled) {
+  opacity: 0.88;
+}
+
+.connect:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+@keyframes card-rise {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+
+@keyframes placeholder-pulse {
+  50% {
+    opacity: 0.5;
+  }
+}
+
+@keyframes sheet-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .card,
+  .skeleton,
+  .dialog[open] {
+    animation: none;
+  }
+}

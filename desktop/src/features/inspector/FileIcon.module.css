@@ -1,0 +1,30 @@
+/* Language tones after VS Code's Seti/Material icon colours, each pair
+   readable on the light and dark canvases. */
+.icon {
+  flex-shrink: 0;
+  color: var(--text-tertiary);
+}
+
+.icon[data-tone="folder"] { color: light-dark(#c08a1e, #dcb862); }
+.icon[data-tone="ts"] { color: light-dark(#2f74c0, #4d9be6); }
+.icon[data-tone="js"] { color: light-dark(#a88a00, #e8d44d); }
+.icon[data-tone="py"] { color: light-dark(#3572a5, #5c9fd6); }
+.icon[data-tone="rs"] { color: light-dark(#b7410e, #e07a4a); }
+.icon[data-tone="go"] { color: light-dark(#00838f, #4fc3d0); }
+.icon[data-tone="java"] { color: light-dark(#b07219, #e0a050); }
+.icon[data-tone="rb"] { color: light-dark(#b0271d, #e0605a); }
+.icon[data-tone="php"] { color: light-dark(#4f5d95, #8892bf); }
+.icon[data-tone="c"] { color: light-dark(#5c6bc0, #8f9be0); }
+.icon[data-tone="cs"] { color: light-dark(#178600, #57c14a); }
+.icon[data-tone="vue"] { color: light-dark(#2f8f5b, #41b883); }
+.icon[data-tone="html"] { color: light-dark(#d1491f, #ef7a50); }
+.icon[data-tone="css"] { color: light-dark(#7b48c4, #a780e0); }
+.icon[data-tone="json"] { color: light-dark(#a07800, #e6c35c); }
+.icon[data-tone="config"] { color: light-dark(#6b7684, #9aa5b1); }
+.icon[data-tone="md"] { color: light-dark(#3b6fb6, #6ea8e8); }
+.icon[data-tone="shell"] { color: light-dark(#3d8b40, #7cc47f); }
+.icon[data-tone="data"] { color: light-dark(#2e7d4f, #5fbf86); }
+.icon[data-tone="image"] { color: light-dark(#a0479a, #d080c8); }
+.icon[data-tone="docker"] { color: light-dark(#1f78c1, #4aa3e8); }
+.icon[data-tone="git"] { color: light-dark(#c2410c, #f0743d); }
+.icon[data-tone="node"] { color: light-dark(#3c873a, #6cc24a); }

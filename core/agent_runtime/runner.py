@@ -85,6 +85,9 @@ _MAX_EMPTY_RETRIES = 2
 _MAX_LENGTH_RECOVERIES = 3
 _SNIP_SAFETY_BUFFER = 1024
 
+# Upper bound on `/compact <focus>` text folded into the summarization prompt.
+_MAX_COMPACT_INSTRUCTIONS_CHARS = 2_000
+
 # Summarization-based compaction (C4a). When the prompt nears the context
 # budget, a model call condenses the conversation into a handoff summary that
 # replaces old turns — semantic compaction, unlike the drop-based _snip_history
@@ -299,6 +302,21 @@ class _SamplingLimit:
 
     def reset(self) -> None:
         self.remaining = self.maximum
+
+
+@dataclass(slots=True)
+class ManualCompaction:
+    """Outcome of one on-demand compaction (`/compact`).
+
+    ``history`` is ``None`` when nothing changed; ``reason`` is then a stable,
+    human-readable explanation. ``usage`` is what the summarization request
+    itself cost, reported even when the summary was rejected.
+    """
+
+    history: list[dict[str, Any]] | None
+    reason: str
+    summary: str | None = None
+    usage: dict[str, int] = field(default_factory=dict)
 
 
 @dataclass(slots=True)
@@ -1873,6 +1891,7 @@ class AgentRunner:
         messages: list[dict[str, Any]],
         *,
         response_observer: Callable[[LLMResponse], Awaitable[None]] | None = None,
+        instructions: str | None = None,
     ) -> str | None:
         """Ask the model for a handoff summary of ``messages``.
 
@@ -1884,8 +1903,19 @@ class AgentRunner:
         genuine prefix of the last request the provider saw, so provider-side
         prefix/KV caching is reused instead of invalidated (the dsh rule).
         """
+        prompt = _SUMMARIZATION_PROMPT
+        focus = (instructions or "").strip()
+        if focus:
+            # `/compact <focus>`: the user's emphasis rides on the same single
+            # instruction message, so the request stays a cache-friendly
+            # prefix of the routed view.
+            prompt += (
+                "\n\nThe user asked this summary to focus on the following; "
+                "give it priority while keeping everything above:\n"
+                + focus[:_MAX_COMPACT_INSTRUCTIONS_CHARS]
+            )
         request = self._request_view(spec, messages) + [
-            {"role": "user", "content": _SUMMARIZATION_PROMPT}
+            {"role": "user", "content": prompt}
         ]
         kwargs = self._build_request_kwargs(
             spec,
@@ -1917,6 +1947,17 @@ class AgentRunner:
         spec: AgentRunSpec,
         messages: list[dict[str, Any]],
     ) -> tuple[list[dict[str, Any]] | None, str]:
+        """Two-value form of :meth:`compact_history_detailed`."""
+        outcome = await self.compact_history_detailed(spec, messages)
+        return outcome.history, outcome.reason
+
+    async def compact_history_detailed(
+        self,
+        spec: AgentRunSpec,
+        messages: list[dict[str, Any]],
+        *,
+        instructions: str | None = None,
+    ) -> ManualCompaction:
         """Summarize ``messages`` on demand — the manual `/compact` engine.
 
         Unlike :meth:`_maybe_compact`, this skips the automatic pressure
@@ -1928,12 +1969,24 @@ class AgentRunner:
         anything (nothing worth replacing).
         """
         if sum(1 for m in messages if m.get("role") != "system") < 4:
-            return None, "No compactable history yet."
-        summary = await self._summarize(spec, messages)
+            return ManualCompaction(None, "No compactable history yet.")
+        usage: dict[str, int] = {}
+
+        async def observe(response: LLMResponse) -> None:
+            self._accumulate_usage(usage, self._usage_dict(response.usage))
+
+        summary = await self._summarize(
+            spec,
+            messages,
+            response_observer=observe,
+            instructions=instructions,
+        )
         if not summary:
-            return None, (
+            return ManualCompaction(
+                None,
                 "Compaction could not produce a useful summary. "
-                "The conversation is unchanged."
+                "The conversation is unchanged.",
+                usage=usage,
             )
         compacted = spec.compaction_strategy.build_history(
             messages,
@@ -1946,12 +1999,14 @@ class AgentRunner:
         # shrink its source). Observed live: a short conversation "compacted"
         # 4 → 3 messages while gaining 1,347 characters.
         if self._history_chars(compacted) >= self._history_chars(messages):
-            return None, (
+            return ManualCompaction(
+                None,
                 "Compaction would not shrink the conversation. "
-                "The conversation is unchanged."
+                "The conversation is unchanged.",
+                usage=usage,
             )
         self._notify_compaction_summary(spec, summary, messages, compacted, "manual")
-        return compacted, "compacted"
+        return ManualCompaction(compacted, "compacted", summary=summary, usage=usage)
 
     def _overflow_reduce(
         self,

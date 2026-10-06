@@ -688,6 +688,7 @@ def test_bundled_core_skills_load_with_resources_and_fixed_provenance(
     catalog = runtime.catalog()
     expected = {
         "frontend-design",
+        "genoffice",
         "mcp-builder",
         "review-agent",
         "security-best-practices",

@@ -9,6 +9,7 @@ import type {
   ClientRuntime,
   RpcMethod,
   SidecarStatus,
+  PendingFile,
 } from "./contracts";
 
 export class BrowserRuntimeError extends Error implements BridgeError {
@@ -466,7 +467,7 @@ export class BrowserRuntime implements ClientRuntime {
     return this.options.chooseDirectory();
   }
 
-  private chooseFiles(multiple: boolean): Promise<File[]> {
+  private pickFiles(multiple: boolean): Promise<File[]> {
     return new Promise((resolve) => {
       const input = document.createElement("input");
       input.type = "file";
@@ -497,7 +498,9 @@ export class BrowserRuntime implements ClientRuntime {
         "NO_THREAD",
         "Select a trusted workspace before uploading files",
       );
-    const files = await this.chooseFiles(multiple);
+    return this.sendFiles(threadId, await this.pickFiles(multiple));
+  }
+  private async sendFiles(threadId: string, files: File[]): Promise<string[]> {
     if (files.length > 8 || files.some((file) => file.size > 10 * 1024 * 1024))
       throw new BrowserRuntimeError(
         "UPLOAD_TOO_LARGE",
@@ -518,6 +521,19 @@ export class BrowserRuntime implements ClientRuntime {
   async pickContextFiles(threadId?: string): Promise<string[]> {
     return this.upload(threadId, true);
   }
+  async chooseFiles(): Promise<PendingFile[]> {
+    return (await this.pickFiles(true)).map((file) => ({
+      name: file.name,
+      size: file.size,
+      source: file,
+    }));
+  }
+  async uploadFiles(threadId: string, files: PendingFile[]): Promise<string[]> {
+    return this.sendFiles(
+      threadId,
+      files.flatMap((file) => (file.source instanceof File ? [file.source] : [])),
+    );
+  }
   async pickFile(threadId?: string): Promise<string | null> {
     return (await this.upload(threadId, false))[0] ?? null;
   }
@@ -526,6 +542,12 @@ export class BrowserRuntime implements ClientRuntime {
       `/api/download?${new URLSearchParams({ threadId, path })}`,
     );
     this.download(await response.blob(), path.split("/").at(-1) ?? "download");
+  }
+  async readFileBytes(threadId: string, path: string): Promise<ArrayBuffer> {
+    const response = await this.http(
+      `/api/download?${new URLSearchParams({ threadId, path })}`,
+    );
+    return response.arrayBuffer();
   }
   private download(blob: Blob, name: string): void {
     const url = URL.createObjectURL(blob),

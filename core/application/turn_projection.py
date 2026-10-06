@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 from dataclasses import replace
+from pathlib import Path
 from time import monotonic
 
+from core.application.document_outputs import document_outputs
 from core.application.event_service import EventBroker
 from core.application.turn_usage import (
     TURN_USAGE_EVENT_TYPE,
@@ -38,6 +40,8 @@ from core.events import (
 from core.persistence.database import Database
 from core.persistence.event_repository import EventRepository
 from core.persistence.execution_repository import ItemRepository
+from core.persistence.thread_repository import ThreadRepository
+from core.persistence.usage_repository import UsageRepository
 from core.reasoning import ReasoningChannel, ReasoningPayload
 
 _STREAM_FLUSH_INTERVAL_S = 0.05
@@ -72,6 +76,8 @@ class TurnEventProjector:
         self._reasoning_last_flush: dict[tuple[str, ReasoningChannel], float] = {}
         self._reasoning_last_length: dict[tuple[str, ReasoningChannel], int] = {}
         self._tool_item_ids: dict[str, str] = {}
+        self._tool_edit_paths: dict[str, str] = {}
+        self._workspace: Path | None = None
         self._plan_tool_calls: set[str] = set()
         self._skill_invocations: dict[str, dict[str, str]] = {}
         self._usage: dict[str, int] = {}
@@ -168,6 +174,12 @@ class TurnEventProjector:
                 },
             )
             self._tool_item_ids[message.call_id] = item.id
+            if (
+                message.activity is not None
+                and message.activity.kind is ToolActivityKind.EDIT
+                and message.activity.subject
+            ):
+                self._tool_edit_paths[message.call_id] = message.activity.subject
         elif isinstance(message, ToolCompleted):
             if message.call_id in self._plan_tool_calls:
                 self._plan_tool_calls.discard(message.call_id)
@@ -184,15 +196,19 @@ class TurnEventProjector:
                 return
             item_id = self._tool_item_ids.get(message.call_id)
             if item_id is not None:
+                payload_update = {
+                    "isError": message.is_error,
+                    "resultPreview": message.result_preview,
+                }
+                documents = self._documents_for(message)
+                if documents:
+                    payload_update["documents"] = documents
                 self._update_item(
                     item_id,
                     status=ItemStatus.FAILED
                     if message.is_error
                     else ItemStatus.COMPLETED,
-                    payload_update={
-                        "isError": message.is_error,
-                        "resultPreview": message.result_preview,
-                    },
+                    payload_update=payload_update,
                 )
         elif isinstance(message, ErrorEvent):
             self._add_item(
@@ -212,6 +228,27 @@ class TurnEventProjector:
                         phase=AgentMessagePhase.FINAL_ANSWER,
                     )
 
+    def _documents_for(self, message: ToolCompleted) -> list[dict[str, object]]:
+        """Document files this tool call wrote, for the chat's file cards."""
+
+        edited_path = self._tool_edit_paths.pop(message.call_id, None)
+        if message.is_error:
+            return []
+        try:
+            if self._workspace is None:
+                with self.database.read() as connection:
+                    thread = ThreadRepository(connection).get(self.thread_id)
+                if thread is None:
+                    return []
+                self._workspace = Path(thread.workspace_path)
+            return document_outputs(
+                result_preview=message.result_preview,
+                edited_path=edited_path,
+                workspace=self._workspace,
+            )
+        except Exception:  # noqa: BLE001 - cards are best-effort decoration
+            return []
+
     def _record_usage(self, message: ModelUsageRecorded) -> None:
         ordinal = message.response_ordinal
         usage = normalize_usage(message.usage)
@@ -226,6 +263,12 @@ class TurnEventProjector:
                     "responseOrdinal": ordinal,
                     "usage": usage,
                 },
+            )
+            UsageRepository(connection).record(
+                thread_id=self.thread_id,
+                turn_id=self.turn_id,
+                response_ordinal=ordinal,
+                usage=usage,
             )
         self._usage_ordinals.add(ordinal)
         add_usage(self._usage, usage)

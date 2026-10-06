@@ -671,10 +671,8 @@ async def _cmd_clear(app, args: str) -> str | None:
 
 
 async def _cmd_compact(app, args: str) -> str | None:
-    if args.strip():
-        return "usage: /compact (no arguments)"
     try:
-        return await app.compact_conversation()
+        return await app.compact_conversation(args.strip() or None)
     except (RuntimeError, ValueError) as exc:
         return str(exc)
 
@@ -862,7 +860,7 @@ REGISTRY: dict[str, Command] = {
         Command("clear", "/clear", "clear the conversation context", _cmd_clear),
         Command(
             "compact",
-            "/compact",
+            "/compact [focus]",
             "summarize older turns to free context",
             _cmd_compact,
         ),

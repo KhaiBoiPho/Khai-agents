@@ -23,6 +23,7 @@ import io
 import json
 import sys
 import traceback
+import types
 
 # Saved before anything can reassign sys.stdout: RPC always uses these.
 _RPC_OUT = sys.stdout
@@ -73,6 +74,30 @@ def _make_tool(name: str, params: list[str]):
     return _tool
 
 
+class _ToolModule(types.ModuleType):
+    """A tool that also works as an importable, callable module.
+
+    Models often write ``import some_tool`` or ``from tools import some_tool``
+    although the tools are already globals; both resolve to the same callable.
+    """
+
+    def __init__(self, name: str, fn) -> None:
+        super().__init__(name)
+        self._fn = fn
+        setattr(self, name, fn)
+
+    def __call__(self, *args, **kwargs):
+        return self._fn(*args, **kwargs)
+
+
+def _register_imports(tools: dict) -> None:
+    bundle = types.ModuleType("tools")
+    for name, fn in tools.items():
+        sys.modules[name] = _ToolModule(name, fn)
+        setattr(bundle, name, fn)
+    sys.modules.setdefault("tools", bundle)
+
+
 def main() -> int:
     init = _recv()
     if not init or "code" not in init:
@@ -80,8 +105,12 @@ def main() -> int:
         return 1
 
     namespace: dict = {"__name__": "__code_mode__"}
-    for spec in init.get("tools", []):
-        namespace[spec["name"]] = _make_tool(spec["name"], spec.get("params", []))
+    tools = {
+        spec["name"]: _make_tool(spec["name"], spec.get("params", []))
+        for spec in init.get("tools", [])
+    }
+    namespace.update(tools)
+    _register_imports(tools)
 
     buffer = io.StringIO()
     result_repr = None

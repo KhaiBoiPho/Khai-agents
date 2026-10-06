@@ -9,7 +9,7 @@ import {
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
-import { useSystemDarkMode } from "../../app/useSystemDarkMode";
+import { useThemeIsDark } from "../../app/useThemeIsDark";
 import styles from "./MarkdownContent.module.css";
 
 interface MarkdownContentProps {
@@ -24,7 +24,7 @@ interface CodeBlockProps {
 
 function CodeBlock({ code, language }: CodeBlockProps) {
   const [copied, setCopied] = useState(false);
-  const darkMode = useSystemDarkMode();
+  const darkMode = useThemeIsDark();
 
   useEffect(() => {
     if (!copied) return;

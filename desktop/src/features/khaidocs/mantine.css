@@ -1,0 +1,6 @@
+/* Mantine's add-on packages. @mantine/core/styles.css is imported from
+   KhaiDocsApp.tsx so vite.config.ts can strip its global baseline; it must
+   load before these, as in Docmost's own entry point. */
+@import "@mantine/spotlight/styles.css";
+@import "@mantine/notifications/styles.css";
+@import "@mantine/dates/styles.css";

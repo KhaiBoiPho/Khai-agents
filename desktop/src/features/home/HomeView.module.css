@@ -137,7 +137,7 @@
 
 .box textarea {
   min-height: 48px;
-  max-height: 190px;
+  max-height: 45vh;
   flex: 1;
   resize: none;
   padding: 13px 14px;
@@ -153,17 +153,24 @@
   color: var(--text-tertiary);
 }
 
-.box button {
+.boxTools {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 10px;
+}
+
+.box .send {
   display: grid;
   width: 28px;
   height: 28px;
-  margin-bottom: 10px;
   place-items: center;
   border-radius: var(--radius-sm);
   color: var(--text-tertiary);
 }
 
-.box button:hover:not(:disabled) {
+.box .send:hover:not(:disabled) {
   background: var(--surface-hover);
   color: var(--text-primary);
 }
@@ -203,13 +210,13 @@
   font-size: var(--text-sm);
 }
 
-.box button {
+.box .send {
   width: 26px;
   height: 26px;
   margin-bottom: 7px;
 }
 
-.box button {
+.box .send {
   width: 30px;
   height: 30px;
   margin-bottom: 6px;
@@ -218,12 +225,12 @@
   color: var(--text-inverse);
 }
 
-.box button:hover:not(:disabled) {
+.box .send:hover:not(:disabled) {
   background: var(--text-secondary);
   color: var(--text-inverse);
 }
 
-.box button:disabled {
+.box .send:disabled {
   opacity: 0.3;
 }
 
@@ -274,5 +281,155 @@
 
 .suggestions button:hover {
   background: var(--surface-hover);
+  color: var(--text-primary);
+}
+
+/* Entrance: greeting, composer, then each suggestion rise in turn. */
+.greeting,
+.composerArea,
+.suggestions button {
+  animation: home-rise 500ms var(--ease-spring) backwards;
+}
+
+.greeting {
+  animation-delay: 60ms;
+}
+
+.composerArea {
+  animation-delay: 160ms;
+}
+
+.suggestions button {
+  animation-duration: 400ms;
+  animation-delay: calc(260ms + var(--stagger, 0) * 60ms);
+}
+
+.suggestions button:hover {
+  transform: translateX(2px);
+}
+
+.box {
+  transition:
+    border-color 200ms ease,
+    box-shadow 300ms ease;
+}
+
+.box:focus-within {
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--signal) 12%, transparent);
+}
+
+.box .send:not(:disabled):active {
+  transform: scale(0.92);
+}
+
+@keyframes home-rise {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .greeting,
+  .composerArea,
+  .suggestions button {
+    animation: none;
+  }
+}
+
+/* Lagoon themes: the focused composer is outlined by a gradient from the
+   accent into violet. Two backgrounds draw it, the surface clipped to the
+   padding box over the gradient clipped to the border box, because
+   border-image would ignore the rounded corners. */
+:global(:root[data-theme^="lagoon"]) .box:focus-within {
+  border-color: transparent;
+  background:
+    linear-gradient(var(--surface-sidebar), var(--surface-sidebar)) padding-box,
+    linear-gradient(120deg, var(--signal), color-mix(in srgb, var(--signal) 35%, #7c5cd6)) border-box;
+}
+
+/* The model picker and send button sit together at the box's lower right. */
+.box .boxTools {
+  margin-bottom: 7px;
+}
+
+.box .boxTools .send {
+  margin-bottom: 0;
+}
+
+/* Composer box: prompt on top, mode toggles and model/send below. */
+.box {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0;
+  padding-right: 0;
+}
+
+.box textarea {
+  width: 100%;
+}
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 0 9px 7px 8px;
+}
+
+.modes {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.toolbar .boxTools {
+  margin-bottom: 0;
+}
+
+.toolbar .send {
+  margin-bottom: 0;
+}
+
+.files {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 9px 10px 0;
+}
+
+.file {
+  display: inline-flex;
+  max-width: 240px;
+  height: 26px;
+  align-items: center;
+  gap: 6px;
+  padding: 0 4px 0 9px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  background: var(--surface-hover);
+  color: var(--text-secondary);
+  font-size: var(--text-xs);
+}
+
+.file > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.file button {
+  display: grid;
+  width: 18px;
+  height: 18px;
+  place-items: center;
+  border-radius: var(--radius-sm);
+  color: var(--text-tertiary);
+}
+
+.file button:hover {
+  background: var(--surface-selected);
   color: var(--text-primary);
 }

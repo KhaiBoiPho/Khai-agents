@@ -30,6 +30,7 @@ from uuid import uuid4
 from loguru import logger
 
 from core.agent_runtime.context import EnvironmentContext
+from core.agent_runtime.helpers import estimate_message_tokens
 from core.agent_runtime.hook import AgentHook, AgentHookContext
 from core.agent_runtime.runner import AgentRunner, AgentRunSpec
 from core.agent_runtime.token_meter import ProviderAnchoredTokenMeter
@@ -618,7 +619,7 @@ class AgentSession:
                 return
         self._history.insert(0, current.message())
 
-    async def compact(self) -> dict[str, Any]:
+    async def compact(self, instructions: str | None = None) -> dict[str, Any]:
         """Manually summarize older history (the `/compact` command, per dsh).
 
         Operates on the RESIDENT model context only — the canonical Session
@@ -642,17 +643,60 @@ class AgentSession:
             compaction_summary_sink=self._compaction_summary_sink,
         )
         before = list(self._history)
-        compacted, reason = await self._runner.compact_history(spec, before)
+        # Price the resident context before the anchor goes stale: the meter
+        # anchors on the provider's own last prompt count, so this includes
+        # the system prompt and tool schemas the history list does not hold.
+        tokens_before = self._measure_context(before)
+        outcome = await self._runner.compact_history_detailed(
+            spec, before, instructions=instructions
+        )
+        compacted = outcome.history
         if compacted is None:
-            raise RuntimeError(reason)
+            refusal = RuntimeError(outcome.reason)
+            # A rejected summary was still billed; callers may account it.
+            refusal.usage = dict(outcome.usage)  # type: ignore[attr-defined]
+            raise refusal
         self._history = compacted
+        # The provider has not priced the compacted shape yet. Carry the
+        # anchored figure across by subtracting what the estimator says the
+        # rewrite removed, so both numbers share one baseline.
+        removed = sum(estimate_message_tokens(m) for m in before) - sum(
+            estimate_message_tokens(m) for m in compacted
+        )
+        tokens_after = (
+            max(0, tokens_before - max(0, removed))
+            if tokens_before is not None
+            else self._measure_context(compacted)
+        )
         return {
             "replaced_messages": len(before) - len(compacted),
             "messages_before": len(before),
             "messages_after": len(compacted),
             "chars_before": sum(len(str(m.get("content", ""))) for m in before),
             "chars_after": sum(len(str(m.get("content", ""))) for m in compacted),
+            "tokens_before": tokens_before,
+            "tokens_after": tokens_after,
+            "summary": outcome.summary,
+            "usage": dict(outcome.usage),
         }
+
+    def _measure_context(self, history: list[dict[str, Any]]) -> int | None:
+        messages = (
+            [{"role": "system", "content": self._system_prompt}]
+            if self._system_prompt
+            else []
+        ) + list(history)
+        try:
+            return self._token_meter.measure(
+                self._provider,
+                self._model,
+                messages,
+                self._tools.get_definitions()
+                if hasattr(self._tools, "get_definitions")
+                else None,
+            )
+        except Exception:  # noqa: BLE001 - a size estimate must never fail compaction
+            return None
 
     # -- submission handling ----------------------------------------------
 

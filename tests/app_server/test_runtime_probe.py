@@ -30,6 +30,7 @@ def test_runtime_probe_imports_lazy_desktop_capabilities(monkeypatch):
     assert "playwright" in result["bundledMcpPresets"]
     assert result["bundledSkills"] == [
         "frontend-design",
+        "genoffice",
         "mcp-builder",
         "review-agent",
         "security-best-practices",

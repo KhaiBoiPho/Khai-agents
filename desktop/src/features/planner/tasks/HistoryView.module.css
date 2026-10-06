@@ -1,0 +1,145 @@
+.history {
+  display: flex;
+  max-width: 760px;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.people {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.people button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px 3px 4px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-pill);
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+}
+
+.people button:first-child {
+  padding-left: 10px;
+}
+
+.people button[aria-pressed="true"] {
+  border-color: var(--text-primary);
+  background: var(--surface-selected);
+  color: var(--text-primary);
+}
+
+.day h2 {
+  margin: 0 0 6px;
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+}
+
+.day ul {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.day li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 8px;
+  border-radius: var(--radius-md);
+  animation: entry-in 280ms var(--ease-spring) both;
+}
+
+.day li:hover,
+.day li[data-active] {
+  background: var(--surface-hover);
+}
+
+.tick {
+  flex-shrink: 0;
+  color: var(--module-tasks);
+}
+
+.title {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  color: var(--text-primary);
+  font-size: var(--text-sm);
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.who {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-secondary);
+  font-size: var(--text-xs);
+}
+
+.who small {
+  color: var(--text-tertiary);
+}
+
+.day time {
+  min-width: 64px;
+  color: var(--text-tertiary);
+  font-family: var(--font-mono);
+  font-size: var(--text-micro);
+  text-align: right;
+}
+
+.empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 56px 16px;
+  color: var(--text-tertiary);
+  text-align: center;
+}
+
+.empty strong {
+  color: var(--text-primary);
+  font-size: var(--text-lg);
+}
+
+.empty p {
+  max-width: 360px;
+  margin: 0;
+  font-size: var(--text-sm);
+}
+
+.more {
+  align-self: center;
+  padding: 5px 14px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  color: var(--text-primary);
+  font-size: var(--text-sm);
+}
+
+.more:hover {
+  background: var(--surface-hover);
+}
+
+@keyframes entry-in {
+  from {
+    opacity: 0;
+    transform: translateY(3px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .day li {
+    animation: none;
+  }
+}

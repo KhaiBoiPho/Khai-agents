@@ -36,6 +36,8 @@ export type ThemePreference =
   | "midnight"
   | "claude"
   | "claude-dark"
+  | "lagoon"
+  | "lagoon-dark"
   | "contrast"
   | "imported";
 
@@ -47,6 +49,8 @@ export const THEME_PREFERENCES: readonly ThemePreference[] = [
   "midnight",
   "claude",
   "claude-dark",
+  "lagoon",
+  "lagoon-dark",
   "contrast",
   "imported",
 ];

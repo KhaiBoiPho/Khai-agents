@@ -1,0 +1,236 @@
+.board {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  align-items: start;
+}
+
+@container tasks (max-width: 900px) {
+  .board {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@container tasks (max-width: 520px) {
+  .board {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.column {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px;
+  border: 1px dashed transparent;
+  border-radius: var(--radius-lg);
+  background: var(--surface-sidebar);
+  transition:
+    background 140ms ease,
+    border-color 140ms ease;
+}
+
+.column[data-over] {
+  border-color: var(--module-tasks);
+  background: color-mix(in srgb, var(--module-tasks) 8%, var(--surface-sidebar));
+}
+
+.columnHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.columnToggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 6px 2px 2px;
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+}
+
+.columnToggle:hover {
+  background: var(--surface-hover);
+}
+
+.columnToggle svg {
+  color: var(--text-tertiary);
+  transition: transform 180ms var(--ease-spring);
+}
+
+.columnToggle svg[data-collapsed] {
+  transform: rotate(-90deg);
+}
+
+.columnToggle strong {
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+}
+
+.columnToggle span {
+  color: var(--text-tertiary);
+  font-size: var(--text-xs);
+}
+
+.column[data-column="in_progress"] .columnToggle strong::before,
+.column[data-column="done"] .columnToggle strong::before {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  margin-right: 6px;
+  border-radius: 50%;
+  background: var(--attention);
+  content: "";
+  vertical-align: 1px;
+}
+
+.column[data-column="done"] .columnToggle strong::before {
+  background: var(--module-tasks);
+}
+
+.archiveAll {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 6px;
+  border-radius: var(--radius-sm);
+  color: var(--text-tertiary);
+  font-size: var(--text-xs);
+}
+
+.archiveAll:hover {
+  background: var(--surface-hover);
+  color: var(--text-primary);
+}
+
+.archiveAll[data-confirm] {
+  background: var(--attention-soft);
+  color: var(--attention);
+}
+
+.columnBody {
+  display: flex;
+  min-height: 44px;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/* A class rule outranks the browser's own [hidden]. */
+.columnBody[hidden] {
+  display: none;
+}
+
+.columnEmpty {
+  margin: 0;
+  padding: 12px 0;
+  color: var(--text-tertiary);
+  font-size: var(--text-xs);
+  text-align: center;
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 9px 10px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--surface-raised);
+  box-shadow: var(--shadow-soft);
+  cursor: grab;
+  animation: card-in 300ms var(--ease-spring) both;
+  animation-delay: calc(var(--i, 0) * 25ms);
+}
+
+.card:hover {
+  border-color: var(--border-strong);
+}
+
+.card[data-active] {
+  border-color: var(--module-tasks);
+}
+
+.card[data-dragging] {
+  opacity: 0.45;
+}
+
+.cardTitle {
+  color: var(--text-primary);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  text-align: left;
+}
+
+.card[data-done] .cardTitle {
+  color: var(--text-tertiary);
+  text-decoration: line-through;
+}
+
+.cardMeta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+}
+
+.cardMeta:empty {
+  display: none;
+}
+
+.cardProgress {
+  color: var(--text-tertiary);
+  font-family: var(--font-mono);
+  font-size: var(--text-micro);
+}
+
+.cardFoot {
+  display: flex;
+  min-height: 24px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.advance {
+  display: grid;
+  width: 24px;
+  height: 24px;
+  margin-left: auto;
+  place-items: center;
+  border-radius: var(--radius-sm);
+  color: var(--text-tertiary);
+}
+
+.advance:hover {
+  background: var(--surface-hover);
+  color: var(--module-tasks);
+}
+
+@keyframes card-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px) scale(0.98);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .card {
+    animation: none;
+  }
+
+  .column,
+  .columnToggle svg {
+    transition: none;
+  }
+}

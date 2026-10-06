@@ -1,6 +1,7 @@
-import { BrainCircuit, ChevronRight, CircleDashed } from "lucide-react";
+import { BrainCircuit, ChevronRight } from "lucide-react";
 import { useEffect, useState } from "react";
 
+import { LoadingDots, ShimmerText } from "../../components/Motion";
 import { decodeReasoningPayload } from "../../app/reasoningPayload";
 import type { Item } from "../../generated/app-server";
 import { MarkdownContent } from "./MarkdownContent";
@@ -81,12 +82,14 @@ export function ReasoningBlock({ item, mode }: ReasoningBlockProps) {
         }}
       >
         {active ? (
-          <CircleDashed className={styles.spinner} size={16} aria-hidden="true" />
+          <LoadingDots className={styles.dots} />
         ) : (
           <BrainCircuit size={16} aria-hidden="true" />
         )}
         <span>
-          <strong>{title}</strong>
+          <strong>
+            <ShimmerText active={active}>{title}</ShimmerText>
+          </strong>
           <small>
             {active
               ? "Model reasoning"

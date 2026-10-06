@@ -44,12 +44,16 @@ const THEME_LABELS: Record<ThemePreference, string> = {
   midnight: "Midnight — deep, cool",
   claude: "Claude — ivory & terracotta",
   "claude-dark": "Claude Dark — slate & terracotta",
+  lagoon: "Lagoon — paper & sea green",
+  "lagoon-dark": "Lagoon Dark — night & sea green",
   contrast: "High contrast — AAA",
   imported: "Imported theme",
 };
 
 function themeTranslationKey(preference: ThemePreference): string {
-  const suffix = preference === "claude-dark" ? "claudeDark" : preference;
+  const suffix = preference.replace(/-(\w)/g, (_, letter: string) =>
+    letter.toUpperCase(),
+  );
   return `settings.appearance.${suffix}`;
 }
 

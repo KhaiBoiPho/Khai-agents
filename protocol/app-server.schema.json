@@ -5032,7 +5032,7 @@
         "limit": {
           "type": "integer",
           "minimum": 1,
-          "maximum": 750
+          "maximum": 5000
         }
       },
       "required": [
@@ -6263,7 +6263,10 @@
           "$ref": "#/$defs/ThreadReadParams"
         },
         "thread/context/compact": {
-          "$ref": "#/$defs/ThreadReadParams"
+          "$ref": "#/$defs/ThreadContextCompactParams"
+        },
+        "usage/summary": {
+          "$ref": "#/$defs/UsageSummaryParams"
         },
         "turn/list": {
           "$ref": "#/$defs/TurnListParams"
@@ -6288,6 +6291,15 @@
         },
         "dictation/transcribe": {
           "$ref": "#/$defs/DictationTranscribeParams"
+        },
+        "rag/status": {
+          "$ref": "#/$defs/RagStatusParams"
+        },
+        "rag/index": {
+          "$ref": "#/$defs/RagIndexParams"
+        },
+        "documents/list": {
+          "$ref": "#/$defs/DocumentListParams"
         }
       },
       "required": [
@@ -6392,6 +6404,7 @@
         "thread/execution/read",
         "thread/context/clear",
         "thread/context/compact",
+        "usage/summary",
         "turn/list",
         "model/reasoning",
         "provider/login/start",
@@ -6399,7 +6412,10 @@
         "provider/login/cancel",
         "provider/logout",
         "dictation/status",
-        "dictation/transcribe"
+        "dictation/transcribe",
+        "rag/status",
+        "rag/index",
+        "documents/list"
       ]
     },
     "MethodResults": {
@@ -7404,7 +7420,10 @@
           "$ref": "#/$defs/EmptyParams"
         },
         "thread/context/compact": {
-          "$ref": "#/$defs/JsonObject"
+          "$ref": "#/$defs/ThreadContextCompactResult"
+        },
+        "usage/summary": {
+          "$ref": "#/$defs/UsageSummaryResult"
         },
         "turn/list": {
           "$ref": "#/$defs/TurnListResult"
@@ -7429,6 +7448,15 @@
         },
         "dictation/transcribe": {
           "$ref": "#/$defs/DictationTranscribeResult"
+        },
+        "rag/status": {
+          "$ref": "#/$defs/RagStatusResult"
+        },
+        "rag/index": {
+          "$ref": "#/$defs/RagStatusResult"
+        },
+        "documents/list": {
+          "$ref": "#/$defs/DocumentListResult"
         }
       },
       "required": [
@@ -7533,6 +7561,7 @@
         "thread/execution/read",
         "thread/context/clear",
         "thread/context/compact",
+        "usage/summary",
         "turn/list",
         "model/reasoning",
         "provider/login/start",
@@ -7540,7 +7569,10 @@
         "provider/login/cancel",
         "provider/logout",
         "dictation/status",
-        "dictation/transcribe"
+        "dictation/transcribe",
+        "rag/status",
+        "rag/index",
+        "documents/list"
       ]
     },
     "Notifications": {
@@ -8334,6 +8366,537 @@
       "required": [
         "name",
         "path"
+      ]
+    },
+    "ThreadContextCompactParams": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "threadId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 255
+        },
+        "instructions": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 2000,
+          "description": "Optional focus for the summary, as in `/compact <focus>`."
+        }
+      },
+      "required": [
+        "threadId"
+      ]
+    },
+    "ThreadContextCompactResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Compaction runs in the background; progress and outcome arrive as thread.context.compacting, thread.context.compacted and thread.context.compaction_failed Thread events.",
+      "properties": {
+        "status": {
+          "const": "started"
+        },
+        "compactionId": {
+          "type": "string",
+          "description": "Carried as payload.compactionId by every thread.context.* event of this run."
+        }
+      },
+      "required": [
+        "status",
+        "compactionId"
+      ]
+    },
+    "UsageSummaryParams": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "days": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 90
+        },
+        "utcOffsetMinutes": {
+          "type": "integer",
+          "minimum": -840,
+          "maximum": 840,
+          "description": "Viewer's offset from UTC; day buckets follow the viewer's calendar."
+        }
+      }
+    },
+    "UsageTotals": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "inputTokens": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "outputTokens": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "cachedInputTokens": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "requests": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "costUsd": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Estimated list-price cost of the requests whose model has a catalog price."
+        },
+        "unpricedRequests": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "inputTokens",
+        "outputTokens",
+        "cachedInputTokens",
+        "requests",
+        "costUsd",
+        "unpricedRequests"
+      ]
+    },
+    "UsageDay": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "date": {
+          "type": "string",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+        },
+        "inputTokens": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "outputTokens": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "cachedInputTokens": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "requests": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "costUsd": {
+          "type": "number",
+          "minimum": 0
+        },
+        "unpricedRequests": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "date",
+        "inputTokens",
+        "outputTokens",
+        "cachedInputTokens",
+        "requests",
+        "costUsd",
+        "unpricedRequests"
+      ]
+    },
+    "UsageModel": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "modelId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "providerName": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "inputTokens": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "outputTokens": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "cachedInputTokens": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "requests": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "costUsd": {
+          "type": "number",
+          "minimum": 0
+        },
+        "unpricedRequests": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "inputPricePerMillion": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "outputPricePerMillion": {
+          "type": [
+            "number",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "modelId",
+        "providerName",
+        "inputTokens",
+        "outputTokens",
+        "cachedInputTokens",
+        "requests",
+        "costUsd",
+        "unpricedRequests",
+        "inputPricePerMillion",
+        "outputPricePerMillion"
+      ]
+    },
+    "UsageSummaryResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "generatedAt": {
+          "type": "string"
+        },
+        "utcOffsetMinutes": {
+          "type": "integer"
+        },
+        "days": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/UsageDay"
+          }
+        },
+        "today": {
+          "$ref": "#/$defs/UsageTotals"
+        },
+        "week": {
+          "$ref": "#/$defs/UsageTotals"
+        },
+        "allTime": {
+          "$ref": "#/$defs/UsageTotals"
+        },
+        "models": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/UsageModel"
+          }
+        }
+      },
+      "required": [
+        "generatedAt",
+        "utcOffsetMinutes",
+        "days",
+        "today",
+        "week",
+        "allTime",
+        "models"
+      ]
+    },
+    "RagStatusParams": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "threadId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 255
+        }
+      },
+      "required": [
+        "threadId"
+      ]
+    },
+    "RagIndexParams": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "threadId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 255
+        },
+        "force": {
+          "type": "boolean",
+          "description": "Re-embed every document, not only new or changed ones."
+        }
+      },
+      "required": [
+        "threadId"
+      ]
+    },
+    "RagDocumentStatus": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "type": "string",
+          "description": "Workspace-relative POSIX path."
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "indexed",
+            "pending",
+            "failed"
+          ]
+        },
+        "chunks": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "error": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "indexedAt": {
+          "type": [
+            "number",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "path",
+        "status",
+        "chunks",
+        "error",
+        "indexedAt"
+      ]
+    },
+    "RagStatusResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Document-search (RAG) index state of one Thread workspace.",
+      "properties": {
+        "state": {
+          "type": "string",
+          "enum": [
+            "idle",
+            "indexing",
+            "error",
+            "unconfigured"
+          ]
+        },
+        "configured": {
+          "type": "boolean",
+          "description": "An embedding credential (OPENROUTER_API_KEY) is available."
+        },
+        "embeddingModel": {
+          "type": "string"
+        },
+        "documents": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/RagDocumentStatus"
+          }
+        },
+        "counts": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "total": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "indexed": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "pending": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "failed": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          "required": [
+            "total",
+            "indexed",
+            "pending",
+            "failed"
+          ]
+        },
+        "progress": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "done": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "total": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "current": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                }
+              },
+              "required": [
+                "done",
+                "total",
+                "current"
+              ]
+            }
+          ]
+        },
+        "error": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "truncated": {
+          "type": "boolean"
+        },
+        "lastIndexedAt": {
+          "type": [
+            "number",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "state",
+        "configured",
+        "embeddingModel",
+        "documents",
+        "counts",
+        "progress",
+        "error",
+        "truncated",
+        "lastIndexedAt"
+      ]
+    },
+    "DocumentListParams": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2000
+        },
+        "threadId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 255,
+          "description": "Only the documents of this Thread."
+        }
+      }
+    },
+    "DocumentEntry": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "A file in the Documents library: uploaded into a chat, or written by the agent.",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "path": {
+          "type": "string",
+          "description": "Workspace-relative path in the owning Thread."
+        },
+        "threadId": {
+          "type": "string"
+        },
+        "threadTitle": {
+          "type": "string"
+        },
+        "projectId": {
+          "type": "string"
+        },
+        "projectName": {
+          "type": "string"
+        },
+        "source": {
+          "type": "string",
+          "enum": [
+            "uploaded",
+            "agent"
+          ]
+        },
+        "size": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "modifiedAt": {
+          "type": "string"
+        },
+        "extension": {
+          "type": "string"
+        },
+        "linked": {
+          "type": "boolean",
+          "description": "False when the chat the file came from no longer exists."
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "path",
+        "threadId",
+        "threadTitle",
+        "projectId",
+        "projectName",
+        "source",
+        "size",
+        "modifiedAt",
+        "extension",
+        "linked"
+      ]
+    },
+    "DocumentListResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "documents": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/DocumentEntry"
+          }
+        }
+      },
+      "required": [
+        "documents"
       ]
     }
   }

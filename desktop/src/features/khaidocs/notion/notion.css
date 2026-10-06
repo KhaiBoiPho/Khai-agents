@@ -1,0 +1,187 @@
+/* Original KhaiDocs code, MIT.
+   Notion-like look for KhaiDocs: colour tokens, icon colours, sidebar and
+   page typography. Everything is scoped to .khaidocs-root. */
+
+.khaidocs-root {
+  --kd-text: #37352f;
+  --kd-text-secondary: #787774;
+  --kd-text-tertiary: #a5a29b;
+  --kd-icon-muted: #91918e;
+  --kd-sidebar-bg: #f7f7f5;
+  --kd-sidebar-text: #5f5e5b;
+  --kd-hover: rgba(55, 53, 47, 0.06);
+  --kd-hover-strong: rgba(55, 53, 47, 0.1);
+  --kd-selected: rgba(55, 53, 47, 0.08);
+  --kd-divider: rgba(55, 53, 47, 0.09);
+  --kd-floating: #ffffff;
+  --kd-card: #ffffff;
+  --kd-card-border: rgba(55, 53, 47, 0.09);
+  --kd-shadow-sm: 0 0 0 1px rgba(15, 15, 15, 0.05), 0 2px 4px rgba(15, 15, 15, 0.1);
+  --kd-shadow-card: 0 0 0 1px rgba(15, 15, 15, 0.04), 0 2px 4px rgba(15, 15, 15, 0.03);
+  --kd-accent: #2383e2;
+
+  /* Page icon colours (Notion's text palette). */
+  --kd-icon-default: #37352f;
+  --kd-icon-gray: #9b9a97;
+  --kd-icon-brown: #9f6b53;
+  --kd-icon-orange: #d9730d;
+  --kd-icon-yellow: #cb912f;
+  --kd-icon-green: #448361;
+  --kd-icon-blue: #337ea9;
+  --kd-icon-purple: #9065b0;
+  --kd-icon-pink: #c14c8a;
+  --kd-icon-red: #d44c47;
+
+  --mantine-color-dimmed: #787774;
+}
+
+.khaidocs-root[data-mantine-color-scheme="dark"] {
+  --kd-text: #d4d4d4;
+  --kd-text-secondary: #9b9b9b;
+  --kd-text-tertiary: #6f6f6f;
+  --kd-icon-muted: #8a8a8a;
+  --kd-sidebar-bg: #202020;
+  --kd-sidebar-text: #a3a3a3;
+  --kd-hover: rgba(255, 255, 255, 0.055);
+  --kd-hover-strong: rgba(255, 255, 255, 0.09);
+  --kd-selected: rgba(255, 255, 255, 0.07);
+  --kd-divider: rgba(255, 255, 255, 0.08);
+  --kd-floating: #252525;
+  --kd-card: #202020;
+  --kd-card-border: rgba(255, 255, 255, 0.07);
+  --kd-shadow-sm: 0 0 0 1px rgba(255, 255, 255, 0.07), 0 2px 6px rgba(0, 0, 0, 0.35);
+  --kd-shadow-card: 0 0 0 1px rgba(255, 255, 255, 0.06);
+  --kd-accent: #2f8fea;
+
+  --kd-icon-default: #d4d4d4;
+  --kd-icon-gray: #9b9b9b;
+  --kd-icon-brown: #ba856f;
+  --kd-icon-orange: #c77d48;
+  --kd-icon-yellow: #ca9849;
+  --kd-icon-green: #529e72;
+  --kd-icon-blue: #379ad3;
+  --kd-icon-purple: #9d68d3;
+  --kd-icon-pink: #d15796;
+  --kd-icon-red: #df5452;
+
+  --mantine-color-dimmed: #9b9b9b;
+}
+
+/* ---------- Shell ---------- */
+
+.khaidocs-root .mantine-AppShell-navbar {
+  background-color: var(--kd-sidebar-bg);
+  border-right: 1px solid var(--kd-divider);
+}
+
+.khaidocs-root .mantine-AppShell-aside {
+  background-color: var(--mantine-color-body);
+  border-left: 1px solid var(--kd-divider);
+}
+
+.khaidocs-root .mantine-AppShell-header {
+  background-color: var(--mantine-color-body);
+  border-bottom: 1px solid var(--kd-divider);
+}
+
+/* The page header (breadcrumb bar) floats over the page like Notion's. */
+.khaidocs-root [data-page-header="true"] {
+  height: 45px;
+  background-color: var(--mantine-color-body);
+}
+
+/* Menus and popovers: Notion's soft floating surfaces. */
+.khaidocs-root .mantine-Menu-dropdown,
+.khaidocs-root .mantine-Popover-dropdown {
+  background-color: var(--kd-floating);
+  border: 0;
+  box-shadow: var(--kd-shadow-sm), 0 8px 24px rgba(15, 15, 15, 0.12);
+  border-radius: 8px;
+}
+
+.khaidocs-root .mantine-Menu-item {
+  font-size: 14px;
+  padding: 5px 8px;
+  border-radius: 5px;
+}
+
+.khaidocs-root .mantine-Menu-item:hover,
+.khaidocs-root .mantine-Menu-item[data-hovered] {
+  background-color: var(--kd-hover);
+}
+
+/* ---------- Page ---------- */
+
+.khaidocs-root .kd-editor {
+  font-size: 16px;
+}
+
+.khaidocs-root .kd-page[data-has-cover] .kd-editor {
+  margin-top: 0;
+}
+
+.khaidocs-root .kd-editor .ProseMirror {
+  line-height: 1.6;
+  color: var(--kd-text);
+  background-color: transparent;
+}
+
+.khaidocs-root .kd-editor .ProseMirror p {
+  margin-top: 0.3em;
+  margin-bottom: 0.3em;
+}
+
+/* Host rem is the app's font size (14px by default), so sizes are in px. */
+.khaidocs-root .kd-editor .ProseMirror h1 {
+  font-size: 30px;
+  margin-top: 1.4em;
+}
+
+.khaidocs-root .kd-editor .ProseMirror h2 {
+  font-size: 24px;
+  margin-top: 1.3em;
+}
+
+.khaidocs-root .kd-editor .ProseMirror h3 {
+  font-size: 20px;
+  margin-top: 1.1em;
+}
+
+/* The page title (after the body rules so it wins). */
+.khaidocs-root .kd-editor .page-title .ProseMirror h1 {
+  font-size: 40px;
+  line-height: 1.2;
+  font-weight: 700;
+  letter-spacing: -0.015em;
+  margin-top: 0;
+  margin-bottom: 0.35em;
+  color: var(--kd-text);
+}
+
+.khaidocs-root .page-title .ProseMirror h1.is-empty::before,
+.khaidocs-root .page-title .ProseMirror h1 .is-empty::before {
+  color: var(--kd-text-tertiary);
+}
+
+.khaidocs-root .kd-editor .ProseMirror blockquote {
+  border-left: 3px solid currentColor;
+}
+
+.khaidocs-root .kd-editor .ProseMirror :not(pre) > code {
+  background: rgba(135, 131, 120, 0.15);
+  color: #eb5757;
+  border-radius: 4px;
+  padding: 0.2em 0.4em;
+  font-size: 85%;
+}
+
+.khaidocs-root .kd-editor .ProseMirror a {
+  color: inherit;
+  border-bottom: 0.05em solid var(--kd-text-tertiary);
+  font-weight: 500;
+}
+
+/* Headerless single-user shell: room for the "»" sidebar opener. */
+.khaidocs-root [data-kd-sidebar-collapsed] [data-page-header="true"] {
+  padding-left: 48px;
+}

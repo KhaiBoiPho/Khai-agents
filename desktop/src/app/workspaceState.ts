@@ -23,6 +23,29 @@ export interface TurnPlanState extends TurnPlan {
   updatedAt: string;
 }
 
+/** How full the open thread's model context is, as last measured. */
+export interface ContextUsage {
+  usedTokens: number;
+  /** "provider": the model's own count for its latest request; "estimate":
+   * computed after a compaction rewrote the history, until the next reply. */
+  source: "provider" | "estimate";
+  at: string;
+}
+
+export interface CompactionEntry {
+  /** `payload.compactionId` shared by one run's `thread.context.*` events. */
+  id: string;
+  status: "running" | "done" | "failed";
+  startedAt: string;
+  instructions: string | null;
+  tokensBefore: number | null;
+  tokensAfter: number | null;
+  summary: string | null;
+  message: string | null;
+  /** The last Turn before compaction, so the row sits after it. */
+  afterTurnId: string | null;
+}
+
 export interface WorkspaceState {
   runtime: SidecarStatus;
   projects: Project[];
@@ -38,6 +61,8 @@ export interface WorkspaceState {
   plansByTurnId: Record<string, TurnPlanState>;
   goal: Goal | null;
   goalOutcome: GoalOutcome | null;
+  contextUsage: ContextUsage | null;
+  compactions: CompactionEntry[];
   entitySequences: Record<string, number>;
   selectedItemId: string | null;
   busy: boolean;
@@ -50,6 +75,7 @@ export type WorkspaceAction =
   | { type: "projects"; projects: Project[]; selectedProjectId: string | null }
   | { type: "settings"; settings: SettingsSnapshot }
   | { type: "project-upsert"; project: Project }
+  | { type: "project-remove"; projectId: string }
   | { type: "select-project"; projectId: string | null }
   | { type: "threads"; threads: Thread[]; selectedThreadId: string | null }
   | { type: "thread-upsert"; thread: Thread }
@@ -88,6 +114,8 @@ export const initialWorkspaceState: WorkspaceState = {
   plansByTurnId: {},
   goal: null,
   goalOutcome: null,
+  contextUsage: null,
+  compactions: [],
   entitySequences: {},
   selectedItemId: null,
   busy: false,
@@ -213,10 +241,117 @@ function applyItemDelta(state: WorkspaceState, event: Event): WorkspaceState {
   };
 }
 
+function counter(value: unknown): number | null {
+  return typeof value === "number" && Number.isFinite(value) && value >= 0
+    ? value
+    : null;
+}
+
+function text(value: unknown): string | null {
+  return typeof value === "string" && value.trim() ? value : null;
+}
+
+/** Tokens the context holds after one provider response: its prompt plus the
+ * reply that now sits in history. */
+export function contextTokensFromUsage(usage: unknown): number | null {
+  if (!isRecord(usage)) return null;
+  const prompt = counter(usage.prompt_tokens) ?? counter(usage.input_tokens);
+  if (prompt === null || prompt === 0) return null;
+  const completion =
+    counter(usage.completion_tokens) ?? counter(usage.output_tokens) ?? 0;
+  return prompt + completion;
+}
+
+function applyContextEvent(
+  state: WorkspaceState,
+  event: Event,
+): WorkspaceState | null {
+  if (
+    event.type !== "turn.usage.recorded" &&
+    !event.type.startsWith("thread.context.")
+  ) {
+    return null;
+  }
+  // Other Threads' `thread.*` events also reach the reducer (sidebar
+  // updates); their context belongs to them, not to the open Thread.
+  if (event.threadId !== state.selectedThreadId) return state;
+  switch (event.type) {
+    case "turn.usage.recorded": {
+      const used = contextTokensFromUsage(event.payload.usage);
+      if (used === null) return state;
+      return {
+        ...state,
+        contextUsage: { usedTokens: used, source: "provider", at: event.timestamp },
+      };
+    }
+    case "thread.context.compacting": {
+      const id = text(event.payload.compactionId) ?? `seq:${event.sequence}`;
+      if (state.compactions.some((entry) => entry.id === id)) return state;
+      return {
+        ...state,
+        compactions: [
+          ...state.compactions,
+          {
+            id,
+            status: "running",
+            startedAt: event.timestamp,
+            instructions: text(event.payload.instructions),
+            tokensBefore: null,
+            tokensAfter: null,
+            summary: null,
+            message: null,
+            afterTurnId: null,
+          },
+        ],
+      };
+    }
+    case "thread.context.compacted":
+    case "thread.context.compaction_failed": {
+      const failed = event.type === "thread.context.compaction_failed";
+      const startedId =
+        text(event.payload.compactionId) ?? `seq:${event.sequence}`;
+      const previous = state.compactions.find((entry) => entry.id === startedId);
+      const tokensAfter = failed ? null : counter(event.payload.tokensAfter);
+      const entry: CompactionEntry = {
+        id: startedId,
+        status: failed ? "failed" : "done",
+        startedAt: previous?.startedAt ?? event.timestamp,
+        instructions:
+          text(event.payload.instructions) ?? previous?.instructions ?? null,
+        tokensBefore: failed ? null : counter(event.payload.tokensBefore),
+        tokensAfter,
+        summary: failed ? null : text(event.payload.summary),
+        message: failed
+          ? (text(event.payload.message) ?? "Compaction failed.")
+          : null,
+        afterTurnId:
+          text(event.payload.afterTurnId) ?? previous?.afterTurnId ?? null,
+      };
+      return {
+        ...state,
+        compactions: previous
+          ? state.compactions.map((candidate) =>
+              candidate.id === startedId ? entry : candidate,
+            )
+          : [...state.compactions, entry],
+        contextUsage:
+          tokensAfter === null
+            ? state.contextUsage
+            : { usedTokens: tokensAfter, source: "estimate", at: event.timestamp },
+      };
+    }
+    default:
+      return null;
+  }
+}
+
 function applyDomainEvent(state: WorkspaceState, event: Event): WorkspaceState {
   if (event.type === "item.delta") {
     return applyItemDelta(state, event);
   }
+  const contextState = applyContextEvent(state, event);
+  if (contextState) return contextState;
+
   if (event.type === "turn.plan.updated") {
     const plan = eventPlan(event);
     const key = event.turnId ? `plan:${event.turnId}` : null;
@@ -328,6 +463,16 @@ export function workspaceReducer(
       return { ...state, settings: action.settings };
     case "project-upsert":
       return { ...state, projects: upsert(state.projects, action.project) };
+    case "project-remove": {
+      const projects = state.projects.filter((project) => project.id !== action.projectId);
+      if (state.selectedProjectId !== action.projectId) return { ...state, projects };
+      // The open folder went away: drop everything that belonged to it.
+      return {
+        ...workspaceReducer(state, { type: "select-project", projectId: null }),
+        projects,
+        threads: [],
+      };
+    }
     case "select-project":
       return {
         ...state,
@@ -341,6 +486,8 @@ export function workspaceReducer(
         plansByTurnId: {},
         goal: null,
         goalOutcome: null,
+        contextUsage: null,
+        compactions: [],
         entitySequences: {},
         selectedItemId: null,
       };
@@ -372,6 +519,8 @@ export function workspaceReducer(
         plansByTurnId: selected ? {} : state.plansByTurnId,
         goal: selected ? null : state.goal,
         goalOutcome: selected ? null : state.goalOutcome,
+        contextUsage: selected ? null : state.contextUsage,
+        compactions: selected ? [] : state.compactions,
         entitySequences: selected ? {} : state.entitySequences,
         selectedItemId: selected ? null : state.selectedItemId,
       };
@@ -388,6 +537,8 @@ export function workspaceReducer(
         plansByTurnId: {},
         goal: null,
         goalOutcome: null,
+        contextUsage: null,
+        compactions: [],
         entitySequences: {},
         selectedItemId: null,
       };
@@ -402,6 +553,8 @@ export function workspaceReducer(
         plansByTurnId: {},
         goal: null,
         goalOutcome: null,
+        contextUsage: null,
+        compactions: [],
         entitySequences: {},
         selectedItemId: null,
       };

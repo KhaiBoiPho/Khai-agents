@@ -210,6 +210,7 @@ class WebSurface:
                     os.unlink(target, dir_fd=directory)
                     await _file_io(os.fsync, directory)
                 completed = True
+                await self._index_upload(context, filename)
                 return web.json_response(
                     {"path": str(context.root / filename), "name": name, "size": count}
                 )
@@ -223,6 +224,31 @@ class WebSurface:
                         pass
                 if directory is not None:
                     os.close(directory)
+
+    async def _index_upload(self, context, filename: str) -> None:
+        """Queue background document indexing for an uploaded document.
+
+        Never fails the upload: no OpenRouter key, or any indexing problem,
+        just leaves the file pending in ``rag/status``.
+        """
+        from core.rag import is_supported
+
+        if not is_supported(filename):
+            return
+
+        def start() -> None:
+            from app_server.dispatcher import rag_embedder_factory
+            from core.rag.service import get_rag_service
+
+            get_rag_service().start(
+                context.root,
+                rag_embedder_factory(self.application, context.project.id),
+            )
+
+        try:
+            await asyncio.to_thread(start)
+        except Exception:  # noqa: BLE001 - indexing is best effort here
+            pass
 
     async def download(self, request):
         self.auth.require(request)

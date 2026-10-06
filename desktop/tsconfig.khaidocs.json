@@ -1,0 +1,43 @@
+// KhaiDocs vendors Docmost's client, which is written against Docmost's own
+// loose compiler settings; it is checked with those, separately from the app.
+{
+  "compilerOptions": {
+    "target": "ES2021",
+    "useDefineForClassFields": true,
+    "lib": [
+      "ES2021",
+      "DOM",
+      "DOM.Iterable"
+    ],
+    "module": "ESNext",
+    "skipLibCheck": true,
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "noEmit": true,
+    "jsx": "react-jsx",
+    "strict": false,
+    "strictNullChecks": false,
+    "noUnusedLocals": false,
+    "noUnusedParameters": false,
+    "noFallthroughCasesInSwitch": true,
+    "allowSyntheticDefaultImports": true,
+    "types": [
+      "vite/client",
+      "node"
+    ],
+    "paths": {
+      "@/*": [
+        "./src/features/khaidocs/docmost/*"
+      ],
+      "@docmost/editor-ext": [
+        "./src/features/khaidocs/editor-ext/index.ts"
+      ]
+    }
+  },
+  "include": [
+    "src/features/khaidocs",
+    "src/khaidocs-app.d.ts"
+  ]
+}

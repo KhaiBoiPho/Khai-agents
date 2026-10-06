@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 from collections.abc import Callable
 import os
 from pathlib import Path
@@ -22,6 +21,7 @@ from app_server.protocol.retry import retry_capabilities
 from core.agent_presets import METADATA_KEY as PRESET_METADATA_KEY
 from core.agent_presets import list_agent_presets
 from core.application.application import DeepCodeApplication
+from core.application.usage_service import MAX_SUMMARY_DAYS, UsageService
 from core.application.errors import (
     InvalidArgumentError,
     NoActiveTurnError,
@@ -75,6 +75,15 @@ from core.domain.project import TrustState
 from core.domain.thread import ThreadMode
 from core.skills.models import MAX_SELECTED_SKILLS, SkillScope
 from core.version import __version__
+
+def rag_embedder_factory(application: Any, project_id: str | None):
+    """Document-search embedder using the project's OpenRouter credential."""
+    from core.rag.service import openrouter_embedder_factory
+
+    return openrouter_embedder_factory(
+        lambda: application.llm.resolve_api_credential("openrouter", project_id)
+    )
+
 
 PROTOCOL_VERSION = "1.0"
 SERVER_VERSION = __version__
@@ -276,6 +285,7 @@ class Dispatcher:
             rpc_methods.THREAD_EXECUTION_READ: self._thread_execution_read,
             rpc_methods.THREAD_CONTEXT_CLEAR: self._thread_context_clear,
             rpc_methods.THREAD_CONTEXT_COMPACT: self._thread_context_compact,
+            rpc_methods.USAGE_SUMMARY: self._usage_summary,
             rpc_methods.TURN_LIST: self._turn_list,
             rpc_methods.MODEL_REASONING: self._model_reasoning,
             rpc_methods.THREAD_RENAME: self._thread_rename,
@@ -328,6 +338,9 @@ class Dispatcher:
             rpc_methods.TEST_RUN: self._test_run,
             rpc_methods.DICTATION_STATUS: self._dictation_status,
             rpc_methods.DICTATION_TRANSCRIBE: self._dictation_transcribe,
+            rpc_methods.RAG_STATUS: self._rag_status,
+            rpc_methods.RAG_INDEX: self._rag_index,
+            rpc_methods.DOCUMENT_LIST: self._document_list,
         }
 
     @property
@@ -1043,10 +1056,37 @@ class Dispatcher:
         return {}
 
     def _thread_context_compact(self, params: Params) -> dict[str, Any]:
-        params.only("threadId")
-        return asyncio.run(
-            self.application.turns.compact_live_context(str(params.string("threadId")))
+        """Admit `/compact`; the outcome arrives as ``thread.context.*`` events.
+
+        Summarizing takes a model round-trip, and this connection answers
+        requests in order, so the work runs on the execution runtime instead
+        of holding every other request behind it.
+        """
+        params.only("threadId", "instructions")
+        instructions = params.string("instructions", required=False, allow_empty=True)
+        if instructions is not None and len(instructions) > 2_000:
+            raise InvalidParams("instructions must be at most 2000 characters")
+        return self.application.turns.start_live_compaction(
+            str(params.string("threadId")),
+            instructions=instructions,
         )
+
+    def _usage_summary(self, params: Params) -> dict[str, Any]:
+        params.only("days", "utcOffsetMinutes")
+        days = params.integer("days", default=30, minimum=1, maximum=MAX_SUMMARY_DAYS)
+        offset = self._signed_integer(params, "utcOffsetMinutes", limit=14 * 60)
+        return UsageService(self.application.database).summary(
+            days=days, utc_offset_minutes=offset
+        )
+
+    @staticmethod
+    def _signed_integer(params: Params, name: str, *, limit: int) -> int:
+        value = params.values.get(name, 0)
+        if isinstance(value, bool) or not isinstance(value, int):
+            raise InvalidParams(f"{name} must be an integer")
+        if not -limit <= value <= limit:
+            raise InvalidParams(f"{name} must be between {-limit} and {limit}")
+        return value
 
     def _turn_list(self, params: Params) -> dict[str, Any]:
         params.only("threadId", "limit", "offset", "state")
@@ -1594,13 +1634,51 @@ class Dispatcher:
             "headSequence": page.head_sequence,
         }
 
+    def _rag_status(self, params: Params) -> dict[str, Any]:
+        params.only("threadId")
+        from core.rag.service import embedder_configured, get_rag_service
+
+        context = self.application.workspaces.resolve(str(params.string("threadId")))
+        factory = rag_embedder_factory(self.application, context.project.id)
+        return get_rag_service().status(
+            context.root, configured=embedder_configured(factory)
+        )
+
+    def _rag_index(self, params: Params) -> dict[str, Any]:
+        """Start background (re-)indexing; returns the status at once."""
+        params.only("threadId", "force")
+        from core.rag.embeddings import EmbeddingNotConfigured
+        from core.rag.service import get_rag_service
+
+        context = self.application.workspaces.resolve(
+            str(params.string("threadId")), require_trusted=True
+        )
+        factory = rag_embedder_factory(self.application, context.project.id)
+        service = get_rag_service()
+        try:
+            service.start(context.root, factory, force=params.boolean("force"))
+        except EmbeddingNotConfigured:
+            return service.status(context.root, configured=False)
+        return service.status(context.root, configured=True)
+
+    def _document_list(self, params: Params) -> dict[str, Any]:
+        params.only("limit", "threadId")
+        from core.application.document_library import DocumentLibrary
+
+        limit = params.optional_integer("limit", minimum=1, maximum=2000) or 500
+        thread_id = params.values.get("threadId")
+        entries = DocumentLibrary(self.application.database).list(
+            limit=limit, thread_id=str(thread_id) if thread_id else None
+        )
+        return {"documents": [entry.to_wire() for entry in entries]}
+
     def _file_list(self, params: Params) -> dict[str, Any]:
         params.only("threadId", "path", "depth", "limit")
         entries, truncated = self.application.files.list(
             str(params.string("threadId")),
             path=str(params.string("path", required=False, allow_empty=True) or ""),
             depth=params.integer("depth", default=2, minimum=1, maximum=8),
-            limit=params.integer("limit", default=750, minimum=1, maximum=750),
+            limit=params.integer("limit", default=750, minimum=1, maximum=5000),
         )
         return {
             "entries": [file_entry_view(entry) for entry in entries],

@@ -52,7 +52,7 @@
   display: block;
   width: 100%;
   min-height: 64px;
-  max-height: 190px;
+  max-height: 45vh;
   resize: none;
   padding: 17px 18px 8px;
   overflow-y: auto;
@@ -81,7 +81,7 @@
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
-  padding: 0 14px 7px;
+  padding: 10px 12px 4px;
 }
 
 .skills {
@@ -292,38 +292,6 @@
   font-size: var(--text-xs);
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.attachments > span {
-  display: inline-flex;
-  max-width: 210px;
-  min-height: 30px;
-  align-items: center;
-  gap: 5px;
-  padding: 0 5px 0 9px;
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-sm);
-  background: var(--surface-code);
-  color: var(--text-secondary);
-  font: var(--text-2xs) var(--font-mono);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.attachments > span button {
-  display: grid;
-  width: 18px;
-  height: 18px;
-  flex: 0 0 auto;
-  place-items: center;
-  border-radius: var(--radius-2xs);
-  color: var(--text-tertiary);
-}
-
-.attachments > span button:hover {
-  background: var(--surface-hover);
-  color: var(--text-primary);
 }
 
 .accessStatusRail {
@@ -1189,4 +1157,91 @@
   border-radius: 50%;
   background: var(--text-primary);
   color: var(--text-inverse);
+}
+
+/* Lagoon themes: the focused composer is outlined by a gradient from the
+   accent into violet. Two backgrounds draw it, the surface clipped to the
+   padding box over the gradient clipped to the border box, because
+   border-image would ignore the rounded corners. */
+:global(:root[data-theme^="lagoon"]) .composer:focus-within {
+  border-color: transparent;
+  background:
+    linear-gradient(var(--surface-sidebar), var(--surface-sidebar)) padding-box,
+    linear-gradient(120deg, var(--signal), color-mix(in srgb, var(--signal) 35%, #7c5cd6)) border-box;
+}
+
+/* Slash menu: a floating panel off the composer, one row per command with
+   an icon, a bold name and a muted description. */
+.slashMenu {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 8px);
+  left: 0;
+  z-index: 45;
+  display: flex;
+  max-height: 320px;
+  flex-direction: column;
+  padding: 5px;
+  overflow-y: auto;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-lg);
+  background: var(--surface-raised);
+  box-shadow: var(--shadow-menu);
+}
+
+.region[data-centered] .slashMenu {
+  top: calc(100% + 8px);
+  bottom: auto;
+}
+
+.slashMenu button {
+  display: flex;
+  min-height: 32px;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 10px;
+  border-radius: var(--radius-md);
+  text-align: left;
+}
+
+.slashMenu button[aria-selected="true"] {
+  background: var(--surface-hover);
+}
+
+.slashIcon {
+  flex-shrink: 0;
+  color: var(--text-secondary);
+}
+
+.slashMenu strong {
+  flex-shrink: 0;
+  color: var(--text-primary);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+}
+
+.slashMenu span {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  color: var(--text-tertiary);
+  font-size: var(--text-sm);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.slashChevron {
+  flex-shrink: 0;
+  margin-left: auto;
+  color: var(--text-tertiary);
+}
+
+/* Narrow composers: the left tools shrink and clip sideways instead of
+   running under the model picker. Only the x axis clips (``clip`` lets the
+   y axis stay visible), so the "+" and mode menus can still open upward. */
+.toolbar > .context {
+  min-width: 0;
+  flex: 1 1 auto;
+  overflow-x: clip;
+  overflow-y: visible;
 }

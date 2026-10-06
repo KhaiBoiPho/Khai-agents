@@ -5,7 +5,7 @@ import {
   PanelRight,
   PanelRightClose,
 } from "lucide-react";
-import { lazy, Suspense, useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useRef, useState, type CSSProperties } from "react";
 
 import { projectCanExecute } from "./app/projectPresentation";
 import { latestExecutingTurn } from "./app/interactiveTurnRouter";
@@ -19,11 +19,18 @@ import {
   type ComposerLaunchIntent,
 } from "./features/execution/Composer";
 import { DesktopSidebar } from "./features/navigation/DesktopSidebar";
+import { withContextFiles } from "./features/execution/promptModes";
+import { isChatsProject } from "./app/chats";
 import { HomeView } from "./features/home/HomeView";
 import { DocumentsPage } from "./features/pages/DocumentsPage";
-import { NotesPage } from "./features/pages/NotesPage";
-import { CalendarPage } from "./features/pages/CalendarPage";
-import { PlanPage } from "./features/pages/PlanPage";
+import { requestFilePreview } from "./features/inspector/filePreviewRequests";
+import { NotesPage } from "./features/planner/notes/NotesPage";
+import { CalendarPage } from "./features/planner/calendar/CalendarPage";
+import { TasksPage } from "./features/planner/tasks/TasksPage";
+import { SchedulePage } from "./features/planner/schedule/SchedulePage";
+import { AppsPage } from "./features/apps/AppsPage";
+import { ReviewResizer } from "./features/inspector/ReviewResizer";
+import { useReviewWidth } from "./features/inspector/useReviewWidth";
 import type { SidebarPage } from "./features/navigation/DesktopSidebar";
 import { useTranscriptMode } from "./features/thread/transcriptMode";
 import type { ClientRuntime } from "./rpc/contracts";
@@ -39,6 +46,9 @@ const Inspector = lazy(() =>
     default: module.Inspector,
   })),
 );
+// Docmost's client and its editor stack are large; load them only when
+// KhaiDocs is opened. See src/khaidocs-app.d.ts for the typed boundary.
+const KhaiDocsApp = lazy(() => import("khaidocs-app"));
 const ManagementWorkspace = lazy(() =>
   import("./features/management/ManagementWorkspace").then((module) => ({
     default: module.ManagementWorkspace,
@@ -83,8 +93,11 @@ const SIDEBAR_KEY = "khai-agents.sidebar-hidden";
 const PAGE_TITLES: Record<SidebarPage, string> = {
   calendar: "Calendar",
   plan: "Plan",
+  schedule: "Schedule",
   documents: "Documents",
   notes: "Notes",
+  khaidocs: "KhaiDocs",
+  apps: "App Authorization",
 };
 
 function readSidebarHidden(): boolean {
@@ -112,7 +125,15 @@ export function App({
     useState<ComposerLaunchIntent | null>(null);
   const { state, selectedProject, selectedThread } = controller;
   const [sidebarHidden, setSidebarHidden] = useState(readSidebarHidden);
-  const [homeOpen, setHomeOpen] = useState(false);
+  // Open on a new chat; the last conversation stays one click away in the
+  // sidebar rather than being reopened on launch.
+  const [homeOpen, setHomeOpen] = useState(true);
+  const [reviewWidth, setReviewWidth] = useReviewWidth();
+  // "Widen" remembers the width to return to; any width at the maximum
+  // (widened or dragged there) counts as wide.
+  const narrowWidthRef = useRef(reviewWidth);
+  const reviewWide =
+    reviewWidth >= window.innerWidth - (sidebarHidden ? 0 : 264) - 460 - 1;
   const [page, setPage] = useState<SidebarPage | null>(null);
   useEffect(() => {
     try {
@@ -186,6 +207,26 @@ export function App({
           : !selectedThread
             ? "Create a thread to begin."
             : null;
+  // The Review panel is remembered per chat: opening it in one chat does not
+  // open it in the others.
+  const reviewOpenByThread = useRef(new Map<string, boolean>());
+  const reviewThreadId = selectedThread?.id ?? null;
+  const reviewOpenNow = ui.inspectorOpen;
+  const lastReviewThread = useRef<string | null>(reviewThreadId);
+  useEffect(() => {
+    if (lastReviewThread.current === reviewThreadId) {
+      // Same chat: remember what the person did with the panel.
+      if (reviewThreadId) reviewOpenByThread.current.set(reviewThreadId, reviewOpenNow);
+      return;
+    }
+    // Another chat: restore its own panel state.
+    lastReviewThread.current = reviewThreadId;
+    const wanted = reviewThreadId
+      ? (reviewOpenByThread.current.get(reviewThreadId) ?? false)
+      : false;
+    if (wanted && !reviewOpenNow) ui.openInspector();
+    if (!wanted && reviewOpenNow) void ui.closeInspector();
+  }, [reviewThreadId, reviewOpenNow, ui]);
   const showingThreads = ui.destination === "threads";
   // Home replaces the thread view when asked for, or when nothing is open.
   const showHome =
@@ -199,6 +240,7 @@ export function App({
   return (
     <main
       className={styles.shell}
+      style={{ "--review-width": `${reviewWidth}px` } as CSSProperties}
       data-inspector={inspectorVisible}
       data-sidebar={sidebarHidden ? "hidden" : "shown"}
     >
@@ -248,6 +290,7 @@ export function App({
             }
           })();
         }}
+        onRemoveProject={(projectId) => controller.removeProject(projectId)}
         onSelectProject={(projectId) => {
           if (projectId === state.selectedProjectId) return;
           void (async () => {
@@ -323,9 +366,37 @@ export function App({
               ) : page === "calendar" ? (
                 <CalendarPage />
               ) : page === "plan" ? (
-                <PlanPage />
+                <TasksPage />
+              ) : page === "schedule" ? (
+                <SchedulePage />
+              ) : page === "apps" ? (
+                <AppsPage />
+              ) : page === "khaidocs" ? (
+                <Suspense fallback={null}>
+                  <KhaiDocsApp />
+                </Suspense>
               ) : (
-                <DocumentsPage />
+                <DocumentsPage
+                  runtime={runtime}
+                  onOpen={(document) => {
+                    void (async () => {
+                      if (
+                        document.threadId !== state.selectedThreadId &&
+                        !(await ui.confirmDiscardInspectorDraft())
+                      ) {
+                        return;
+                      }
+                      setHomeOpen(false);
+                      setPage(null);
+                      reviewOpenByThread.current.set(document.threadId, true);
+                      if (document.threadId !== state.selectedThreadId) {
+                        await controller.selectThread(document.threadId);
+                      }
+                      requestFilePreview(document.path);
+                      ui.openInspector("files");
+                    })();
+                  }}
+                />
               )}
             </section>
           </>
@@ -336,6 +407,9 @@ export function App({
             </header>
             <section className={styles.threadViewport}>
               <HomeView
+                runtime={runtime}
+                settings={state.settings}
+                onManageProviders={() => ui.openSettings("models")}
                 projects={state.projects}
                 selectedProjectId={state.selectedProjectId}
                 busy={state.busy}
@@ -348,15 +422,30 @@ export function App({
                   })();
                 }}
                 onAddFolder={() => void controller.openProject()}
-                onStart={(projectId, prompt) => {
+                onOpenSettings={(section) => ui.openSettings(section)}
+                onStart={(projectId, prompt, model, files) => {
                   void (async () => {
                     const target =
                       projectId ?? (await controller.ensureChatsProject()).id;
-                    const created = await controller.createThreadIn(target);
+                    const created = await controller.createThreadIn(
+                      target,
+                      "code",
+                      undefined,
+                      model,
+                    );
                     if (!created) return;
+                    let text = prompt;
+                    if (files.length && runtime.uploadFiles) {
+                      try {
+                        const paths = await runtime.uploadFiles(created.id, files);
+                        text = withContextFiles(prompt, paths, created.workspacePath);
+                      } catch (error) {
+                        console.error("Could not upload the attached files", error);
+                      }
+                    }
                     setComposerIntent({
                       threadId: created.id,
-                      prompt,
+                      prompt: text,
                       skillIds: [],
                       autoSend: true,
                     });
@@ -368,11 +457,10 @@ export function App({
           </>
         ) : showingThreads ? (
           <>
-            <header className={styles.titleSlot}>
+            <header className={styles.titleSlot} data-bar={selectedThread ? "true" : undefined}>
               <h1 id="thread-title">
                 {selectedThread?.title ?? selectedProject?.displayName ?? "Khai-Agents"}
               </h1>
-            </header>
             {selectedThread ? (
               <button
                 type="button"
@@ -387,6 +475,7 @@ export function App({
                 Review
               </button>
             ) : null}
+            </header>
 
             <section className={styles.threadViewport}>
               {!selectedProject ? (
@@ -450,6 +539,7 @@ export function App({
                     items={state.items}
                     approvals={state.approvals}
                     plansByTurnId={state.plansByTurnId}
+                    compactions={state.compactions}
                     selectedItemId={state.selectedItemId}
                     transcriptMode={transcript.mode}
                     busy={state.busy}
@@ -570,6 +660,11 @@ export function App({
                   })();
                 }}
                 onOpenSettings={(section) => ui.openSettings(section)}
+                contextUsage={state.contextUsage}
+                compacting={state.compactions.some(
+                  (entry) => entry.status === "running",
+                )}
+                onCompact={() => void controller.compactThread()}
                 onOpenProject={() => {
                   void (async () => {
                     if (await ui.confirmDiscardInspectorDraft()) {
@@ -604,6 +699,11 @@ export function App({
 
       {inspectorVisible ? (
         <section className={styles.reviewPane} aria-label="Review panel">
+          <ReviewResizer
+            width={reviewWidth}
+            sidebarWidth={sidebarHidden ? 0 : 264}
+            onResize={setReviewWidth}
+          />
           <Suspense fallback={<LoadingSurface>Loading review…</LoadingSurface>}>
             <Inspector
               runtime={runtime}
@@ -619,6 +719,18 @@ export function App({
               onTabChange={ui.setInspectorTab}
               onDirtyChange={ui.setInspectorDirty}
               onClose={() => void ui.closeInspector()}
+              sessionScoped={isChatsProject(selectedProject)}
+              wide={reviewWide}
+              onToggleWide={() => {
+                if (reviewWide) {
+                  setReviewWidth(narrowWidthRef.current);
+                } else {
+                  narrowWidthRef.current = reviewWidth;
+                  setReviewWidth(
+                    Math.max(320, window.innerWidth - (sidebarHidden ? 0 : 264) - 460),
+                  );
+                }
+              }}
             />
           </Suspense>
         </section>

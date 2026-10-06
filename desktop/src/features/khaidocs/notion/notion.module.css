@@ -1,0 +1,275 @@
+/* Original KhaiDocs code, MIT. Notion-style page top and icon picker. */
+
+/* ---------- Icon picker ---------- */
+
+.pickerDropdown {
+  overflow: hidden;
+}
+
+.pickerTabs {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 6px 8px 0;
+  border-bottom: 1px solid var(--kd-divider);
+}
+
+.pickerTab,
+.pickerRemove {
+  appearance: none;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: 14px;
+  color: var(--kd-text-secondary);
+  padding: 6px 8px 8px;
+  cursor: pointer;
+  position: relative;
+  border-radius: 4px 4px 0 0;
+}
+
+.pickerTab:hover,
+.pickerRemove:hover {
+  color: var(--kd-text);
+}
+
+.pickerTab[data-active] {
+  color: var(--kd-text);
+  font-weight: 500;
+}
+
+.pickerTab[data-active]::after {
+  content: "";
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  bottom: -1px;
+  height: 2px;
+  border-radius: 1px;
+  background: var(--kd-text);
+}
+
+.iconTab {
+  padding: 10px 10px 4px;
+}
+
+.iconTabTop {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.swatches {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.swatch {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.08);
+  outline-offset: 2px;
+}
+
+.swatch[data-active] {
+  outline: 2px solid var(--kd-accent);
+}
+
+.iconGrid {
+  display: grid;
+  grid-template-columns: repeat(10, 1fr);
+  gap: 2px;
+}
+
+.iconCell {
+  height: 32px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.iconCell:hover {
+  background: var(--kd-hover);
+}
+
+.iconCell[data-selected] {
+  background: var(--kd-selected);
+}
+
+.iconEmpty {
+  padding: 40px 0;
+  text-align: center;
+  color: var(--kd-text-secondary);
+  font-size: 13px;
+}
+
+.emojiTab {
+  display: flex;
+  justify-content: center;
+}
+
+.emojiTab :global(em-emoji-picker) {
+  --rgb-background: transparent;
+  --shadow: none;
+  --border-radius: 0;
+  height: 340px;
+  width: 100%;
+}
+
+/* ---------- Cover ---------- */
+
+.cover {
+  position: relative;
+  /* Full width of the main area: undo AppShell's padding, sit under the
+     fixed page header. */
+  margin-inline: calc(var(--app-shell-padding, 1rem) * -1);
+  margin-top: calc(var(--page-header-height, 45px) - var(--app-shell-padding, 1rem));
+  height: clamp(150px, 30cqh, 280px);
+  overflow: hidden;
+}
+
+.coverImage,
+.coverFill {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.coverImage {
+  object-fit: cover;
+  object-position: center 50%;
+}
+
+.coverActions {
+  position: absolute;
+  right: max(24px, calc((100% - 900px) / 2));
+  bottom: 12px;
+  display: flex;
+  gap: 0;
+  border-radius: 6px;
+  overflow: hidden;
+  background: var(--kd-floating);
+  box-shadow: var(--kd-shadow-sm);
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+
+.cover:hover .coverActions,
+.coverActions:focus-within {
+  opacity: 1;
+}
+
+.coverButton {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  font-size: 12px;
+  color: var(--kd-text-secondary);
+  padding: 5px 10px;
+  cursor: pointer;
+}
+
+.coverButton:hover {
+  background: var(--kd-hover);
+  color: var(--kd-text);
+}
+
+.coverButton + .coverButton,
+.coverActions > span + .coverButton {
+  border-left: 1px solid var(--kd-divider);
+}
+
+.coverGrid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+}
+
+.coverSwatch {
+  height: 52px;
+  border-radius: 4px;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.06);
+  transition: transform 80ms ease, box-shadow 80ms ease;
+}
+
+.coverSwatch:hover {
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.06), 0 0 0 2px var(--kd-accent);
+}
+
+/* ---------- Icon + controls above the title ---------- */
+
+.pageHead {
+  position: relative;
+  padding-inline: 3rem;
+  z-index: 2;
+
+  @media (max-width: $mantine-breakpoint-sm) {
+    padding-inline: 1rem;
+  }
+}
+
+.pageHead[data-has-cover][data-has-icon] {
+  margin-top: -52px;
+}
+
+.pageHead[data-has-cover]:not([data-has-icon]) {
+  margin-top: 12px;
+}
+
+.bigIcon {
+  width: 84px;
+  height: 84px;
+  margin-left: -6px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 100ms ease;
+}
+
+.bigIcon:hover {
+  background: var(--kd-hover) !important;
+}
+
+.headControls {
+  display: flex;
+  gap: 2px;
+  height: 28px;
+  margin: 2px 0 0 -8px;
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+
+:global(.kd-editor):hover .headControls,
+.headControls:focus-within {
+  opacity: 1;
+}
+
+.headButton {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font: inherit;
+  font-size: 14px;
+  color: var(--kd-text-tertiary);
+  padding: 4px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.headButton:hover {
+  background: var(--kd-hover);
+  color: var(--kd-text-secondary);
+}

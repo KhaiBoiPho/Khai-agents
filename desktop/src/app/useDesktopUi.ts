@@ -47,7 +47,7 @@ export function useDesktopUi(): DesktopUiController {
   const [sessionQuery, setSessionQuery] = useState("");
   const [inspectorOpen, setInspectorOpen] = useState(false);
   const [inspectorTab, setInspectorTab] =
-    useState<DesktopInspectorTab>("changes");
+    useState<DesktopInspectorTab>("files");
   const [inspectorDirty, setInspectorDirty] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsSection, setSettingsSection] = useState<string | null>(null);
@@ -83,7 +83,8 @@ export function useDesktopUi(): DesktopUiController {
   );
 
   const openInspector = useCallback((tab?: DesktopInspectorTab) => {
-    if (tab) setInspectorTab(tab);
+    // Changes and Terminal left the panel; their callers land on Files.
+    if (tab) setInspectorTab(tab === "changes" || tab === "terminal" ? "files" : tab);
     setInspectorOpen(true);
   }, []);
   const closeInspector = useCallback(async () => {

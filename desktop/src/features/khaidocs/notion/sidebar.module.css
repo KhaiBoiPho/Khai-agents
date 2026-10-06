@@ -1,0 +1,484 @@
+/* Original KhaiDocs code, MIT. Notion-style sidebar, tree rows, folders. */
+
+.sidebar {
+  height: 100%;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  user-select: none;
+  color: var(--kd-sidebar-text);
+  font-size: 14px;
+}
+
+/* ---------- Workspace row ---------- */
+
+.workspaceRow {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  height: 44px;
+  padding: 0 8px 0 8px;
+  flex-shrink: 0;
+}
+
+.workspaceMenu {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+}
+
+.workspaceMenu > button {
+  max-width: 100%;
+  padding: 4px 6px;
+  border-radius: 6px;
+}
+
+.workspaceMenu > button:hover {
+  background: var(--kd-hover);
+}
+
+.workspaceMenu > button :global(.mantine-Text-root) {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--kd-text);
+}
+
+.collapseButton,
+.sectionAction,
+.rowAction {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: var(--kd-text-secondary);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  border-radius: 5px;
+  padding: 0;
+}
+
+.collapseButton {
+  width: 28px;
+  height: 28px;
+  opacity: 0;
+  transition: opacity 100ms ease;
+}
+
+.collapseButton[data-always],
+.sidebar:hover .collapseButton,
+.collapseButton:focus-visible {
+  opacity: 1;
+}
+
+.collapseButton:hover,
+.sectionAction:hover,
+.rowAction:hover {
+  background: var(--kd-hover-strong);
+  color: var(--kd-text);
+}
+
+/* ---------- Plain rows (Search, Home, Recents, Templates…) ---------- */
+
+.navRows {
+  padding: 0 4px 6px;
+  flex-shrink: 0;
+}
+
+.navRow {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  width: 100%;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 8px;
+  border-radius: 6px;
+  color: var(--kd-sidebar-text);
+  text-decoration: none;
+  font-weight: 500;
+  cursor: pointer;
+  text-align: left;
+}
+
+.navRow:hover {
+  background: var(--kd-hover);
+}
+
+.navRow[data-active] {
+  background: var(--kd-selected);
+  color: var(--kd-text);
+}
+
+.navIcon {
+  width: 22px;
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  color: var(--kd-text-secondary);
+}
+
+.navLabel {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ---------- Scrolling body with sections ---------- */
+
+.scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 0 4px 16px;
+}
+
+.section {
+  margin-top: 10px;
+}
+
+.sectionHeader {
+  display: flex;
+  align-items: center;
+  height: 30px;
+  padding: 0 4px 0 8px;
+  border-radius: 6px;
+}
+
+.sectionHeader:hover {
+  background: var(--kd-hover);
+}
+
+.sectionTitle {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--kd-text-secondary);
+  padding: 0;
+  cursor: pointer;
+  flex: 1;
+  text-align: left;
+  height: 100%;
+}
+
+.sectionActions {
+  display: flex;
+  gap: 2px;
+  opacity: 0;
+  transition: opacity 100ms ease;
+}
+
+.sectionHeader:hover .sectionActions,
+.sectionActions:focus-within,
+.sectionActions:has([aria-expanded="true"]) {
+  opacity: 1;
+}
+
+.sectionAction {
+  width: 22px;
+  height: 22px;
+}
+
+/* ---------- The page tree ---------- */
+
+/* The tree grows to its full height and scrolls with the sidebar (Docmost
+   gives it its own scroll box). */
+.treeHost > div,
+.treeHost > div > div {
+  height: auto !important;
+  overflow: visible !important;
+}
+
+.treeHost :global([role="treeitem"]) {
+  padding-bottom: 0;
+}
+
+.treeHost .treeNode {
+  height: 28px;
+  border-radius: 6px;
+  color: var(--kd-sidebar-text);
+  background: transparent;
+}
+
+.treeHost .treeNode:hover {
+  background: var(--kd-hover);
+}
+
+.treeHost .treeNode[data-selected="true"] {
+  background: var(--kd-selected);
+}
+
+.treeHost .treeNode[data-selected="true"] .treeTitle {
+  color: var(--kd-text);
+}
+
+.treeHost .treeNode[data-receiving-drop="make-child"] {
+  background: color-mix(in srgb, var(--kd-accent) 16%, transparent);
+  outline: none;
+}
+
+.treeRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  height: 28px;
+  padding: 0 4px 0 8px;
+  border-radius: 6px;
+  text-decoration: none;
+  color: inherit;
+  outline: none;
+}
+
+.treeRow:focus-visible {
+  box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--kd-accent) 55%, transparent);
+}
+
+.iconSlot {
+  position: relative;
+  width: 22px;
+  height: 22px;
+  flex-shrink: 0;
+}
+
+.iconFace,
+.chevron {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+}
+
+.chevron {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  color: var(--kd-text-secondary);
+  cursor: pointer;
+  opacity: 0;
+  z-index: 1;
+}
+
+.chevron svg {
+  transition: transform 120ms ease;
+}
+
+.chevron[data-open] svg {
+  transform: rotate(90deg);
+}
+
+.chevron:hover {
+  background: var(--kd-hover-strong);
+}
+
+@media (hover: hover) {
+  .treeRow[data-expandable]:hover .chevron {
+    opacity: 1;
+  }
+  .treeRow[data-expandable]:hover .iconFace {
+    opacity: 0;
+  }
+}
+
+.iconButton {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.iconButton:hover {
+  background: var(--kd-hover-strong);
+}
+
+.treeTitle {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.rowActions {
+  display: inline-flex;
+  align-items: center;
+  gap: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.treeRow:hover .rowActions,
+.treeRow:focus-within .rowActions,
+.rowActions:has([aria-expanded="true"]) {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.rowActions :global(.mantine-ActionIcon-root),
+.rowAction {
+  width: 22px !important;
+  height: 22px !important;
+  min-width: 22px !important;
+  min-height: 22px !important;
+  border-radius: 5px;
+  color: var(--kd-text-secondary);
+}
+
+/* ---------- "Move to folder" list ---------- */
+
+.pickRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 7px 10px;
+  border-radius: 6px;
+  font-size: 14px;
+}
+
+.pickRow:hover:not(:disabled) {
+  background: var(--kd-hover);
+}
+
+.pickRow:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.pickTitle {
+  flex-shrink: 0;
+  max-width: 55%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--kd-text);
+}
+
+.pickPath {
+  flex: 1;
+  min-width: 0;
+  text-align: right;
+  font-size: 12px;
+  color: var(--kd-text-tertiary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ---------- Folder page ---------- */
+
+.folderBody {
+  padding-inline: 3rem;
+
+  @media (max-width: $mantine-breakpoint-sm) {
+    padding-inline: 1rem;
+  }
+}
+
+.folderBar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 0 8px;
+  border-bottom: 1px solid var(--kd-divider);
+  margin-bottom: 4px;
+}
+
+.folderAction {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 13px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  color: var(--kd-text-secondary);
+}
+
+.folderAction:hover {
+  background: var(--kd-hover);
+  color: var(--kd-text);
+}
+
+.folderEmpty {
+  padding: 28px 0;
+  text-align: center;
+}
+
+.folderRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 40px;
+  padding: 6px 8px;
+  margin: 0 -8px;
+  border-radius: 6px;
+  color: var(--kd-text);
+  text-decoration: none;
+  border-bottom: 1px solid var(--kd-divider);
+}
+
+.folderRow:hover {
+  background: var(--kd-hover);
+}
+
+.folderRowTitle {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 15px;
+  font-weight: 500;
+}
+
+.folderRowMeta {
+  font-size: 12px;
+  color: var(--kd-text-tertiary);
+  white-space: nowrap;
+}
+
+.folderRowChevron {
+  color: var(--kd-text-tertiary);
+  flex-shrink: 0;
+}
+
+.workspaceBadge {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 6px;
+}
+
+.workspaceBadge span {
+  overflow: hidden;
+  color: var(--kd-text);
+  font-size: 14px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

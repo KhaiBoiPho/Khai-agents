@@ -370,11 +370,17 @@ PROVIDERS: tuple[ProviderSpec, ...] = (
 )
 
 
-# Templates offered in the provider pickers and connection lists. The rest of
-# ``PROVIDERS`` stays registered so existing code paths keep resolving.
-LISTED_PROVIDER_NAMES: frozenset[str] = frozenset({"gemini", "nvidia"})
+# Templates offered in the provider pickers and connection lists, in display
+# order (Gemini stays the default chat connection; OpenRouter also serves the
+# document-search embeddings). The rest of ``PROVIDERS`` stays registered so
+# existing code paths keep resolving.
+LISTED_PROVIDER_ORDER: tuple[str, ...] = ("gemini", "nvidia", "openrouter")
+LISTED_PROVIDER_NAMES: frozenset[str] = frozenset(LISTED_PROVIDER_ORDER)
 LISTED_PROVIDERS: tuple[ProviderSpec, ...] = tuple(
-    spec for spec in PROVIDERS if spec.name in LISTED_PROVIDER_NAMES
+    spec
+    for name in LISTED_PROVIDER_ORDER
+    for spec in PROVIDERS
+    if spec.name == name
 )
 
 

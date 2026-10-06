@@ -68,7 +68,7 @@ def test_builtin_roster_ships_with_system_trust() -> None:
         assert expected in roster
         assert roster[expected].trust == "system"
         assert roster[expected].broken is None
-    assert roster["code-reader"].tools == ("read", "grep", "glob", "skill")
+    assert roster["code-reader"].tools == ("repo_map", "read", "grep", "glob", "skill")
 
 
 def test_project_root_wins_a_duplicate_id(tmp_path: Path) -> None:
@@ -112,7 +112,7 @@ def test_identity_is_the_file_stem_not_the_frontmatter_name(tmp_path: Path) -> N
     roster = {p.id: p for p in list_agent_presets(workspace)}
     # The shipped code-reader is untouched; the file answers to its stem only.
     assert roster["code-reader"].trust == "system"
-    assert roster["code-reader"].tools == ("read", "grep", "glob", "skill")
+    assert roster["code-reader"].tools == ("repo_map", "read", "grep", "glob", "skill")
     assert roster["honest-id"].display_name == "code-reader"  # display only
 
 
@@ -214,7 +214,7 @@ def test_start_persists_a_by_value_snapshot(tmp_path: Path) -> None:
         session = application.session_store.get_session(thread.id)
         stored = session.metadata[METADATA_KEY]
         assert stored["id"] == "code-reader"
-        assert stored["tools"] == ["read", "grep", "glob", "skill"]
+        assert stored["tools"] == ["repo_map", "read", "grep", "glob", "skill"]
         assert stored["allowSpawn"] is False
     finally:
         application.close()

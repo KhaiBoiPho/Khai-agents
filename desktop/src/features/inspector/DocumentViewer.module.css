@@ -1,0 +1,203 @@
+.viewer {
+  height: 100%;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  background: var(--surface-inset);
+}
+
+.viewer[data-kind="xlsx"],
+.viewer[data-kind="csv"] {
+  overflow: hidden;
+  background: var(--surface-canvas);
+}
+
+.loading {
+  display: flex;
+  height: 100%;
+  min-height: 120px;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: var(--text-tertiary);
+  font-size: var(--text-xs);
+}
+
+.problem {
+  margin: 16px;
+  padding: 10px 12px;
+  border-radius: var(--radius-md);
+  background: var(--danger-soft);
+  color: var(--danger);
+  font-size: var(--text-xs);
+}
+
+.footnote {
+  margin: 0;
+  padding: 10px 16px 16px;
+  color: var(--text-tertiary);
+  font-size: var(--text-2xs);
+  text-align: center;
+}
+
+/* Pages as sheets of paper on a grey desk. */
+.pdf {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  padding: 16px;
+}
+
+.pdf canvas {
+  max-width: 100%;
+  height: auto;
+  border-radius: 2px;
+  background: #ffffff;
+  box-shadow: 0 1px 3px rgb(0 0 0 / 18%), 0 6px 20px rgb(0 0 0 / 8%);
+}
+
+/* docx-preview draws white pages in its own wrapper; keep them centred and
+   scaled into the panel. */
+.docx :global(.khai-docx-wrapper) {
+  padding: 16px !important;
+  background: transparent !important;
+}
+
+.docx :global(.khai-docx-wrapper > section.khai-docx) {
+  max-width: 100%;
+  margin-bottom: 14px !important;
+  box-shadow: 0 1px 3px rgb(0 0 0 / 18%), 0 6px 20px rgb(0 0 0 / 8%) !important;
+}
+
+.pptx {
+  padding: 16px;
+}
+
+.pptx :global(.pptx-preview-wrapper) {
+  margin: 0 auto;
+  background: transparent !important;
+}
+
+/* ---- Sheets ---- */
+
+.sheet {
+  display: flex;
+  height: 100%;
+  flex-direction: column;
+}
+
+.tableScroll {
+  min-height: 0;
+  flex: 1;
+  overflow: auto;
+}
+
+.table {
+  border-collapse: separate;
+  border-spacing: 0;
+  color: var(--text-primary);
+  font-size: var(--text-xs);
+  font-variant-numeric: tabular-nums;
+}
+
+.table th,
+.table td {
+  max-width: 280px;
+  padding: 4px 10px;
+  overflow: hidden;
+  border-right: 1px solid var(--border-subtle);
+  border-bottom: 1px solid var(--border-subtle);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.table td[data-numeric] {
+  text-align: right;
+}
+
+.table thead th {
+  position: sticky;
+  z-index: 2;
+  top: 0;
+  background: var(--surface-sidebar);
+  color: var(--text-tertiary);
+  font-weight: var(--weight-medium);
+  text-align: center;
+}
+
+.table tbody th {
+  position: sticky;
+  z-index: 1;
+  left: 0;
+  min-width: 40px;
+  background: var(--surface-sidebar);
+  color: var(--text-tertiary);
+  font-weight: var(--weight-regular);
+  text-align: right;
+}
+
+.table thead th:first-child {
+  z-index: 3;
+  left: 0;
+}
+
+.table tbody tr:hover td {
+  background: var(--surface-hover);
+}
+
+.sheetTabs {
+  display: flex;
+  gap: 2px;
+  overflow-x: auto;
+  padding: 4px 8px;
+  border-top: 1px solid var(--border-subtle);
+  background: var(--surface-sidebar);
+}
+
+.sheetTabs button {
+  flex-shrink: 0;
+  padding: 4px 12px;
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  font-size: var(--text-xs);
+}
+
+.sheetTabs button:hover {
+  background: var(--surface-hover);
+}
+
+.sheetTabs button[aria-pressed="true"] {
+  background: var(--surface-canvas);
+  color: var(--signal);
+  font-weight: var(--weight-medium);
+  box-shadow: var(--shadow-soft);
+}
+
+.media {
+  display: flex;
+  min-height: 100%;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 24px;
+  /* A checkerboard shows transparency in images. */
+  background:
+    repeating-conic-gradient(var(--surface-inset) 0 25%, transparent 0 50%) 0 0 / 16px 16px;
+}
+
+.media img,
+.media video {
+  max-width: 100%;
+  max-height: 70vh;
+  object-fit: contain;
+}
+
+.media small {
+  padding: 2px 8px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-raised);
+  color: var(--text-tertiary);
+  font-size: var(--text-xs);
+}

@@ -1,0 +1,40 @@
+/* A 7px grab strip along the panel's left border; the visible line only
+   thickens and takes the accent while hovered or dragged. */
+.handle {
+  position: absolute;
+  z-index: 6;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 7px;
+  cursor: col-resize;
+  touch-action: none;
+}
+
+.handle::after {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 3px;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  content: "";
+  transition: background-color 120ms ease;
+}
+
+.handle:hover::after,
+.handle:focus-visible::after,
+.handle[data-dragging]::after {
+  background: var(--signal);
+}
+
+.handle:focus-visible {
+  outline: 0;
+}
+
+/* While dragging, keep the cursor and stop text selection everywhere. */
+:global(body:has([aria-label="Resize review panel"][data-dragging])) {
+  cursor: col-resize;
+  user-select: none;
+}

@@ -130,6 +130,17 @@ def _result_text(result: Any) -> str:
         if isinstance(text, str):
             parts.append(text)
             continue
+        if getattr(block, "type", None) in {"image", "audio"}:
+            # Binary content is not model-readable as text; base64 would only
+            # burn the context window. Servers that render (e.g. genoffice)
+            # also write the files to disk and name them in a text block.
+            data = getattr(block, "data", "")
+            size = len(data) * 3 // 4 if isinstance(data, str) else 0
+            parts.append(
+                f"[{block.type} omitted: {getattr(block, 'mimeType', '?')}, "
+                f"~{size} bytes]"
+            )
+            continue
         dump = getattr(block, "model_dump", None)
         value = dump(mode="json", by_alias=True) if callable(dump) else str(block)
         parts.append(

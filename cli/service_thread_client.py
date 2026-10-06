@@ -434,10 +434,46 @@ class ServiceThreadClient:
     def clear_context(self):
         self.rpc.call("thread/context/clear", {"threadId": self.thread.id})
 
-    async def compact_context(self):
-        return await asyncio.to_thread(
-            self.rpc.call, "thread/context/compact", {"threadId": self.thread.id}
+    async def compact_context(self, instructions: str | None = None):
+        """Run `/compact` through the service and wait for its outcome event.
+
+        The service admits compaction and summarizes in the background; the
+        result is the matching ``thread.context.compacted`` (or
+        ``compaction_failed``) event, read from the durable log.
+        """
+        thread_id = self.thread.id
+        head = (
+            await asyncio.to_thread(
+                self.rpc.call, "event/replay", {"threadId": thread_id, "limit": 1}
+            )
+        )["headSequence"] or 0
+        params = {"threadId": thread_id}
+        if instructions:
+            params["instructions"] = instructions
+        started = await asyncio.to_thread(
+            self.rpc.call, "thread/context/compact", params
         )
+        compaction_id = started["compactionId"]
+        after = head
+        deadline = asyncio.get_running_loop().time() + 600
+        while asyncio.get_running_loop().time() < deadline:
+            page = await asyncio.to_thread(
+                self.rpc.call,
+                "event/replay",
+                {"threadId": thread_id, "after": after, "limit": 100},
+            )
+            for value in page["events"]:
+                after = max(after, value["sequence"])
+                payload = value.get("payload") or {}
+                if payload.get("compactionId") != compaction_id:
+                    continue
+                if value["type"] == "thread.context.compaction_failed":
+                    raise RuntimeError(payload.get("message") or "Compaction failed.")
+                if value["type"] == "thread.context.compacted":
+                    return compaction_report(payload)
+            if not page["hasMore"]:
+                await asyncio.sleep(0.25)
+        raise RuntimeError("Timed out waiting for compaction to finish.")
 
     def set_event_loop(self, loop):
         # Events are consumed on the TUI loop by the bounded pump below.
@@ -560,3 +596,19 @@ class ServiceThreadClient:
                 # Admission already succeeded. A presentation write cannot
                 # make the composer report that the submitted input failed.
                 pass
+
+
+def compaction_report(payload: dict) -> dict:
+    """The in-process report shape, rebuilt from a compaction event."""
+
+    return {
+        "messages_before": payload.get("messagesBefore") or 0,
+        "messages_after": payload.get("messagesAfter") or 0,
+        "replaced_messages": (payload.get("messagesBefore") or 0)
+        - (payload.get("messagesAfter") or 0),
+        "chars_before": payload.get("charsBefore") or 0,
+        "chars_after": payload.get("charsAfter") or 0,
+        "tokens_before": payload.get("tokensBefore"),
+        "tokens_after": payload.get("tokensAfter"),
+        "summary": payload.get("summary"),
+    }

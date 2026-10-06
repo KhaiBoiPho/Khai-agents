@@ -446,9 +446,11 @@ class TuiThreadClient:
         self._require_idle()
         self.application.turns.clear_live_context(self.thread.id)
 
-    async def compact_context(self) -> dict:
+    async def compact_context(self, instructions: str | None = None) -> dict:
         self._require_idle()
-        return await self.application.turns.compact_live_context(self.thread.id)
+        return await self.application.turns.compact_live_context(
+            self.thread.id, instructions=instructions
+        )
 
     async def close(self) -> None:
         await self.stop_domain_events()

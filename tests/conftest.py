@@ -10,6 +10,9 @@ def _isolate_session_store(tmp_path, monkeypatch):
     home = tmp_path / "deepcode-home"
     monkeypatch.setenv("DEEPCODE_HOME", str(home))
     monkeypatch.setenv("DEEPCODE_SESSIONS_DIR", str(home / "sessions"))
+    # Keep the built-in GenOffice MCP server out of MCP plans unless a test
+    # opts in (an empty GENOFFICE_BIN disables binary resolution).
+    monkeypatch.setenv("GENOFFICE_BIN", "")
     from core.providers.registry import PROVIDERS
 
     credential_environment_names = {

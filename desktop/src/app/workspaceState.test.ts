@@ -6,6 +6,7 @@ import type {
   GoalOutcome,
   Item,
   JsonValue,
+  Project,
   Thread,
   Turn,
   WorkflowRun,
@@ -427,5 +428,43 @@ describe("workspace event projection", () => {
     expect(removed.items).toEqual([]);
     expect(removed.plansByTurnId).toEqual({});
     expect(removed.entitySequences).toEqual({});
+  });
+});
+
+describe("project removal", () => {
+  const project = (id: string): Project => ({
+    id,
+    canonicalPath: `/work/${id}`,
+    displayName: id,
+    trustState: "trusted",
+    settings: {},
+    createdAt: "2026-10-06T00:00:00Z",
+    updatedAt: "2026-10-06T00:00:00Z",
+    lastOpenedAt: "2026-10-06T00:00:00Z",
+  });
+
+  it("clears the open project's chats when that project is removed", () => {
+    const loaded = workspaceReducer(initialWorkspaceState, {
+      type: "projects",
+      projects: [project("a"), project("b")],
+      selectedProjectId: "a",
+    });
+    const removed = workspaceReducer(loaded, { type: "project-remove", projectId: "a" });
+
+    expect(removed.projects.map((item) => item.id)).toEqual(["b"]);
+    expect(removed.selectedProjectId).toBeNull();
+    expect(removed.threads).toEqual([]);
+  });
+
+  it("leaves the open project alone when another one is removed", () => {
+    const loaded = workspaceReducer(initialWorkspaceState, {
+      type: "projects",
+      projects: [project("a"), project("b")],
+      selectedProjectId: "a",
+    });
+    const removed = workspaceReducer(loaded, { type: "project-remove", projectId: "b" });
+
+    expect(removed.projects.map((item) => item.id)).toEqual(["a"]);
+    expect(removed.selectedProjectId).toBe("a");
   });
 });

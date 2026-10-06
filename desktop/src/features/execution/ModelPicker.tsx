@@ -1,5 +1,5 @@
 import { Check, Search, Settings } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 
 import type {
   ConnectionInfo,
@@ -16,7 +16,8 @@ import styles from "./ModelPicker.module.css";
 interface ModelPickerProps {
   runtime: ClientRuntime;
   project: Project | null;
-  thread: Thread | null;
+  /** The thread's current choice, or the pending choice for a new chat. */
+  thread: ModelSelection | null;
   settings: SettingsSnapshot | null;
   disabled: boolean;
   onChange(
@@ -27,6 +28,11 @@ interface ModelPickerProps {
   ): void;
   onManageProviders?: () => void;
 }
+
+export type ModelSelection = Pick<
+  Thread,
+  "model" | "connectionId" | "reasoningEffort" | "contextWindow"
+>;
 
 const MODELS_PER_GROUP = 60;
 
@@ -48,6 +54,22 @@ export function ModelPicker({
   const { catalog: connectionCatalog, models: listModels } =
     useConnectionCatalog(runtime, project?.id ?? null);
   const [open, setOpen] = useState(false);
+  // Open toward the side with more room and never past the window edge.
+  const [placement, setPlacement] = useState<CSSProperties>({});
+  useLayoutEffect(() => {
+    if (!open) return;
+    const rect = rootRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    const margin = 12;
+    const above = rect.top - margin;
+    const below = window.innerHeight - rect.bottom - margin;
+    const up = above >= below;
+    setPlacement({
+      top: up ? "auto" : "calc(100% + 6px)",
+      bottom: up ? "calc(100% + 6px)" : "auto",
+      maxHeight: Math.min(480, Math.max(160, (up ? above : below) - 6)),
+    });
+  }, [open]);
   const [query, setQuery] = useState("");
   const [catalogs, setCatalogs] = useState<Record<string, ModelCatalogResult>>(
     {},
@@ -181,6 +203,7 @@ export function ModelPicker({
       {open ? (
         <section
           className={styles.menu}
+          style={placement}
           role="dialog"
           aria-label="Choose model and effort"
         >

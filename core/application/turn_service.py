@@ -70,7 +70,7 @@ from core.application.views import (
     turn_view,
 )
 from core.domain.approval import Approval, ApprovalStatus
-from core.domain.common import utc_now
+from core.domain.common import new_id, utc_now
 from core.domain.event import DomainEvent
 from core.domain.execution_permission import ExecutionPermissionMode
 from core.domain.execution_profile import ExecutionProfile, ExecutionSelection
@@ -100,6 +100,7 @@ from core.persistence.execution_repository import (
 )
 from core.persistence.project_repository import ProjectRepository
 from core.persistence.thread_repository import ThreadRepository
+from core.persistence.usage_repository import UsageRepository
 from core.sessions import SessionStore
 from core.skills.host import SkillWorkspaceRegistry
 from core.sessions.continuation import assistant_continuation_metadata
@@ -244,6 +245,9 @@ class TurnService:
         self._goal_context_provider: GoalContextProvider | None = None
         self._goal_submission_scope: GoalSubmissionScope | None = None
         self._execution_coordinator: ExecutionCoordinator | None = None
+        # Threads whose resident context is being summarized right now.
+        self._compacting_lock = threading.Lock()
+        self._compacting: set[str] = set()
 
     def configure_execution_coordinator(
         self,
@@ -643,6 +647,14 @@ class TurnService:
             )
             for guard in admission_guards:
                 guard(admission)
+            if self.is_compacting(thread_id):
+                raise ConflictError(
+                    f"thread context is being compacted: {thread_id}",
+                    user_message=(
+                        "The conversation is being compacted. Send again once "
+                        "compaction finishes."
+                    ),
+                )
             active = turns.active_for_thread(thread_id)
             if active is not None and not queue_if_busy:
                 raise TurnAlreadyRunningError(
@@ -1205,19 +1217,216 @@ class TurnService:
             raise ConflictError("cannot clear context while a Turn is active")
         self.session_runtimes.clear_live_history(thread_id)
 
-    async def compact_live_context(self, thread_id: str) -> dict[str, Any]:
+    def is_compacting(self, thread_id: str) -> bool:
+        with self._compacting_lock:
+            return thread_id in self._compacting
+
+    def start_live_compaction(
+        self,
+        thread_id: str,
+        *,
+        instructions: str | None = None,
+    ) -> dict[str, Any]:
+        """Admit a `/compact` request and summarize in the background.
+
+        A summarization round-trip takes as long as a model reply, so the
+        request returns as soon as the work is admitted; progress and the
+        outcome arrive as durable Thread events —
+        ``thread.context.compacting`` now, then ``thread.context.compacted``
+        or ``thread.context.compaction_failed``.
+        """
+
+        focus = (instructions or "").strip() or None
+        if self.active_for_thread(thread_id) is not None:
+            raise ConflictError(
+                "Compaction is unavailable while a Turn is active.",
+                user_message="Wait for the current reply to finish, then compact.",
+            )
+        with self._compacting_lock:
+            if thread_id in self._compacting:
+                raise ConflictError(
+                    "Compaction is already running for this conversation."
+                )
+            self._compacting.add(thread_id)
+        try:
+            compaction_id = new_id("compact")
+            self._append_thread_event(
+                thread_id,
+                "thread.context.compacting",
+                {"compactionId": compaction_id, "instructions": focus},
+            )
+            self.registry.start(
+                compaction_id,
+                lambda: self._run_live_compaction(
+                    thread_id, focus, compaction_id=compaction_id
+                ),
+                on_cancelled_before_start=lambda: self._finish_compaction(
+                    thread_id,
+                    compaction_id,
+                    error="Compaction was cancelled before it started.",
+                ),
+            )
+        except BaseException:
+            with self._compacting_lock:
+                self._compacting.discard(thread_id)
+            raise
+        return {"status": "started", "compactionId": compaction_id}
+
+    async def _run_live_compaction(
+        self,
+        thread_id: str,
+        instructions: str | None,
+        *,
+        compaction_id: str,
+    ) -> None:
+        try:
+            await self.compact_live_context(
+                thread_id,
+                instructions=instructions,
+                _compaction_id=compaction_id,
+                _admitted=True,
+            )
+        except asyncio.CancelledError:
+            self._finish_compaction(
+                thread_id, compaction_id, error="Compaction was cancelled."
+            )
+            raise
+        except Exception as exc:  # noqa: BLE001 - surfaced as a Thread event
+            message = getattr(exc, "user_message", None) or str(exc) or type(
+                exc
+            ).__name__
+            logging.getLogger(__name__).info(
+                "Compaction for %s failed: %s", thread_id, message
+            )
+            self._finish_compaction(thread_id, compaction_id, error=message)
+
+    def _finish_compaction(
+        self,
+        thread_id: str,
+        compaction_id: str,
+        *,
+        error: str,
+    ) -> None:
+        with self._compacting_lock:
+            self._compacting.discard(thread_id)
+        try:
+            self._append_thread_event(
+                thread_id,
+                "thread.context.compaction_failed",
+                {"compactionId": compaction_id, "message": error},
+            )
+        except Exception:  # noqa: BLE001 - a deleted Thread has no timeline
+            logging.getLogger(__name__).debug(
+                "could not record compaction failure", exc_info=True
+            )
+
+    def _append_thread_event(
+        self,
+        thread_id: str,
+        event_type: str,
+        payload: dict[str, Any],
+    ) -> DomainEvent:
+        with self.database.transaction() as connection:
+            if ThreadRepository(connection).get(thread_id) is None:
+                raise ThreadNotFoundError(f"thread not found: {thread_id}")
+            event = EventRepository(connection).append(
+                thread_id=thread_id,
+                type=event_type,
+                payload=payload,
+            )
+        self._publish([event])
+        return event
+
+    async def compact_live_context(
+        self,
+        thread_id: str,
+        *,
+        instructions: str | None = None,
+        _compaction_id: str | None = None,
+        _admitted: bool = False,
+    ) -> dict[str, Any]:
         """Summarize resident model context on demand (`/compact`).
 
         Canonical Session data is never rewritten — this is `/clear`'s gentler
         sibling: older turns collapse into a model-written handoff summary
-        while recent user input survives verbatim.
+        while recent user input survives verbatim. On success the outcome is
+        recorded as a ``thread.context.compacted`` event (token counts before
+        and after, and the summary) and the summarization request's own cost
+        enters the usage ledger.
         """
+        if not _admitted:
+            with self._compacting_lock:
+                if thread_id in self._compacting:
+                    raise ConflictError(
+                        "Compaction is already running for this conversation."
+                    )
+                self._compacting.add(thread_id)
+        try:
+            report = await self._compact_live_context(thread_id, instructions)
+        finally:
+            with self._compacting_lock:
+                self._compacting.discard(thread_id)
+        tokens_before = report.get("tokens_before")
+        tokens_after = report.get("tokens_after")
+        payload: dict[str, Any] = {
+            "compactionId": _compaction_id,
+            "instructions": (instructions or "").strip() or None,
+            "tokensBefore": tokens_before if isinstance(tokens_before, int) else None,
+            "tokensAfter": tokens_after if isinstance(tokens_after, int) else None,
+            "messagesBefore": report.get("messages_before"),
+            "messagesAfter": report.get("messages_after"),
+            "charsBefore": report.get("chars_before"),
+            "charsAfter": report.get("chars_after"),
+            "summary": report.get("summary")
+            if isinstance(report.get("summary"), str)
+            else None,
+        }
+        usage = normalize_usage(report.get("usage"))
+        profile = report.get("_execution_profile")
+        with self.database.transaction() as connection:
+            latest = TurnRepository(connection).list_for_thread(thread_id)
+            payload["afterTurnId"] = latest[-1].id if latest else None
+            if usage:
+                payload["usage"] = usage
+                UsageRepository(connection).record(
+                    thread_id=thread_id,
+                    usage=usage,
+                    source="compaction",
+                    connection_id=getattr(profile, "connection_id", None),
+                    provider_name=getattr(profile, "provider_name", None),
+                    model_id=getattr(profile, "model_id", None),
+                )
+            event = EventRepository(connection).append(
+                thread_id=thread_id,
+                type="thread.context.compacted",
+                payload=payload,
+            )
+        self._publish([event])
+        report.pop("_execution_profile", None)
+        return report
+
+    async def _compact_live_context(
+        self,
+        thread_id: str,
+        instructions: str | None,
+    ) -> dict[str, Any]:
         if self.active_for_thread(thread_id) is not None:
             raise ConflictError("Compaction is unavailable while a Turn is active.")
         with self.database.read() as connection:
             thread = ThreadRepository(connection).get(thread_id)
+            latest_turns = (
+                TurnRepository(connection).list_for_thread(thread_id)
+                if thread is not None
+                else []
+            )
         if thread is None:
             raise ThreadNotFoundError(f"thread not found: {thread_id}")
+        latest = latest_turns[-1] if latest_turns else None
+        if latest is None:
+            raise ConflictError(
+                "No compactable history yet.",
+                user_message="Nothing to compact yet — this conversation is empty.",
+            )
         # Resolve the Thread's CURRENT selection exactly like a Turn does, so
         # compaction summarizes with the model the user selected — not with
         # whatever the resident runtime was built with before a switch.
@@ -1230,10 +1439,38 @@ class TurnService:
                 context_window=thread.context_window,
             ),
         )
-        return await self.session_runtimes.compact_live_history(
-            thread_id,
-            execution_profile=execution_profile,
-        )
+        try:
+            report = await self.session_runtimes.compact_live_history(
+                thread_id,
+                execution_profile=execution_profile,
+                instructions=instructions,
+                # Used only when no runtime is resident: rebuild it the way the
+                # latest Turn ran, so a restart does not disable `/compact`.
+                workspace=thread.workspace_path,
+                execution_security_profile=latest.execution_security_profile,
+                permission_mode_override=latest.execution_permission_mode,
+            )
+        except RuntimeError as exc:
+            if isinstance(exc, ConflictError):
+                raise
+            # A refused summary (e.g. it would not shrink the conversation)
+            # was still a billed model request.
+            billed = normalize_usage(getattr(exc, "usage", None))
+            if billed:
+                with self.database.transaction() as connection:
+                    UsageRepository(connection).record(
+                        thread_id=thread_id,
+                        usage=billed,
+                        source="compaction",
+                        connection_id=execution_profile.connection_id,
+                        provider_name=execution_profile.provider_name,
+                        model_id=execution_profile.model_id,
+                    )
+            # AgentSession.compact reports refusals ("No compactable history
+            # yet.", "would not shrink …") as stable, user-facing messages.
+            raise ConflictError(str(exc)) from exc
+        report["_execution_profile"] = execution_profile
+        return report
 
     def interrupt(
         self,

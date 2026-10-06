@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import hashlib
 import hmac
 import logging
 from logging.handlers import RotatingFileHandler
@@ -24,6 +25,7 @@ from app_server.errors import RpcError
 from app_server.protocol.codec import decode_request
 from app_server.service_client import ServiceClient, ServiceUnavailable
 from app_server.service_state import ServiceFiles, ServiceRecord, identity_proof
+from app_server.khaidocs_proxy import KhaiDocsProxy
 from app_server.websocket import WebSocketTransport
 from app_server.web_surface import WebSurface
 from core.application.application import DeepCodeApplication
@@ -73,7 +75,12 @@ class ControlServer:
         self.interrupt = threading.Event()
         self.phase = "ready"
         self._operation = asyncio.Lock()
-        self.browser_auth = BrowserAuth(record.instance_id)
+        database = Path(record.database)
+        self.browser_auth = BrowserAuth(
+            record.instance_id,
+            store=database.with_name(database.name + ".service") / "browser-sessions.json",
+            cookie_key=hashlib.sha256(str(database).encode()).hexdigest()[:16],
+        )
         self.web_surface = WebSurface(
             host.application, self.browser_auth, lambda: self.phase
         )
@@ -108,6 +115,11 @@ class ControlServer:
             ]
         )
         app.add_routes(self.web_surface.routes())
+        # After the service's own /api routes, which therefore keep priority.
+        khaidocs = KhaiDocsProxy(self.browser_auth, self.web_surface.assets)
+        self.khaidocs = khaidocs
+        app.add_routes(khaidocs.routes())
+        app.on_cleanup.append(khaidocs.close)
         app.on_shutdown.append(self.business.shutdown)
         app.on_cleanup.append(self.business.cleanup)
         app.on_response_prepare.append(self._private_response)
@@ -129,7 +141,7 @@ class ControlServer:
         allowed_origins = [self.public_origin] if public_host else [self.record.url]
         origins = request.headers.getall("Origin", [])
         browser_route = request.path.startswith(
-            ("/auth/", "/api/", "/assets/")
+            ("/auth/", "/api/", "/assets/", "/khaidocs/", "/socket.io/", "/collab")
         ) or request.path in {"/", "/index.html", "/web-build.json", "/login"}
         if origins and (not browser_route or origins != allowed_origins):
             raise web.HTTPForbidden(text="Invalid browser origin")
@@ -446,6 +458,16 @@ async def serve(files: ServiceFiles, port: int) -> None:
                 continue
             installed_signals.append(sig)
         files.publish(record, token)
+        # KhaiDocs comes up alongside the service and signs in on its own.
+        from app_server import khaidocs_stack
+
+        khaidocs_stack.start_in_background(
+            control.khaidocs.server, control.khaidocs.set_credentials
+        )
+        # So is the document index's Postgres + Qdrant stack.
+        from core.rag import stack as rag_stack
+
+        rag_stack.start_in_background()
         logger.info("Service ready at %s (pid %d)", record.url, record.pid)
         await control.stopped.wait()
     finally:

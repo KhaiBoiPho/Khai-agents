@@ -35,7 +35,12 @@ interface CodeWorkbenchState {
 
 export interface CodeWorkbenchController extends CodeWorkbenchState {
   refresh(): Promise<void>;
+  /** List one folder's children on demand and merge them into the tree. */
+  loadDirectory(path: string): Promise<void>;
   openFile(path: string): Promise<void>;
+  /** Close the open file; a pending read for it is dropped. */
+  closeFile(): void;
+  clearError(): void;
   setDraft(value: string): void;
   saveFile(): Promise<void>;
   runTest(turnId: string, commandId: string): Promise<void>;
@@ -69,10 +74,12 @@ export function useCodeWorkbench(
   const activeThreadId = useRef<string | null>(threadId);
   const refreshGeneration = useRef(0);
   const fileGeneration = useRef(0);
+  const loadedDirectories = useRef(new Set<string>());
   activeThreadId.current = threadId;
 
   const refresh = useCallback(async () => {
     const generation = ++refreshGeneration.current;
+    loadedDirectories.current = new Set();
     if (!threadId) {
       setState(initialState);
       return;
@@ -85,7 +92,8 @@ export function useCodeWorkbench(
       testError: null,
     }));
     const [files, git, diffs, tests] = await Promise.allSettled([
-      runtime.request("file/list", { threadId, depth: 4, limit: 750 }),
+      // Two levels up front; deeper folders load when they are opened.
+      runtime.request("file/list", { threadId, depth: 2, limit: 5000 }),
       runtime.request("git/status", { threadId }),
       runtime.request("git/diff", { threadId, scope: "all" }),
       runtime.request("test/discover", { threadId }),
@@ -122,6 +130,33 @@ export function useCodeWorkbench(
     fileGeneration.current += 1;
     void refresh();
   }, [refresh, workspacePath]);
+
+  const loadDirectory = useCallback(
+    async (path: string) => {
+      if (!threadId || !path || loadedDirectories.current.has(path)) return;
+      loadedDirectories.current.add(path);
+      try {
+        const result = await runtime.request("file/list", {
+          threadId,
+          path,
+          depth: 1,
+          limit: 5000,
+        });
+        if (activeThreadId.current !== threadId) return;
+        setState((current) => {
+          // Replace the folder's direct children; keep deeper loaded levels.
+          const known = new Set(current.entries.map((entry) => entry.path));
+          const added = result.entries.filter((entry) => !known.has(entry.path));
+          return added.length
+            ? { ...current, entries: [...current.entries, ...added] }
+            : current;
+        });
+      } catch {
+        loadedDirectories.current.delete(path);
+      }
+    },
+    [runtime, threadId],
+  );
 
   const openFile = useCallback(
     async (path: string) => {
@@ -309,7 +344,13 @@ export function useCodeWorkbench(
     () => ({
       ...state,
       refresh,
+      loadDirectory,
       openFile,
+      closeFile: () => {
+        fileGeneration.current += 1;
+        setState((current) => ({ ...current, file: null, draft: "", loading: false }));
+      },
+      clearError: () => setState((current) => ({ ...current, error: null })),
       setDraft: (draft: string) => setState((current) => ({ ...current, draft })),
       saveFile,
       runTest,
@@ -322,6 +363,7 @@ export function useCodeWorkbench(
       discardChange,
       openFile,
       refresh,
+      loadDirectory,
       resolveWorktree,
       runTest,
       saveFile,

@@ -43,6 +43,7 @@ READ_METHODS = frozenset(
         "git/status",
         "git/diff",
         "test/discover",
+        "rag/status",
     }
 )
 

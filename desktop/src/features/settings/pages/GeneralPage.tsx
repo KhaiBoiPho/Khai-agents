@@ -41,6 +41,8 @@ const THEME_LABELS: Record<ThemePreference, string> = {
   midnight: "Midnight",
   claude: "Ivory",
   "claude-dark": "Slate",
+  lagoon: "Lagoon",
+  "lagoon-dark": "Lagoon Dark",
   contrast: "High contrast",
   imported: "Imported theme",
 };

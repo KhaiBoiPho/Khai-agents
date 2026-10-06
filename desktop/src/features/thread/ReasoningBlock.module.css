@@ -63,8 +63,9 @@
   transform: rotate(90deg);
 }
 
-.spinner {
-  animation: reasoning-spin 1.15s linear infinite;
+.dots {
+  justify-self: center;
+  color: var(--signal);
 }
 
 .content {
@@ -114,14 +115,18 @@
   font-style: italic;
 }
 
-@keyframes reasoning-spin {
-  to {
-    transform: rotate(360deg);
+.reasoning[open] .content {
+  animation: reasoning-reveal 200ms ease backwards;
+}
+
+@keyframes reasoning-reveal {
+  from {
+    opacity: 0;
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .spinner {
+  .reasoning[open] .content {
     animation: none;
   }
 }

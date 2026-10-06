@@ -99,3 +99,6 @@ credentials.json
 .env.*
 !.env.example
 !*.env.example
+
+# Bundled GenOffice CLI (scripts/setup-genoffice.sh)
+tools/genoffice/

@@ -71,6 +71,8 @@ setuptools.setup(
     extras_require={
         "server": [],
         "advanced-documents": ["docling>=2.113.0"],
+        # Tree-sitter parsing for the repo map; without it a regex fallback runs.
+        "codemap": ["tree-sitter>=0.23", "tree-sitter-language-pack>=0.7"],
         "test": [
             "pytest>=8,<10",
             "pytest-asyncio>=1,<2",

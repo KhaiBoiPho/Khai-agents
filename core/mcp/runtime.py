@@ -12,7 +12,8 @@ from loguru import logger
 from core.agent_runtime.tools.base import Tool, ToolResult
 from core.agent_runtime.tools.registry import ToolRegistry
 from core.mcp.connection import CredentialResolver, McpConnection, OAuthProviderFactory
-from core.mcp.models import McpRuntimePlan, McpStartupError
+from core.mcp.genoffice import builtin_server_instructions
+from core.mcp.models import McpRuntimePlan, McpServerSource, McpStartupError
 from core.mcp.naming import visible_tool_name
 from core.mcp.tools import McpToolAdapter
 
@@ -157,7 +158,16 @@ class McpSessionRuntime:
     def instruction_context(self) -> str | None:
         sections = []
         for server_id in sorted(self._connections):
-            instruction = self._connections[server_id].instructions
+            connection = self._connections[server_id]
+            instruction = connection.instructions
+            if connection.server.source is McpServerSource.BUILTIN:
+                # Khai's own guidance for a server it ships, after the
+                # server's instructions so it wins on workflow questions.
+                addendum = builtin_server_instructions(server_id)
+                if addendum:
+                    instruction = (
+                        f"{instruction}\n\n{addendum}" if instruction else addendum
+                    )
             if instruction:
                 sections.append(f"MCP server {server_id} instructions:\n{instruction}")
         if not sections:

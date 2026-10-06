@@ -16,6 +16,7 @@ import type {
   DesktopUpdateProgress,
   RpcMethod,
   SidecarStatus,
+  PendingFile,
 } from "./contracts";
 import type { Update } from "@tauri-apps/plugin-updater";
 
@@ -148,6 +149,19 @@ class TauriDesktopRuntime implements ClientRuntime {
     });
     if (typeof selection === "string") return [selection];
     return Array.isArray(selection) ? selection : [];
+  }
+
+  async chooseFiles(): Promise<PendingFile[]> {
+    return (await this.pickContextFiles()).map((path) => ({
+      name: path.replaceAll("\\", "/").split("/").at(-1) ?? path,
+      size: 0,
+      source: path,
+    }));
+  }
+
+  async uploadFiles(_threadId: string, files: PendingFile[]): Promise<string[]> {
+    // The desktop app reads local paths directly; nothing to upload.
+    return files.flatMap((file) => (typeof file.source === "string" ? [file.source] : []));
   }
 
   async exportDiagnostics(

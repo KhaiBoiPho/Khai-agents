@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useReducer, useRef } from "react";
 
+import type { ModelSelection } from "../features/execution/ModelPicker";
 import type {
   ApprovalDecision,
   ConfigScope,
@@ -80,11 +81,14 @@ export interface WorkspaceController {
   openProject(): Promise<void>;
   selectProject(projectId: string): Promise<void>;
   trustProject(): Promise<void>;
+  /** Forget a folder and its chats; files on disk are left alone. */
+  removeProject(projectId: string): Promise<void>;
   createThread(mode?: ThreadMode, title?: string): Promise<Thread | undefined>;
   createThreadIn(
     projectId: string,
     mode?: ThreadMode,
     title?: string,
+    model?: ModelSelection | null,
   ): Promise<Thread | undefined>;
   ensureChatsProject(): Promise<Project>;
   forkThread(): Promise<void>;
@@ -101,6 +105,8 @@ export interface WorkspaceController {
     contextWindow: number | null,
   ): Promise<void>;
   setAccessPreset(preset: ExecutionAccessPreset | null): Promise<boolean>;
+  /** Start `/compact`; progress arrives as `thread.context.*` events. */
+  compactThread(instructions?: string): Promise<boolean>;
   refreshSettings(): Promise<void>;
   updateSettings(
     patch: JsonObject,
@@ -355,10 +361,21 @@ export function useWorkspaceController(runtime: ClientRuntime): WorkspaceControl
       withBusy(async () => {
         const path = await runtime.pickDirectory();
         if (!path) return;
-        const result = await runtime.request("project/add", {
+        // Self-hosted, single-user install: a folder the user picks is
+        // trusted from the start.
+        const added = await runtime.request("project/add", {
           path,
-          trustState: "untrusted",
+          trustState: "trusted",
         });
+        // Re-adding a known folder returns it as stored, so lift an older
+        // untrusted record too.
+        const result =
+          added.project.trustState === "trusted"
+            ? added
+            : await runtime.request("project/update", {
+                projectId: added.project.id,
+                trustState: "trusted",
+              });
         dispatch({ type: "project-upsert", project: result.project });
         dispatch({ type: "select-project", projectId: result.project.id });
         selectedThreadRef.current = null;
@@ -377,10 +394,19 @@ export function useWorkspaceController(runtime: ClientRuntime): WorkspaceControl
         selectedThreadRef.current = null;
         eventStreamRef.current?.stop();
         localStorage.setItem(PROJECT_KEY, projectId);
+        // Self-hosted, single-user install: opening a folder trusts it.
+        const project = state.projects.find((item) => item.id === projectId);
+        if (project && project.trustState !== "trusted") {
+          const trusted = await runtime.request("project/update", {
+            projectId,
+            trustState: "trusted",
+          });
+          dispatch({ type: "project-upsert", project: trusted.project });
+        }
         await loadThreads(projectId, localStorage.getItem(THREAD_KEY));
         await loadSettings(projectId);
       }),
-    [loadSettings, loadThreads, withBusy],
+    [loadSettings, loadThreads, runtime, state.projects, withBusy],
   );
 
   const selectedProject =
@@ -428,8 +454,28 @@ export function useWorkspaceController(runtime: ClientRuntime): WorkspaceControl
   }, [runtime]);
 
   /** Start a thread in any project, switching to it first if needed. */
+  const removeProject = useCallback(
+    (projectId: string) =>
+      withBusy(async () => {
+        await runtime.request("project/remove", { projectId });
+        if (projectId === state.selectedProjectId) {
+          selectedThreadRef.current = null;
+          eventStreamRef.current?.stop();
+          localStorage.removeItem(PROJECT_KEY);
+          localStorage.removeItem(THREAD_KEY);
+        }
+        dispatch({ type: "project-remove", projectId });
+      }),
+    [runtime, state.selectedProjectId, withBusy],
+  );
+
   const createThreadIn = useCallback(
-    (projectId: string, mode: ThreadMode = "code", title?: string) =>
+    (
+      projectId: string,
+      mode: ThreadMode = "code",
+      title?: string,
+      model?: ModelSelection | null,
+    ) =>
       withBusy(async () => {
         if (projectId !== state.selectedProjectId) {
           dispatch({ type: "select-project", projectId });
@@ -439,23 +485,46 @@ export function useWorkspaceController(runtime: ClientRuntime): WorkspaceControl
           await loadThreads(projectId, null);
           await loadSettings(projectId);
         }
+        // Folders added before auto-trust: starting a chat in one trusts it.
+        const project = state.projects.find((item) => item.id === projectId);
+        if (project && project.trustState !== "trusted") {
+          const trusted = await runtime.request("project/update", {
+            projectId,
+            trustState: "trusted",
+          });
+          dispatch({ type: "project-upsert", project: trusted.project });
+        }
         const result = await runtime.request("thread/start", {
           projectId,
           title: title ?? (mode === "paper" ? "New Paper2Code run" : "New task"),
           mode,
         });
-        dispatch({ type: "thread-upsert", thread: result.thread });
-        dispatch({ type: "select-thread", threadId: result.thread.id });
-        selectedThreadRef.current = result.thread.id;
-        localStorage.setItem(THREAD_KEY, result.thread.id);
-        await replayThread(result.thread.id);
-        return result.thread;
+        let thread = result.thread;
+        // A model picked on Home applies before the first message is sent.
+        if (model && (model.connectionId || model.model)) {
+          thread = (
+            await runtime.request("thread/execution/update", {
+              threadId: thread.id,
+              connectionId: model.connectionId,
+              model: model.model,
+              reasoningEffort: model.reasoningEffort,
+              contextWindow: model.contextWindow,
+            })
+          ).thread;
+        }
+        dispatch({ type: "thread-upsert", thread });
+        dispatch({ type: "select-thread", threadId: thread.id });
+        selectedThreadRef.current = thread.id;
+        localStorage.setItem(THREAD_KEY, thread.id);
+        await replayThread(thread.id);
+        return thread;
       }),
     [
       loadSettings,
       loadThreads,
       replayThread,
       runtime,
+      state.projects,
       state.selectedProjectId,
       withBusy,
     ],
@@ -833,7 +902,8 @@ export function useWorkspaceController(runtime: ClientRuntime): WorkspaceControl
         if (!turn || turn.threadId !== selectedThread?.id) return;
         const snapshot = await runtime.request("turn/retry", {
           turnId,
-          useCurrentSelection: false,
+          // Retry with whatever model is selected now, not the failed one.
+          useCurrentSelection: true,
         });
         dispatch({ type: "snapshot", snapshot });
       }),
@@ -981,6 +1051,27 @@ export function useWorkspaceController(runtime: ClientRuntime): WorkspaceControl
     [runtime, withBusy],
   );
 
+  const compactThread = useCallback(
+    async (instructions?: string): Promise<boolean> => {
+      if (!selectedThread) return false;
+      // Not `withBusy`: summarizing takes a model round-trip and the rest of
+      // the UI stays usable; the timeline row reports progress.
+      dispatch({ type: "error", error: null });
+      try {
+        const focus = instructions?.trim();
+        await runtime.request("thread/context/compact", {
+          threadId: selectedThread.id,
+          ...(focus ? { instructions: focus } : {}),
+        });
+        return true;
+      } catch (error) {
+        reportError(error);
+        return false;
+      }
+    },
+    [reportError, runtime, selectedThread],
+  );
+
   const restartRuntime = useCallback(
     () =>
       withBusy(async () => {
@@ -1000,6 +1091,7 @@ export function useWorkspaceController(runtime: ClientRuntime): WorkspaceControl
       openProject,
       selectProject,
       trustProject,
+      removeProject,
       createThread,
       createThreadIn,
       ensureChatsProject,
@@ -1012,6 +1104,7 @@ export function useWorkspaceController(runtime: ClientRuntime): WorkspaceControl
       setThreadModel,
       setThreadExecution,
       setAccessPreset,
+      compactThread,
       refreshSettings,
       updateSettings,
       setGoal,
@@ -1059,6 +1152,7 @@ export function useWorkspaceController(runtime: ClientRuntime): WorkspaceControl
       continueGoal,
       setGoal,
       setAccessPreset,
+      compactThread,
       setThreadExecution,
       setThreadModel,
       updateSettings,
@@ -1072,6 +1166,7 @@ export function useWorkspaceController(runtime: ClientRuntime): WorkspaceControl
       startWorkflow,
       state,
       trustProject,
+      removeProject,
     ],
   );
 }

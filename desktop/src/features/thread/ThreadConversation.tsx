@@ -1,5 +1,12 @@
 import { ArrowDown } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  Fragment,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 
 import type {
   Approval,
@@ -7,8 +14,9 @@ import type {
   Item,
   Turn,
 } from "../../generated/app-server";
-import type { TurnPlanState } from "../../app/workspaceState";
+import type { CompactionEntry, TurnPlanState } from "../../app/workspaceState";
 import type { DesktopInspectorTab } from "../../app/useDesktopUi";
+import { CompactionNotice } from "./CompactionNotice";
 import { buildConversationTurns } from "./conversationModel";
 import { PlanProgress } from "./PlanProgress";
 import styles from "./ThreadConversation.module.css";
@@ -20,6 +28,8 @@ interface ThreadConversationProps {
   items: Item[];
   approvals: Approval[];
   plansByTurnId: Record<string, TurnPlanState>;
+  /** `/compact` runs, placed after the Turn they followed. */
+  compactions?: CompactionEntry[];
   selectedItemId: string | null;
   transcriptMode: TranscriptMode;
   busy: boolean;
@@ -37,6 +47,7 @@ export function ThreadConversation({
   items,
   approvals,
   plansByTurnId,
+  compactions = [],
   selectedItemId,
   transcriptMode,
   busy,
@@ -54,6 +65,23 @@ export function ThreadConversation({
     () => buildConversationTurns(turns, items),
     [items, turns],
   );
+  const compactionsAfter = useMemo(() => {
+    const known = new Set(groupedTurns.map((group) => group.id));
+    const placed = new Map<string, CompactionEntry[]>();
+    const trailing: CompactionEntry[] = [];
+    for (const entry of compactions) {
+      if (entry.afterTurnId && known.has(entry.afterTurnId)) {
+        placed.set(entry.afterTurnId, [
+          ...(placed.get(entry.afterTurnId) ?? []),
+          entry,
+        ]);
+      } else {
+        // Still running (no anchor yet) or anchored to an unloaded Turn.
+        trailing.push(entry);
+      }
+    }
+    return { placed, trailing };
+  }, [compactions, groupedTurns]);
   const approvalsByItem = useMemo(
     () => new Map(approvals.map((approval) => [approval.itemId, approval])),
     [approvals],
@@ -75,7 +103,8 @@ export function ThreadConversation({
   const itemUpdate = latestItem
     ? `${latestItem.id}:${latestItem.status}:${latestItem.updatedAt}:${JSON.stringify(latestItem.payload).length}`
     : `${turns.at(-1)?.id ?? "empty"}:${turns.at(-1)?.status ?? "idle"}`;
-  const latestUpdate = `${itemUpdate}:${activePlan?.updatedAt ?? "no-plan"}`;
+  const latestCompaction = compactions.at(-1);
+  const latestUpdate = `${itemUpdate}:${activePlan?.updatedAt ?? "no-plan"}:${latestCompaction ? `${latestCompaction.id}:${latestCompaction.status}` : "no-compaction"}`;
   const scrollToLatest = useCallback((behavior: ScrollBehavior) => {
     const viewport = scrollViewportRef.current;
     if (typeof viewport?.scrollTo === "function") {
@@ -137,19 +166,26 @@ export function ThreadConversation({
       >
         <div className={styles.conversation}>
           {groupedTurns.map((group) => (
-            <TurnBlock
-              key={group.id}
-              group={group}
-              approvalsByItem={approvalsByItem}
-              selectedItemId={selectedItemId}
-              transcriptMode={transcriptMode}
-              busy={busy}
-              onSelectItem={onSelectItem}
-              onOpenInspector={onOpenInspector}
-              onRespondToApproval={onRespondToApproval}
-              onRetryTurn={onRetryTurn}
-              onCancelQueuedTurn={onCancelQueuedTurn}
-            />
+            <Fragment key={group.id}>
+              <TurnBlock
+                group={group}
+                approvalsByItem={approvalsByItem}
+                selectedItemId={selectedItemId}
+                transcriptMode={transcriptMode}
+                busy={busy}
+                onSelectItem={onSelectItem}
+                onOpenInspector={onOpenInspector}
+                onRespondToApproval={onRespondToApproval}
+                onRetryTurn={onRetryTurn}
+                onCancelQueuedTurn={onCancelQueuedTurn}
+              />
+              {compactionsAfter.placed.get(group.id)?.map((entry) => (
+                <CompactionNotice key={entry.id} entry={entry} />
+              ))}
+            </Fragment>
+          ))}
+          {compactionsAfter.trailing.map((entry) => (
+            <CompactionNotice key={entry.id} entry={entry} />
           ))}
           <div className={styles.conversationEnd} ref={endRef} />
         </div>

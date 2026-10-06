@@ -136,7 +136,8 @@ class CodeModeTool(Tool):
             "and batching — instead of one tool call at a time. Prefer this when a "
             f"task needs several dependent or repeated tool calls. The program runs {isolation}; "
             "each function call runs the real tool with "
-            "the usual permission checks. print() what you want to see, or set a "
+            "the usual permission checks. The tool functions are already defined "
+            "as globals: call them directly, do not import them. print() what you want to see, or set a "
             "top-level `result` variable to return structured data. Available tools:\n"
             f"{api_block}"
         )

@@ -27,7 +27,7 @@ from core.persistence.execution_repository import TurnRepository
 DEFAULT_READ_LIMIT = 128 * 1024
 MAX_READ_LIMIT = 128 * 1024
 MAX_EDIT_BYTES = 128 * 1024
-MAX_TREE_ENTRIES = 750
+MAX_TREE_ENTRIES = 5000
 
 
 @dataclass(frozen=True, slots=True)

@@ -1,0 +1,22 @@
+.badge {
+  --badge: #6b7280;
+  display: grid;
+  flex-shrink: 0;
+  place-items: center;
+  border-radius: 7px;
+  background: var(--badge);
+  color: #ffffff;
+}
+
+.badge[data-family="pdf"] { --badge: #e5484d; }
+.badge[data-family="word"] { --badge: #3b78e7; }
+.badge[data-family="sheet"] { --badge: #2f9e5b; }
+.badge[data-family="csv"] { --badge: #12a594; }
+.badge[data-family="slides"] { --badge: #ef7d33; }
+.badge[data-family="image"] { --badge: #a855c7; }
+.badge[data-family="audio"] { --badge: #d6409f; }
+.badge[data-family="video"] { --badge: #7c5ce0; }
+.badge[data-family="archive"] { --badge: #b58a1b; }
+.badge[data-family="markdown"] { --badge: #5b6b80; }
+.badge[data-family="code"] { --badge: #4c6ef5; }
+.badge[data-family="data"] { --badge: #c27c0e; }

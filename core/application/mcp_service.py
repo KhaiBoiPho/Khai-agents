@@ -22,6 +22,7 @@ from core.application.errors import InvalidArgumentError, ProjectNotTrustedError
 from core.application.project_service import ProjectService
 from core.config import home_config_path, project_config_path
 from core.domain.project import TrustState
+from core.mcp.genoffice import builtin_server_definitions
 from core.mcp.models import (
     McpServerDefinition,
     ResolvedMcpServer,
@@ -206,8 +207,16 @@ class McpService:
         )
 
         entries: list[McpServerInfo] = []
-        effective = dict(user_raw)
-        sources = {name: ("user", home_config_path().parent) for name in user_raw}
+        builtins = builtin_server_definitions()
+        effective: dict[str, Any] = {
+            name: definition.model_dump(
+                by_alias=True, exclude_none=True, exclude_defaults=True
+            )
+            for name, definition in builtins.items()
+        }
+        sources = {name: ("builtin", home_config_path().parent) for name in builtins}
+        effective.update(user_raw)
+        sources.update({name: ("user", home_config_path().parent) for name in user_raw})
         if project is not None and project.trust_state is TrustState.TRUSTED:
             effective.update(project_raw)
             assert project_path is not None
@@ -460,6 +469,14 @@ class McpService:
             selected = _raw_servers(current)
             existing = selected.get(clean_name, {})
             base = dict(existing) if isinstance(existing, dict) else {}
+            if not base and scope == "user":
+                # Editing a built-in server copies its definition into the
+                # user layer, which then replaces the built-in entry whole.
+                builtin = builtin_server_definitions().get(clean_name)
+                if builtin is not None:
+                    base = builtin.model_dump(
+                        by_alias=True, exclude_none=True, exclude_defaults=True
+                    )
             candidate = deep_merge(base, patch)
             if not base and "enabled" not in candidate:
                 candidate["enabled"] = False
@@ -519,6 +536,11 @@ class McpService:
 
         def mutate(current: dict[str, Any]) -> dict[str, Any]:
             selected = _raw_servers(current)
+            if clean_name not in selected and clean_name in builtin_server_definitions():
+                raise InvalidArgumentError(
+                    f"{clean_name} is a built-in MCP server; disable it instead "
+                    "of removing it"
+                )
             if clean_name not in selected:
                 raise InvalidArgumentError(
                     f"MCP server is not defined in the {scope} config: {clean_name}"

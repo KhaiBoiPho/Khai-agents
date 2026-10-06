@@ -51,6 +51,7 @@ class McpServerSource(StrEnum):
     USER = "user"
     PROJECT = "project"
     PLUGIN = "plugin"
+    BUILTIN = "builtin"
 
 
 class _ConfigModel(BaseModel):

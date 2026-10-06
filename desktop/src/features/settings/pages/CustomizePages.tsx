@@ -19,20 +19,8 @@ import {
   SlidersHorizontal,
 } from "lucide-react";
 import { useMemo, useState } from "react";
-import {
-  siDiagramsdotnet,
-  siFigma,
-  siGithub,
-  siGmail,
-  siGooglecalendar,
-  siGoogledrive,
-  siLinear,
-  siNotion,
-  siPostman,
-  siSupabase,
-  type SimpleIcon,
-} from "simple-icons";
 
+import { BrandIcon } from "../../../components/BrandIcon";
 import { Dropdown } from "../../../components/Dropdown";
 import { useSkillManagement } from "../../extensions/useSkillManagement";
 import { useMcpCatalog } from "../../mcp/useMcpCatalog";
@@ -58,31 +46,6 @@ import {
   Toggle,
 } from "../ui/SettingsUI";
 import styles from "./Pages.module.css";
-
-const BRANDS: Record<string, SimpleIcon> = {
-  github: siGithub,
-  googledrive: siGoogledrive,
-  gmail: siGmail,
-  googlecalendar: siGooglecalendar,
-  notion: siNotion,
-  linear: siLinear,
-  figma: siFigma,
-  supabase: siSupabase,
-  postman: siPostman,
-  diagramsdotnet: siDiagramsdotnet,
-};
-
-function BrandIcon({ name }: { name: string }) {
-  const icon = BRANDS[name];
-  if (!icon) return <Plug size={15} />;
-  // Near-black marks would vanish on the dark theme; draw those in text color.
-  const dark = parseInt(icon.hex, 16) < 0x333333;
-  return (
-    <svg viewBox="0 0 24 24" className={styles.brandIcon} aria-hidden="true">
-      <path d={icon.path} fill={dark ? "currentColor" : `#${icon.hex}`} />
-    </svg>
-  );
-}
 
 function AddMenu({ items }: { items: Array<{ id: string; label: string; onSelect(): void }> }) {
   return (

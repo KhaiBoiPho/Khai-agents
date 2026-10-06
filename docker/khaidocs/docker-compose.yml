@@ -1,0 +1,53 @@
+# KhaiDocs server: the stock Docmost image (AGPL-3.0, docmost/docmost),
+# pinned to the release the vendored client in
+# desktop/src/features/khaidocs/docmost was taken from. Bump both together.
+#
+#   cd docker/khaidocs && ./up.sh        # first run writes .env with secrets
+#
+# The DeepCode web service (app_server/khaidocs_proxy.py) and the desktop dev
+# server (desktop/vite.config.ts) proxy /api, /socket.io and /collab here;
+# KHAIDOCS_SERVER_URL overrides the address for both.
+
+name: khaidocs
+
+services:
+  docmost:
+    image: docmost/docmost:0.96.0
+    depends_on:
+      - db
+      - redis
+    environment:
+      # The origin the browser uses: the DeepCode web service (default port
+      # 3081), which proxies to this container. For the Vite dev server set
+      # KHAIDOCS_APP_URL=http://localhost:1420. Links are built from it.
+      APP_URL: ${KHAIDOCS_APP_URL:-http://127.0.0.1:3081}
+      APP_SECRET: ${KHAIDOCS_APP_SECRET:?run ./up.sh to create .env}
+      DATABASE_URL: postgresql://docmost:${KHAIDOCS_DB_PASSWORD:?run ./up.sh to create .env}@db:5432/docmost
+      REDIS_URL: redis://redis:6379
+    ports:
+      - "127.0.0.1:${KHAIDOCS_PORT:-3456}:3000"
+    restart: unless-stopped
+    volumes:
+      - docmost:/app/data/storage
+
+  db:
+    image: postgres:18
+    environment:
+      POSTGRES_DB: docmost
+      POSTGRES_USER: docmost
+      POSTGRES_PASSWORD: ${KHAIDOCS_DB_PASSWORD:?run ./up.sh to create .env}
+    restart: unless-stopped
+    volumes:
+      - db_data:/var/lib/postgresql
+
+  redis:
+    image: redis:8
+    command: ["redis-server", "--appendonly", "yes", "--maxmemory-policy", "noeviction"]
+    restart: unless-stopped
+    volumes:
+      - redis_data:/data
+
+volumes:
+  docmost:
+  db_data:
+  redis_data:

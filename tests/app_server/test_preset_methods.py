@@ -68,7 +68,7 @@ def test_preset_roster_selection_and_lock_over_the_wire(tmp_path: Path) -> None:
 
     roster = {entry["id"]: entry for entry in responses[2]["result"]["presets"]}
     assert "code-reader" in roster and roster["code-reader"]["trust"] == "system"
-    assert roster["code-reader"]["tools"] == ["read", "grep", "glob", "skill"]
+    assert roster["code-reader"]["tools"] == ["repo_map", "read", "grep", "glob", "skill"]
 
     assert responses[3]["result"]["agentPreset"] == "code-reader"
     assert responses[4]["result"]["agentPreset"] == "code-reader"

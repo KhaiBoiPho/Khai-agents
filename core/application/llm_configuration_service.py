@@ -623,6 +623,17 @@ class LLMConfigurationService:
             phases=(phase,),
         )[phase]
 
+    def build_provider(self, workspace: str | Path, profile: ExecutionProfile):
+        """Build a one-off provider client for an already resolved profile.
+
+        Used for small out-of-band calls (e.g. Session title generation) that
+        must talk to the same connection/model a Turn used without spinning up
+        an agent runtime. The caller owns ``aclose()``.
+        """
+
+        config = load_config_for_workspace(workspace)
+        return ConnectionResolver(config, self.credentials).build_provider(profile)
+
     def resolve_phases(
         self,
         workspace: str | Path,

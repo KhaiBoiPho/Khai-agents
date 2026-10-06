@@ -2,6 +2,14 @@ import {
   Atom,
   Check,
   ChevronDown,
+  ChevronRight,
+  BookOpen,
+  FileDiff,
+  Minimize2,
+  Pencil,
+  Box,
+  Shield,
+  SquarePen,
   ArrowUp,
   Folder,
   FolderPlus,
@@ -14,6 +22,7 @@ import {
   Paperclip,
   Plug,
   Plus,
+  Telescope,
   Puzzle,
   ScrollText,
   ShieldAlert,
@@ -50,6 +59,7 @@ import { PresetPicker } from "../presets/PresetPicker";
 import { usePresetCatalog } from "../presets/usePresetCatalog";
 import { useSkillCatalog } from "../skills/useSkillCatalog";
 import {
+  type CommandDefinition,
   matchingCommands,
   parseComposerCommand,
   type ComposerCommand,
@@ -62,8 +72,18 @@ import { isRecoveredHistoryProject } from "../../app/projectPresentation";
 import { isChatsProject } from "../../app/chats";
 import mascotUrl from "../../assets/khai-mascot.png";
 import { MOCK_ACCOUNT } from "../../mocks/preview";
+import {
+  DEEP_EFFORTS,
+  executionTarget,
+  isInsideWorkspace,
+  withContextFiles,
+  withDeepResearch,
+  withSearch,
+} from "./promptModes";
 import { ModelPicker } from "./ModelPicker";
 import { ContextRing } from "./ContextRing";
+import { FileCard } from "../../components/FileCard";
+import type { ContextUsage } from "../../app/workspaceState";
 
 interface ComposerProps {
   editable: boolean;
@@ -115,6 +135,11 @@ interface ComposerProps {
   onTrustProject?: () => void;
   onForkThread?: () => void;
   onCreatePaperThread?: () => void;
+  /** Latest measured fill of this thread's model context. */
+  contextUsage?: ContextUsage | null;
+  /** A `/compact` is summarizing this thread right now. */
+  compacting?: boolean;
+  onCompact?: () => void;
 }
 
 export interface ComposerLaunchIntent {
@@ -155,6 +180,9 @@ export function Composer({
   onTrustProject,
   onForkThread,
   onCreatePaperThread,
+  contextUsage = null,
+  compacting = false,
+  onCompact,
 }: ComposerProps) {
   const recoveredHistory = isRecoveredHistoryProject(project);
   const plainChat = isChatsProject(project);
@@ -190,6 +218,7 @@ export function Composer({
   );
   const [deliveryNotice, setDeliveryNotice] = useState<string | null>(null);
   const [searchOn, setSearchOn] = useState(false);
+  const [researchOn, setResearchOn] = useState(false);
   const executionDefaults = executionTarget(thread, settings);
   const deepThinkOn = DEEP_EFFORTS.has(
     (thread?.reasoningEffort ?? executionDefaults.effort ?? "").toLocaleLowerCase(),
@@ -256,7 +285,9 @@ export function Composer({
     const textarea = textareaRef.current;
     if (!textarea) return;
     textarea.style.height = "0px";
-    textarea.style.height = `${Math.min(textarea.scrollHeight, 190)}px`;
+    // Grow with the prompt up to nearly half the window before scrolling.
+    const cap = Math.max(190, Math.round(window.innerHeight * 0.45));
+    textarea.style.height = `${Math.min(textarea.scrollHeight, cap)}px`;
     // A dictated transcript is inserted mid-text, so the caret has to be put
     // back where the text ended instead of jumping to the end of the draft.
     const caret = caretRef.current;
@@ -317,10 +348,17 @@ export function Composer({
       setCommandError(null);
       return;
     }
+    if (compacting) {
+      setCommandError("Compacting the conversation — send again when it finishes.");
+      return;
+    }
     record(value);
-    const executionPrompt = withSearch(
-      withContextFiles(value, attachments, thread?.workspacePath),
-      searchOn,
+    const executionPrompt = withDeepResearch(
+      withSearch(
+        withContextFiles(value, attachments, thread?.workspacePath),
+        searchOn && !researchOn,
+      ),
+      researchOn,
     );
     const selectable = new Set(skillCatalog.activeSkills.map((skill) => skill.id));
     const selectedIds = selectedSkillIds.filter((skillId) =>
@@ -348,9 +386,12 @@ export function Composer({
       await submit();
       return;
     }
-    const executionPrompt = withSearch(
-      withContextFiles(value, attachments, thread?.workspacePath),
-      searchOn,
+    const executionPrompt = withDeepResearch(
+      withSearch(
+        withContextFiles(value, attachments, thread?.workspacePath),
+        searchOn && !researchOn,
+      ),
+      researchOn,
     );
     const selectable = new Set(skillCatalog.activeSkills.map((skill) => skill.id));
     const selectedIds = selectedSkillIds.filter((skillId) =>
@@ -365,6 +406,34 @@ export function Composer({
     setSkillPickerOpen(false);
   };
   const commandSuggestions = matchingCommands(prompt);
+  const [commandIndex, setCommandIndex] = useState(0);
+  const [menuDismissed, setMenuDismissed] = useState(false);
+  const menuCommands = menuDismissed ? [] : commandSuggestions;
+  useEffect(() => {
+    setCommandIndex(0);
+    if (!prompt.trimStart().startsWith("/")) setMenuDismissed(false);
+  }, [prompt]);
+
+  /** Arguments are typed after the name; argument-free commands run at once. */
+  const selectCommand = (command: CommandDefinition) => {
+    textareaRef.current?.focus();
+    if (command.usage.endsWith(" ")) {
+      setPrompt(command.usage);
+      return;
+    }
+    const parsed = parseComposerCommand(command.usage);
+    if (!parsed) return;
+    if (!parsed.ok) {
+      setCommandError(parsed.message);
+      return;
+    }
+    void (async () => {
+      if (await onCommand(parsed.command)) {
+        setPrompt("");
+        setCommandError(null);
+      }
+    })();
+  };
   const dictationStatus = dictation.recording
     ? t("composer.dictation.recording", "Recording {{seconds}}s · stop to transcribe", {
         seconds: dictation.elapsedSeconds,
@@ -408,6 +477,31 @@ export function Composer({
   });
 
   const onKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (menuCommands.length && !event.nativeEvent.isComposing) {
+      if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+        event.preventDefault();
+        const step = event.key === "ArrowDown" ? 1 : -1;
+        setCommandIndex(
+          (current) => (current + step + menuCommands.length) % menuCommands.length,
+        );
+        return;
+      }
+      if ((event.key === "Enter" && !event.shiftKey) || event.key === "Tab") {
+        const command = menuCommands[Math.min(commandIndex, menuCommands.length - 1)];
+        const typed = prompt.trim();
+        // A complete command with its argument runs through the normal submit.
+        if (!(event.key === "Enter" && typed.length > command.usage.trim().length)) {
+          event.preventDefault();
+          selectCommand(command);
+          return;
+        }
+      }
+      if (event.key === "Escape") {
+        event.preventDefault();
+        setMenuDismissed(true);
+        return;
+      }
+    }
     if (event.key === "Escape" && dictation.recording) {
       event.preventDefault();
       dictation.cancel();
@@ -555,24 +649,30 @@ export function Composer({
         <label className={styles.promptLabel} htmlFor="turn-prompt">
           Task instruction
         </label>
-        {commandSuggestions.length ? (
-          <div className={styles.commandMenu} role="listbox" aria-label="Commands">
-            {commandSuggestions.map((command) => (
-              <button
-                type="button"
-                role="option"
-                aria-selected={false}
-                key={command.name}
-                onMouseDown={(event) => event.preventDefault()}
-                onClick={() => {
-                  setPrompt(command.usage);
-                  textareaRef.current?.focus();
-                }}
-              >
-                <code>/{command.name}</code>
-                <span>{command.description}</span>
-              </button>
-            ))}
+        {menuCommands.length ? (
+          <div className={styles.slashMenu} role="listbox" aria-label="Commands">
+            {menuCommands.map((command, index) => {
+              const meta = COMMAND_META[command.name];
+              const Icon = meta?.icon ?? SquareSlash;
+              return (
+                <button
+                  type="button"
+                  role="option"
+                  aria-selected={index === commandIndex}
+                  key={command.name}
+                  onMouseDown={(event) => event.preventDefault()}
+                  onMouseEnter={() => setCommandIndex(index)}
+                  onClick={() => selectCommand(command)}
+                >
+                  <Icon size={16} className={styles.slashIcon} />
+                  <strong>{meta?.title ?? command.name}</strong>
+                  <span>{command.description}</span>
+                  {command.usage.endsWith(" ") ? (
+                    <ChevronRight size={15} className={styles.slashChevron} />
+                  ) : null}
+                </button>
+              );
+            })}
           </div>
         ) : null}
         {skillPickerOpen && !active ? (
@@ -673,17 +773,7 @@ export function Composer({
         {attachments.length ? (
           <div className={styles.attachments} aria-label="Attached context files">
             {attachments.map((path) => (
-              <span key={path} title={path}>
-                <Paperclip size={12} />
-                {fileName(path)}
-                <button
-                  type="button"
-                  onClick={() => removeAttachment(path)}
-                  aria-label={`Remove ${fileName(path)}`}
-                >
-                  <X size={12} />
-                </button>
-              </span>
+              <FileCard key={path} path={path} size="compact" onRemove={() => removeAttachment(path)} />
             ))}
           </div>
         ) : null}
@@ -817,6 +907,17 @@ export function Composer({
             <Globe size={14} />
             Search
           </button>
+          <button
+            type="button"
+            className={styles.toggle}
+            aria-pressed={researchOn}
+            onClick={() => setResearchOn((on) => !on)}
+            disabled={!editable}
+            title="Research the web in depth and write a cited report"
+          >
+            <Telescope size={14} />
+            Deep research
+          </button>
           {dictation.available ? (
             <button
               className={styles.iconButton}
@@ -879,7 +980,12 @@ export function Composer({
             onManageProviders={onManageProviders}
           />
           <ContextRing
-            contextWindow={thread?.contextWindow ?? null}
+            runtime={runtime}
+            thread={thread}
+            usage={contextUsage}
+            compacting={compacting}
+            canCompact={!active && !hasActiveWork}
+            onCompact={onCompact}
             onOpenUsage={
               onOpenSettings ? () => onOpenSettings("usage") : undefined
             }
@@ -902,40 +1008,6 @@ export function Composer({
   );
 }
 
-function normalizedPath(path: string): string {
-  return path.replaceAll("\\", "/").replace(/\/+$/, "");
-}
-
-function isInsideWorkspace(path: string, workspace: string): boolean {
-  const candidate = normalizedPath(path);
-  const root = normalizedPath(workspace);
-  return candidate === root || candidate.startsWith(`${root}/`);
-}
-
-function fileName(path: string): string {
-  return normalizedPath(path).split("/").at(-1) ?? path;
-}
-
-function withContextFiles(
-  prompt: string,
-  paths: string[],
-  workspace: string | undefined,
-): string {
-  if (!paths.length) return prompt;
-  const root = workspace ? normalizedPath(workspace) : "";
-  const references = paths.map((path) => {
-    const normalized = normalizedPath(path);
-    return normalized.startsWith(`${root}/`)
-      ? normalized.slice(root.length + 1)
-      : normalized;
-  });
-  return [
-    prompt,
-    "",
-    "Attached workspace context:",
-    ...references.map((path) => `- ${path}`),
-  ].join("\n");
-}
 
 /** Close a popover on an outside click or Escape. */
 function usePopover() {
@@ -1195,34 +1267,17 @@ function ModeMenu({
   );
 }
 
-const DEEP_EFFORTS = new Set(["high", "xhigh", "max"]);
 
-/** The connection, model and effort a thread runs with, defaults included. */
-function executionTarget(
-  thread: Thread | null,
-  settings: SettingsSnapshot | null,
-): { connection: string | null; model: string | null; effort: string | null } {
-  const defaults = settings?.agents.defaults;
-  const record =
-    typeof defaults === "object" && defaults !== null && !Array.isArray(defaults)
-      ? (defaults as Record<string, unknown>)
-      : {};
-  const text = (value: unknown) =>
-    typeof value === "string" && value ? value : null;
-  return {
-    connection: thread?.connectionId ?? text(record.connection),
-    model: thread?.model ?? text(record.model),
-    effort: text(record.reasoningEffort) ?? text(record.reasoning_effort),
-  };
-}
 
-/**
- * Search mode rides on the prompt: the agent is asked to use its web-search
- * tools (the Firecrawl connector) for this one message.
- */
-function withSearch(prompt: string, enabled: boolean): string {
-  if (!enabled) return prompt;
-  return `${prompt}
-
-Search the web with the available web-search tools (for example Firecrawl) before answering, and cite the sources you used.`;
-}
+/** Display names and icons for the slash menu. */
+const COMMAND_META: Record<string, { title: string; icon: typeof SquarePen }> = {
+  new: { title: "New chat", icon: SquarePen },
+  init: { title: "Init", icon: BookOpen },
+  paper: { title: "Paper2Code", icon: ScrollText },
+  review: { title: "Review", icon: FileDiff },
+  fork: { title: "Fork", icon: GitFork },
+  rename: { title: "Rename", icon: Pencil },
+  compact: { title: "Compact", icon: Minimize2 },
+  model: { title: "Model", icon: Box },
+  permissions: { title: "Permissions", icon: Shield },
+};

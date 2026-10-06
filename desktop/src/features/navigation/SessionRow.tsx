@@ -17,6 +17,7 @@ import {
 } from "react";
 
 import type { Thread } from "../../generated/app-server";
+import { ConfirmDialog } from "../../components/ConfirmDialog";
 import styles from "./SessionRow.module.css";
 
 interface SessionRowProps {
@@ -238,63 +239,43 @@ export function SessionRow({
       ) : null}
 
       {mode === "archive" ? (
-        <div
-          className={styles.confirmation}
-          role="alertdialog"
-          aria-label={`Archive ${thread.title}`}
-        >
-          <p>
-            Archive this Session?
-            <span>Its canonical history is preserved.</span>
-          </p>
-          <div>
-            <button type="button" onClick={() => setMode("closed")}>
-              Cancel
-            </button>
-            <button
-              type="button"
-              className={styles.confirmArchive}
-              disabled={busy}
-              onClick={() => {
-                setMode("closed");
-                void onArchive(thread.id);
-              }}
-            >
-              Archive
-            </button>
-          </div>
-        </div>
+        <ConfirmDialog
+          title="Archive this chat?"
+          description={
+            <>
+              <strong>{thread.title}</strong> moves out of the sidebar. Its history is kept
+              and it can be restored.
+            </>
+          }
+          confirmLabel="Archive"
+          icon="archive"
+          busy={busy}
+          onCancel={() => setMode("closed")}
+          onConfirm={() => {
+            setMode("closed");
+            void onArchive(thread.id);
+          }}
+        />
       ) : null}
 
       {mode === "delete" ? (
-        <div
-          className={styles.confirmation}
-          role="alertdialog"
-          aria-label={`Delete ${thread.title}`}
-        >
-          <p>
-            Permanently delete this Session?
-            <span>
-              Conversation and Goal history will be removed. Workspace files stay untouched.
-            </span>
-          </p>
-          <div>
-            <button type="button" onClick={() => setMode("closed")}>
-              Cancel
-            </button>
-            <button
-              type="button"
-              className={styles.confirmDelete}
-              disabled={busy}
-              onClick={() => {
-                setMode("closed");
-                void onDelete(thread.id);
-              }}
-            >
-              Delete permanently
-            </button>
-          </div>
-        </div>
+        <ConfirmDialog
+          title="Delete chat?"
+          description={
+            <>
+              <strong>{thread.title}</strong> and its history will be permanently deleted.
+              Files in the workspace stay untouched.
+            </>
+          }
+          confirmLabel="Delete"
+          tone="danger"
+          busy={busy}
+          onCancel={() => setMode("closed")}
+          onConfirm={() => {
+            setMode("closed");
+            void onDelete(thread.id);
+          }}
+        />
       ) : null}
     </div>
   );

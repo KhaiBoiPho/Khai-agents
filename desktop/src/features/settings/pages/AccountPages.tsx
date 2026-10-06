@@ -1,10 +1,10 @@
 /**
- * Account, Privacy, Usage, Capabilities and Memory. None of these have a
- * backend yet: values come from src/mocks/preview.ts and edits live in this
+ * Account, Privacy, Capabilities and Memory. None of these have a backend
+ * yet: values come from src/mocks/preview.ts and edits live in this
  * page only (TODO(backend)).
  */
 
-import { CircleHelp, Trash2 } from "lucide-react";
+import { Trash2 } from "lucide-react";
 import { useState } from "react";
 
 import mascotUrl from "../../../assets/khai-mascot.png";
@@ -16,16 +16,13 @@ import {
   MOCK_PRIVACY,
   MOCK_PROFILE,
   MOCK_TRUSTED_DEVICES,
-  MOCK_USAGE,
   MOCK_WORK_ROLES,
-  percent,
 } from "../../../mocks/preview";
 import type { SettingsSectionProps } from "../settingsSections";
 import {
   Badge,
   Button,
   Group,
-  Meter,
   Page,
   Row,
   Table,
@@ -218,94 +215,5 @@ export function MemoryPage(_props: SettingsSectionProps) {
   );
 }
 
-export function UsagePage(_props: SettingsSectionProps) {
-  const [overage, setOverage] = useState(true);
-  const peak = Math.max(...MOCK_USAGE.daily);
-  return (
-    <Page>
-      <div className={styles.usageHead}>
-        <p>
-          <strong>Your usage</strong> <span>Local · Preview</span>
-        </p>
-        <h2>{MOCK_USAGE.headline}</h2>
-      </div>
-
-      <Group>
-        <Meter
-          label="Current session"
-          detail={MOCK_USAGE.session.resets}
-          value={MOCK_USAGE.session.used}
-          figure={`${MOCK_USAGE.session.used}% used`}
-        />
-        <Meter
-          label="This week"
-          detail={MOCK_USAGE.week.resets}
-          value={MOCK_USAGE.week.used}
-          figure={`${MOCK_USAGE.week.used}% used`}
-        />
-      </Group>
-
-      <Group title="Provider limits" description="Rate limits and quotas reported by each connected provider.">
-        {MOCK_USAGE.providers.map((provider) => (
-          <Meter
-            key={`${provider.name}-${provider.detail}`}
-            label={provider.name}
-            detail={provider.detail}
-            value={percent(provider.used, provider.total)}
-            figure={`${provider.used.toLocaleString()} / ${provider.total.toLocaleString()}`}
-          />
-        ))}
-      </Group>
-
-      <Group title="Last 7 days">
-        <div className={styles.chart} aria-label="Requests per day">
-          {MOCK_USAGE.daily.map((value, index) => (
-            <span key={index} title={`${value} requests`}>
-              <i style={{ height: `${(value / peak) * 100}%` }} />
-              <small>{["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"][index]}</small>
-            </span>
-          ))}
-        </div>
-      </Group>
-
-      <Group title="Limit resets">
-        <Row label="No resets right now" description="When you get one, it shows up here with its expiry date." />
-      </Group>
-
-      <Group
-        title="Usage credits"
-        aside={<strong>${MOCK_USAGE.credits.remaining.toFixed(2)}</strong>}
-        description="Available for any task. Promotional credits are used before purchased credits."
-      >
-        <Row label="Keep working past a provider limit by spending usage credits.">
-          <Toggle label="Use usage credits" checked={overage} onChange={setOverage} />
-        </Row>
-        <Table
-          columns={[
-            { label: "", width: "2fr" },
-            { label: "Granted", align: "end" },
-            { label: "Spent", align: "end" },
-            { label: "Remaining", align: "end" },
-          ]}
-          rows={[
-            [
-              <span key="p" className={styles.dotLabel}>Promotional</span>,
-              `$${MOCK_USAGE.credits.granted.toFixed(2)}`,
-              `$${MOCK_USAGE.credits.spent.toFixed(2)}`,
-              <strong key="r">${MOCK_USAGE.credits.remaining.toFixed(2)}</strong>,
-            ],
-          ]}
-        />
-        <div className={styles.buyRow}>
-          <button type="button" className={styles.buy}>
-            Buy more usage <span>Up to 30% off</span>
-          </button>
-        </div>
-      </Group>
-
-      <p className={styles.muted}>
-        <CircleHelp size={13} /> Figures on this page are preview data until the service reports real usage.
-      </p>
-    </Page>
-  );
-}
+// Usage reads real data from the service; it lives in its own module.
+export { UsagePage } from "./UsagePage";
