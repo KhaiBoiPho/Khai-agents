@@ -14,7 +14,7 @@ loguru>=0.7.0
 mcp>=1.29,<2
 mcp-server-git
 nest_asyncio
-openai>=1.55.0
+openai>=3.24.0
 openapi
 pathlib2
 prompt_toolkit>=3.0.0
