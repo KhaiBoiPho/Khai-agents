@@ -109,8 +109,8 @@ export interface ClientRuntime extends RpcTransport {
   chooseFiles?(): Promise<PendingFile[]>;
   /** ...and put them in the thread's workspace once it does; returns paths. */
   uploadFiles?(threadId: string, files: PendingFile[]): Promise<string[]>;
-  /** Hosted web: write one file at `path` relative to the user's workspace. */
-  uploadWorkspaceFile?(path: string, file: Blob): Promise<void>;
+  /** Hosted web: write files at paths relative to the user's workspace. */
+  uploadWorkspaceFiles?(files: Array<{ path: string; file: Blob }>): Promise<void>;
   downloadFile?(threadId: string, path: string): Promise<void>;
   /** A workspace file's raw bytes, for in-app previews of binary documents. */
   readFileBytes?(threadId: string, path: string): Promise<ArrayBuffer>;

@@ -10,7 +10,7 @@ import re
 import secrets
 import stat
 from pathlib import Path
-from urllib.parse import quote
+from urllib.parse import quote, unquote
 
 from aiohttp import web
 
@@ -23,6 +23,9 @@ from core.version import __version__
 ASSET_DIRECTORY = Path(__file__).with_name("web_assets")
 MAX_UPLOAD = 10 * 1024 * 1024
 MAX_DOWNLOAD = 32 * 1024 * 1024
+# One folder-upload request (app_server.web_surface.workspace_upload).
+MAX_BATCH_FILES = 200
+MAX_BATCH_BYTES = 24 * 1024 * 1024
 
 
 def read_web_build(assets: Path = ASSET_DIRECTORY) -> dict | None:
@@ -228,71 +231,83 @@ class WebSurface:
                     os.close(directory)
 
     async def workspace_upload(self, request):
-        """One file of a folder the browser uploads into the user's workspace.
+        """Files of a folder the browser uploads into the user's workspace.
 
-        ``path`` is relative to the workspace root, e.g. ``my-app/src/main.py``;
-        an existing file is replaced. Hosted workers only.
+        A ``multipart/form-data`` body; each part is one file whose field
+        name is its URI-encoded path relative to the workspace root, e.g.
+        ``my-app%2Fsrc%2Fmain.py``. Existing files are replaced. Batching many
+        files per request keeps a large folder to a few dozen requests.
+        Hosted workers only.
         """
 
         self.auth.require(request)
         root = workspace_root()
         if root is None:
             raise web.HTTPNotFound()
-        if request.content_type != "application/octet-stream":
-            raise web.HTTPUnsupportedMediaType(text="Binary upload body required")
-        if request.content_length is not None and request.content_length > MAX_UPLOAD:
-            raise web.HTTPRequestEntityTooLarge(
-                max_size=MAX_UPLOAD, actual_size=request.content_length
-            )
-        try:
-            relative = relative_path(request.query.get("path", ""))
-        except ValueError:
-            raise web.HTTPBadRequest(text="Invalid file path") from None
-        target = root / relative
+        if request.content_type != "multipart/form-data":
+            raise web.HTTPUnsupportedMediaType(text="multipart/form-data body required")
+        written: list[str] = []
+        total = 0
+        async with self._uploads:
+            reader = await request.multipart()
+            async for part in reader:
+                if len(written) >= MAX_BATCH_FILES:
+                    raise web.HTTPRequestEntityTooLarge(
+                        max_size=MAX_BATCH_FILES, actual_size=len(written) + 1
+                    )
+                try:
+                    relative = relative_path(unquote(part.name or ""))
+                except ValueError:
+                    raise web.HTTPBadRequest(text=f"Invalid file path: {part.name}") from None
+                total += await self._write_workspace_file(root, root / relative, part)
+                if total > MAX_BATCH_BYTES:
+                    raise web.HTTPRequestEntityTooLarge(
+                        max_size=MAX_BATCH_BYTES, actual_size=total
+                    )
+                written.append(str(relative))
+        return web.json_response({"files": written, "size": total})
 
+    async def _write_workspace_file(self, root: Path, target: Path, part) -> int:
         def prepare() -> None:
             target.parent.mkdir(parents=True, exist_ok=True)
             # A symlink the agent created must not lead an upload elsewhere.
             if not within(root, target.parent) or target.is_symlink():
                 raise web.HTTPForbidden(text="Path leaves the workspace")
 
-        async with self._uploads:
-            await asyncio.to_thread(prepare)
-            staging = target.with_name(f".{target.name}.{secrets.token_hex(6)}.part")
-            descriptor = os.open(
-                staging,
-                os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0),
-                0o600,
-            )
-            completed = False
-            try:
-                count = 0
-                async for chunk in request.content.iter_chunked(64 * 1024):
-                    count += len(chunk)
-                    if count > MAX_UPLOAD:
-                        raise web.HTTPRequestEntityTooLarge(
-                            max_size=MAX_UPLOAD, actual_size=count
-                        )
+        await asyncio.to_thread(prepare)
+        staging = target.with_name(f".{target.name}.{secrets.token_hex(6)}.part")
+        descriptor = os.open(
+            staging,
+            os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0),
+            0o600,
+        )
+        completed = False
+        try:
+            count = 0
+            while chunk := await part.read_chunk(64 * 1024):
+                count += len(chunk)
+                if count > MAX_UPLOAD:
+                    raise web.HTTPRequestEntityTooLarge(max_size=MAX_UPLOAD, actual_size=count)
 
-                    def write_all(data=chunk):
-                        view = memoryview(data)
-                        while view:
-                            written = os.write(descriptor, view)
-                            if not written:
-                                raise OSError("upload write made no progress")
-                            view = view[written:]
+                def write_all(data=chunk):
+                    view = memoryview(data)
+                    while view:
+                        done = os.write(descriptor, view)
+                        if not done:
+                            raise OSError("upload write made no progress")
+                        view = view[done:]
 
-                    await _file_io(write_all)
+                await _file_io(write_all)
+            os.close(descriptor)
+            descriptor = None
+            os.replace(staging, target)
+            completed = True
+            return count
+        finally:
+            if descriptor is not None:
                 os.close(descriptor)
-                descriptor = None
-                os.replace(staging, target)
-                completed = True
-            finally:
-                if descriptor is not None:
-                    os.close(descriptor)
-                if not completed:
-                    staging.unlink(missing_ok=True)
-        return web.json_response({"path": str(target), "size": count})
+            if not completed:
+                staging.unlink(missing_ok=True)
 
     async def _index_upload(self, context, filename: str) -> None:
         """Queue background document indexing for an uploaded document.

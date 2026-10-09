@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 import asyncio
+from urllib.parse import quote
+
+import aiohttp
 
 import pytest
 
@@ -28,24 +31,29 @@ def test_workspace_upload_and_confinement(tmp_path, monkeypatch):
     async def scenario():
         async with control_server(tmp_path) as (control, client):
             headers = await browser_headers(control, client)
-            upload = {**headers, "Content-Type": "application/octet-stream"}
-            response = await client.post(
-                "/api/workspace/upload?path=app/src/main.py", headers=upload, data=b"print(1)"
-            )
+
+            def form(files):
+                data = aiohttp.FormData()
+                for path, body in files.items():
+                    data.add_field(quote(path, safe=""), body, filename="file")
+                return data
+
+            async def upload(files):
+                return await client.post(
+                    "/api/workspace/upload", headers=headers, data=form(files)
+                )
+
+            response = await upload({"app/src/main.py": b"print(1)", "app/README.md": b"hi"})
             assert response.status == 200
+            assert (await response.json())["files"] == ["app/src/main.py", "app/README.md"]
             assert (root / "app/src/main.py").read_bytes() == b"print(1)"
-            response = await client.post(
-                "/api/workspace/upload?path=../escape.txt", headers=upload, data=b"x"
-            )
-            assert response.status == 400
+            assert (await upload({"../escape.txt": b"x"})).status == 400
             outside = tmp_path / "outside"
             outside.mkdir()
             (root / "link").symlink_to(outside)
-            response = await client.post(
-                "/api/workspace/upload?path=link/x.txt", headers=upload, data=b"x"
-            )
-            assert response.status == 403
+            assert (await upload({"link/x.txt": b"x"})).status == 403
             assert not (outside / "x.txt").exists()
+            assert not list(root.rglob("*.part"))
 
     asyncio.run(scenario())
 

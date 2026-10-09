@@ -46,9 +46,13 @@ describe("filterChosenFiles", () => {
         "dotnet/App.csproj": "",
         "dotnet/bin/Debug/App.dll": "",
         "scripts/bin/deploy.sh": "",
+        "electron/package.json": "",
+        "electron/build/icon.png": "",
       }),
     ).toEqual([
       "app/dotnet/App.csproj",
+      "app/electron/build/icon.png",
+      "app/electron/package.json",
       "app/go/go.mod",
       "app/go/vendor/lib/lib.go",
       "app/php/composer.json",

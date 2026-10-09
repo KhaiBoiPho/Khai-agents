@@ -12,6 +12,27 @@ import {
 } from "./folderFilter";
 
 const UPLOAD_ATTEMPTS = 3;
+// Per request; the server accepts up to 200 files and 24 MiB.
+const BATCH_FILES = 100;
+const BATCH_BYTES = 8 * 1024 * 1024;
+
+/** Consecutive groups of files, each one upload request. */
+function batches(uploads: Upload[]): Upload[][] {
+  const groups: Upload[][] = [];
+  let current: Upload[] = [];
+  let bytes = 0;
+  for (const upload of uploads) {
+    if (current.length && (current.length >= BATCH_FILES || bytes + upload.file.size > BATCH_BYTES)) {
+      groups.push(current);
+      current = [];
+      bytes = 0;
+    }
+    current.push(upload);
+    bytes += upload.file.size;
+  }
+  if (current.length) groups.push(current);
+  return groups;
+}
 
 interface FolderUploadProps {
   runtime: ClientRuntime;
@@ -32,7 +53,7 @@ export function FolderUpload({ runtime, root, onChoose, onCancel }: FolderUpload
   const [dragging, setDragging] = useState(false);
 
   const send = async (uploads: Upload[]) => {
-    const write = runtime.uploadWorkspaceFile?.bind(runtime);
+    const write = runtime.uploadWorkspaceFiles?.bind(runtime);
     if (!write) return;
     const kept = uploads.filter((upload) => upload.file.size <= MAX_FILE);
     if (kept.length > MAX_FILES) {
@@ -46,14 +67,14 @@ export function FolderUpload({ runtime, root, onChoose, onCancel }: FolderUpload
     setError(null);
     let done = 0;
     setBusy(`Uploading 0 of ${kept.length} files…`);
-    const queue = [...kept];
+    const queue = batches(kept);
     try {
-      // One stalled request over a long upload is normal on a relayed
-      // connection; retry it rather than failing the whole folder.
-      const sendOne = async (upload: Upload) => {
+      // A stalled request is normal now and then on a relayed connection;
+      // retry the batch rather than failing the whole folder.
+      const sendBatch = async (batch: Upload[]) => {
         for (let attempt = 1; ; attempt += 1) {
           try {
-            return await write(upload.path, upload.file);
+            return await write(batch);
           } catch (cause) {
             // The runtime marks 4xx answers as not retryable; network errors
             // and timeouts carry no code.
@@ -61,7 +82,7 @@ export function FolderUpload({ runtime, root, onChoose, onCancel }: FolderUpload
             const permanent = code !== undefined && !retryable;
             if (permanent || attempt >= UPLOAD_ATTEMPTS)
               throw new Error(
-                `Could not upload ${upload.path}: ${cause instanceof Error ? cause.message : String(cause)}`,
+                `Upload failed: ${cause instanceof Error ? cause.message : String(cause)}`,
                 { cause },
               );
             await new Promise((resolve) => setTimeout(resolve, 1000 * attempt));
@@ -70,15 +91,15 @@ export function FolderUpload({ runtime, root, onChoose, onCancel }: FolderUpload
       };
       const worker = async () => {
         for (let next = queue.shift(); next; next = queue.shift()) {
-          await sendOne(next);
-          done += 1;
+          await sendBatch(next);
+          done += next.length;
           setBusy(`Uploading ${done} of ${kept.length} files…`);
         }
       };
-      await Promise.all([worker(), worker(), worker(), worker()]);
+      await Promise.all([worker(), worker()]);
       onChoose(`${root}/${kept[0].path.split("/")[0]}`);
     } catch (cause) {
-      queue.length = 0; // stop the other workers
+      queue.length = 0; // stop the other worker
       setError(cause instanceof Error ? cause.message : String(cause));
     } finally {
       setBusy(null);

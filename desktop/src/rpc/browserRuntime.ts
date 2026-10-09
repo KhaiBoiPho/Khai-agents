@@ -540,16 +540,21 @@ export class BrowserRuntime implements ClientRuntime {
       files.flatMap((file) => (file.source instanceof File ? [file.source] : [])),
     );
   }
-  async uploadWorkspaceFile(path: string, file: Blob): Promise<void> {
+  async uploadWorkspaceFiles(
+    files: Array<{ path: string; file: Blob }>,
+  ): Promise<void> {
+    const form = new FormData();
+    let bytes = 0;
+    for (const { path, file } of files) {
+      // The field name carries the path: browsers may rewrite file names.
+      form.append(encodeURIComponent(path), file, "file");
+      bytes += file.size;
+    }
     await this.http(
-      `/api/workspace/upload?${new URLSearchParams({ path })}`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/octet-stream" },
-        body: file,
-      },
-      // A minute, plus time for the file at a slow 50 KB/s upload.
-      60000 + Math.ceil(file.size / 50),
+      "/api/workspace/upload",
+      { method: "POST", body: form },
+      // A minute, plus time for the batch at a slow 50 KB/s upload.
+      60000 + Math.ceil(bytes / 50),
     );
   }
   async pickFile(threadId?: string): Promise<string | null> {

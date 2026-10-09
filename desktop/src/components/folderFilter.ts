@@ -35,13 +35,12 @@ const GENERATED = new Set([
 
 /** Generated only when the project around them has the given marker. */
 const GENERATED_BESIDE: Array<[folder: string, marker: RegExp]> = [
-  ["vendor", /^(composer\.json|Gemfile)$/], // PHP Composer, Ruby bundler
+  ["vendor", /^composer\.json$/], // PHP Composer
   ["deps", /^mix\.exs$/], // Elixir
   ["_build", /^(mix\.exs|rebar\.config|dune-project)$/], // Elixir, Erlang, OCaml
   ["target", /^(Cargo\.toml|pom\.xml|build\.sbt)$/], // Rust, Maven, sbt
-  ["build", /^(build\.gradle(\.kts)?|settings\.gradle(\.kts)?|pubspec\.yaml|CMakeLists\.txt|package\.json|setup\.py|pyproject\.toml)$/],
-  ["dist", /^(package\.json|setup\.py|pyproject\.toml|.*\.cabal)$/],
-  ["out", /^(package\.json|build\.gradle(\.kts)?|.*\.iml)$/],
+  // build/, dist/ and out/ are left to .gitignore: projects keep real
+  // sources there too (electron-builder resources, published dist files).
   ["bin", /\.(csproj|fsproj|vbproj|sln)$/], // .NET
   ["obj", /\.(csproj|fsproj|vbproj|sln)$/], // .NET
   [".build", /^Package\.swift$/], // SwiftPM
@@ -53,7 +52,7 @@ const GENERATED_PATTERN = [/\.egg-info$/, /^cmake-build-/];
 const JUNK_FILE = /^(\.DS_Store|Thumbs\.db|desktop\.ini)$|\.(pyc|pyo|class|o)$/;
 
 export const MAX_FILE = 10 * 1024 * 1024;
-export const MAX_FILES = 5000;
+export const MAX_FILES = 20000;
 
 export class FolderFilter {
   /** Directory path ("" for the root) -> its .gitignore rules. */
