@@ -108,6 +108,7 @@
     "highlightjs-sap-abap": "0.3.0",
     "i18next": "^26.3.6",
     "i18next-http-backend": "3.0.6",
+    "ignore": "7.0.5",
     "image-dimensions": "2.5.0",
     "jotai": "2.20.1",
     "js-cookie": "3.0.7",

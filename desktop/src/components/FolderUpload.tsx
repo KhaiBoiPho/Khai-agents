@@ -3,27 +3,15 @@ import { useRef, useState, type DragEvent } from "react";
 
 import type { ClientRuntime } from "../rpc/contracts";
 import styles from "./FolderPicker.module.css";
+import {
+  filterChosenFiles,
+  MAX_FILE,
+  MAX_FILES,
+  readDroppedFolder,
+  type Upload,
+} from "./folderFilter";
 
-/** Folders an upload leaves out: dependencies, build output, VCS data. */
-const SKIPPED = new Set([
-  ".git",
-  "node_modules",
-  ".venv",
-  "venv",
-  "__pycache__",
-  ".next",
-  "dist",
-  "build",
-  "target",
-]);
-const MAX_FILE = 10 * 1024 * 1024;
-const MAX_FILES = 5000;
-
-interface Upload {
-  /** Path relative to the workspace root, starting with the folder's name. */
-  path: string;
-  file: File;
-}
+const UPLOAD_ATTEMPTS = 3;
 
 interface FolderUploadProps {
   runtime: ClientRuntime;
@@ -45,11 +33,8 @@ export function FolderUpload({ runtime, root, onChoose, onCancel }: FolderUpload
 
   const send = async (uploads: Upload[]) => {
     const write = runtime.uploadWorkspaceFile?.bind(runtime);
-    if (!write || !uploads.length) return;
-    const wanted = uploads.filter(
-      (upload) => !upload.path.split("/").slice(0, -1).some((part) => SKIPPED.has(part)),
-    );
-    const kept = wanted.filter((upload) => upload.file.size <= MAX_FILE);
+    if (!write) return;
+    const kept = uploads.filter((upload) => upload.file.size <= MAX_FILE);
     if (kept.length > MAX_FILES) {
       setError(`That folder has ${kept.length} files; the limit is ${MAX_FILES}.`);
       return;
@@ -61,11 +46,31 @@ export function FolderUpload({ runtime, root, onChoose, onCancel }: FolderUpload
     setError(null);
     let done = 0;
     setBusy(`Uploading 0 of ${kept.length} files…`);
+    const queue = [...kept];
     try {
-      const queue = [...kept];
+      // One stalled request over a long upload is normal on a relayed
+      // connection; retry it rather than failing the whole folder.
+      const sendOne = async (upload: Upload) => {
+        for (let attempt = 1; ; attempt += 1) {
+          try {
+            return await write(upload.path, upload.file);
+          } catch (cause) {
+            // The runtime marks 4xx answers as not retryable; network errors
+            // and timeouts carry no code.
+            const { code, retryable } = cause as { code?: string; retryable?: boolean };
+            const permanent = code !== undefined && !retryable;
+            if (permanent || attempt >= UPLOAD_ATTEMPTS)
+              throw new Error(
+                `Could not upload ${upload.path}: ${cause instanceof Error ? cause.message : String(cause)}`,
+                { cause },
+              );
+            await new Promise((resolve) => setTimeout(resolve, 1000 * attempt));
+          }
+        }
+      };
       const worker = async () => {
         for (let next = queue.shift(); next; next = queue.shift()) {
-          await write(next.path, next.file);
+          await sendOne(next);
           done += 1;
           setBusy(`Uploading ${done} of ${kept.length} files…`);
         }
@@ -73,10 +78,22 @@ export function FolderUpload({ runtime, root, onChoose, onCancel }: FolderUpload
       await Promise.all([worker(), worker(), worker(), worker()]);
       onChoose(`${root}/${kept[0].path.split("/")[0]}`);
     } catch (cause) {
+      queue.length = 0; // stop the other workers
       setError(cause instanceof Error ? cause.message : String(cause));
     } finally {
       setBusy(null);
       if (input.current) input.current.value = "";
+    }
+  };
+
+  const choose = async (files: File[]) => {
+    if (!files.length) return;
+    setBusy("Reading folder…");
+    try {
+      await send(await filterChosenFiles(files));
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : String(cause));
+      setBusy(null);
     }
   };
 
@@ -91,7 +108,7 @@ export function FolderUpload({ runtime, root, onChoose, onCancel }: FolderUpload
     }
     setBusy("Reading folder…");
     try {
-      await send(await readDirectory(entry as FileSystemDirectoryEntry));
+      await send(await readDroppedFolder(entry as FileSystemDirectoryEntry));
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause));
       setBusy(null);
@@ -114,9 +131,10 @@ export function FolderUpload({ runtime, root, onChoose, onCancel }: FolderUpload
         <header className={styles.header}>
           <h2 id="folder-upload-title">Open a folder</h2>
           <p>
-            Upload a project folder from this computer. It is copied into your
-            private workspace; dependencies and build output such as
-            node_modules are left out.
+            Upload a project folder from this computer into your private
+            workspace. Dependencies, caches and build output for any language
+            (node_modules, .venv, target, vendor…) and everything in the
+            project's .gitignore are left out.
           </p>
         </header>
 
@@ -127,14 +145,7 @@ export function FolderUpload({ runtime, root, onChoose, onCancel }: FolderUpload
           multiple
           // Non-standard attributes React does not type.
           {...{ webkitdirectory: "", directory: "" }}
-          onChange={(event) =>
-            void send(
-              Array.from(event.target.files ?? []).map((file) => ({
-                path: file.webkitRelativePath,
-                file,
-              })),
-            )
-          }
+          onChange={(event) => void choose(Array.from(event.target.files ?? []))}
         />
         <button
           type="button"
@@ -174,35 +185,4 @@ export function FolderUpload({ runtime, root, onChoose, onCancel }: FolderUpload
       </section>
     </div>
   );
-}
-
-/** Every file under a dropped folder, with paths starting at its name. */
-async function readDirectory(directory: FileSystemDirectoryEntry): Promise<Upload[]> {
-  const uploads: Upload[] = [];
-  const walk = async (folder: FileSystemDirectoryEntry, prefix: string) => {
-    const reader = folder.createReader();
-    // readEntries returns results in batches until an empty one.
-    for (;;) {
-      const batch = await new Promise<FileSystemEntry[]>((resolve, reject) =>
-        reader.readEntries(resolve, reject),
-      );
-      if (!batch.length) break;
-      for (const entry of batch) {
-        const path = `${prefix}/${entry.name}`;
-        if (entry.isDirectory) {
-          if (!SKIPPED.has(entry.name))
-            await walk(entry as FileSystemDirectoryEntry, path);
-        } else {
-          const file = await new Promise<File>((resolve, reject) =>
-            (entry as FileSystemFileEntry).file(resolve, reject),
-          );
-          uploads.push({ path, file });
-        }
-        if (uploads.length > MAX_FILES)
-          throw new Error(`That folder has more than ${MAX_FILES} files.`);
-      }
-    }
-  };
-  await walk(directory, directory.name);
-  return uploads;
 }

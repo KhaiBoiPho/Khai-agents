@@ -548,7 +548,8 @@ export class BrowserRuntime implements ClientRuntime {
         headers: { "Content-Type": "application/octet-stream" },
         body: file,
       },
-      60000,
+      // A minute, plus time for the file at a slow 50 KB/s upload.
+      60000 + Math.ceil(file.size / 50),
     );
   }
   async pickFile(threadId?: string): Promise<string | null> {
