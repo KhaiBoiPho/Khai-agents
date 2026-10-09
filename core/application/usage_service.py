@@ -61,6 +61,21 @@ class _Totals:
                 tokens.input_tokens * prices[0] + tokens.output_tokens * prices[1]
             ) / 1_000_000
 
+    def add_reported(self, tokens: UsageTokens, cost_usd: float, *, requests: int = 1) -> None:
+        """A response whose provider reported what it charged."""
+
+        self.input_tokens += tokens.input_tokens
+        self.output_tokens += tokens.output_tokens
+        self.cached_input_tokens += tokens.cached_input_tokens
+        self.requests += requests
+        self.cost_usd += cost_usd
+
+    def add_record(self, record, prices: tuple[float, float] | None) -> None:
+        if record.cost_usd is not None:
+            self.add_reported(record.tokens, record.cost_usd)
+        else:
+            self.add(record.tokens, prices)
+
     def view(self) -> dict[str, Any]:
         return {
             "inputTokens": self.input_tokens,
@@ -122,19 +137,34 @@ class UsageService:
             day = record.recorded_at.astimezone(zone).date()
             bucket = daily.get(day)
             if bucket is not None:
-                bucket.add(record.tokens, prices)
+                bucket.add_record(record, prices)
             if day >= week_start:
-                week_totals.add(record.tokens, prices)
+                week_totals.add_record(record, prices)
             if day == today:
-                today_totals.add(record.tokens, prices)
+                today_totals.add_record(record, prices)
 
         all_time = _Totals()
         models: list[dict[str, Any]] = []
-        for model_id, provider_name, requests, inputs, outputs, cached in by_model:
-            prices = prices_for(model_id)
+        for entry in by_model:
+            prices = prices_for(entry.model_id)
             totals = _Totals()
-            totals.add(UsageTokens(inputs, outputs, cached), prices, requests=requests)
-            all_time.add(UsageTokens(inputs, outputs, cached), prices, requests=requests)
+            # Reported charges where the provider gave them, list prices for
+            # the rest (cached counts ride with the reported part).
+            reported = UsageTokens(
+                entry.tokens.input_tokens - entry.unreported_tokens.input_tokens,
+                entry.tokens.output_tokens - entry.unreported_tokens.output_tokens,
+                entry.tokens.cached_input_tokens,
+            )
+            unreported_requests = entry.requests - entry.reported_requests
+            for target in (totals, all_time):
+                target.add_reported(
+                    reported, entry.reported_cost_usd, requests=entry.reported_requests
+                )
+                if unreported_requests:
+                    target.add(
+                        entry.unreported_tokens, prices, requests=unreported_requests
+                    )
+            model_id, provider_name = entry.model_id, entry.provider_name
             models.append(
                 {
                     "modelId": model_id,

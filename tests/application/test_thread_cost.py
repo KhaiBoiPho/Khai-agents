@@ -139,3 +139,35 @@ def test_balance_baseline_follows_spending_top_ups_and_new_keys(
     assert other["baselineUsd"] == pytest.approx(5.0)
     stored = (tmp_path / "provider_balance.json").read_text()
     assert "sk-or" not in stored
+
+
+def test_usage_summary_prefers_reported_costs(tmp_path: Path) -> None:
+    from core.application import DeepCodeApplication
+    from core.application.usage_service import UsageService, model_prices
+    from core.persistence.usage_repository import UsageRepository
+
+    application = DeepCodeApplication.open(tmp_path / "state.sqlite3")
+    try:
+        with application.database.transaction() as connection:
+            repository = UsageRepository(connection)
+            repository.record(
+                thread_id="thr_a",
+                usage={"prompt_tokens": 100, "completion_tokens": 10, USAGE_COST_KEY: 2_000_000},
+                model_id="gpt-4o",
+            )
+            repository.record(
+                thread_id="thr_b",
+                usage={"prompt_tokens": 50, "completion_tokens": 5},
+                model_id="gpt-4o",
+            )
+        summary = UsageService(application.database).summary()
+        prices = model_prices("gpt-4o")
+        assert prices is not None
+        listed = (50 * prices[0] + 5 * prices[1]) / 1_000_000
+        for view in (summary["allTime"], summary["today"], summary["models"][0]):
+            assert view["costUsd"] == pytest.approx(0.002 + listed)
+            assert view["requests"] == 2
+            assert view["inputTokens"] == 150
+            assert view["unpricedRequests"] == 0
+    finally:
+        application.close()

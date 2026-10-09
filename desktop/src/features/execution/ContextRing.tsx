@@ -129,6 +129,8 @@ export function ContextRing({
           <small className={styles.tip}>
             Tip: <code>/compact focus on …</code> tells the summary what to keep.
           </small>
+          <hr />
+          <ApiSpend runtime={runtime} thread={thread} />
           {onOpenUsage ? (
             <>
               <hr />
@@ -149,6 +151,76 @@ export function ContextRing({
       ) : null}
     </div>
   );
+}
+
+interface Spend {
+  /** Everything this Khai-Agents account has spent, since it was created. */
+  accountUsd: number;
+  unpricedRequests: number;
+  /** The OpenRouter account's lifetime spend, when the chat uses OpenRouter. */
+  openRouterUsd: number | null;
+}
+
+/** API money spent: by this account here, and on the OpenRouter account. */
+function ApiSpend({ runtime, thread }: { runtime: RpcTransport; thread: Thread | null }) {
+  const [spend, setSpend] = useState<Spend | null>(null);
+  const threadId = thread?.id ?? null;
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      const summary = await runtime
+        .request("usage/summary", {
+          days: 1,
+          utcOffsetMinutes: -new Date().getTimezoneOffset(),
+        })
+        .catch(() => null);
+      const connectionId = threadId
+        ? ((await runtime.request("thread/execution/read", { threadId }).catch(() => null))
+            ?.executionProfile.connectionId ?? null)
+        : null;
+      const balance = connectionId
+        ? await runtime.request("provider/balance", { connectionId }).catch(() => null)
+        : null;
+      if (cancelled || !summary) return;
+      setSpend({
+        accountUsd: summary.allTime.costUsd,
+        unpricedRequests: summary.allTime.unpricedRequests,
+        openRouterUsd: balance?.supported ? (balance.totalUsage ?? null) : null,
+      });
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [runtime, threadId]);
+
+  return (
+    <>
+      <div className={styles.row}>
+        <strong>API spend</strong>
+      </div>
+      <div className={styles.row}>
+        <span>This account, since it was created</span>
+        <strong>{spend ? usd(spend.accountUsd) : "—"}</strong>
+      </div>
+      {spend?.openRouterUsd != null ? (
+        <div className={styles.row}>
+          <span>OpenRouter account, all time</span>
+          <strong>{usd(spend.openRouterUsd)}</strong>
+        </div>
+      ) : null}
+      {spend && spend.unpricedRequests > 0 ? (
+        <p className={styles.note}>
+          {spend.unpricedRequests} model calls have no known price and are not counted.
+        </p>
+      ) : null}
+    </>
+  );
+}
+
+function usd(value: number): string {
+  if (value === 0) return "$0.00";
+  if (value < 0.01) return `$${value.toFixed(4)}`;
+  return `$${value.toFixed(2)}`;
 }
 
 /**

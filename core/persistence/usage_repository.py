@@ -60,6 +60,19 @@ class UsageRecord:
     cost_usd: float | None = None
 
 
+@dataclass(frozen=True, slots=True)
+class ModelTotals:
+    model_id: str | None
+    provider_name: str | None
+    requests: int
+    tokens: UsageTokens
+    #: Summed provider-reported charges, and how many responses had one.
+    reported_cost_usd: float
+    reported_requests: int
+    #: Tokens of the responses without a reported charge (priced by list).
+    unreported_tokens: UsageTokens
+
+
 class UsageRepository:
     def __init__(self, connection: Connection) -> None:
         self.connection = connection
@@ -171,16 +184,27 @@ class UsageRepository:
         ).fetchall()
         return [self._from_row(row) for row in rows]
 
-    def totals_by_model(self) -> list[tuple[str | None, str | None, int, int, int, int]]:
-        """``(model, provider, requests, input, output, cached)`` over all time."""
+    def totals_by_model(self) -> list[ModelTotals]:
+        """Per model and provider, over all time."""
 
         rows = self.connection.execute(
             "SELECT model_id, provider_name, COUNT(*), SUM(input_tokens), "
-            "SUM(output_tokens), SUM(cached_input_tokens) FROM usage_records "
-            "GROUP BY model_id, provider_name"
+            "SUM(output_tokens), SUM(cached_input_tokens), "
+            "COALESCE(SUM(cost_usd), 0), COUNT(cost_usd), "
+            "COALESCE(SUM(CASE WHEN cost_usd IS NULL THEN input_tokens END), 0), "
+            "COALESCE(SUM(CASE WHEN cost_usd IS NULL THEN output_tokens END), 0) "
+            "FROM usage_records GROUP BY model_id, provider_name"
         ).fetchall()
         return [
-            (row[0], row[1], int(row[2]), int(row[3]), int(row[4]), int(row[5]))
+            ModelTotals(
+                model_id=row[0],
+                provider_name=row[1],
+                requests=int(row[2]),
+                tokens=UsageTokens(int(row[3]), int(row[4]), int(row[5])),
+                reported_cost_usd=float(row[6]),
+                reported_requests=int(row[7]),
+                unreported_tokens=UsageTokens(int(row[8]), int(row[9]), 0),
+            )
             for row in rows
         ]
 
