@@ -46,12 +46,6 @@ def test_workspace_upload_and_confinement(tmp_path, monkeypatch):
             )
             assert response.status == 403
             assert not (outside / "x.txt").exists()
-            response = await client.post(
-                "/api/workspace/clone",
-                headers=headers,
-                json={"url": "file:///etc"},
-            )
-            assert response.status == 400
 
     asyncio.run(scenario())
 

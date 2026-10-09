@@ -8,10 +8,9 @@ import json
 import os
 import re
 import secrets
-import shutil
 import stat
-from pathlib import Path, PurePosixPath
-from urllib.parse import quote, urlsplit
+from pathlib import Path
+from urllib.parse import quote
 
 from aiohttp import web
 
@@ -24,9 +23,6 @@ from core.version import __version__
 ASSET_DIRECTORY = Path(__file__).with_name("web_assets")
 MAX_UPLOAD = 10 * 1024 * 1024
 MAX_DOWNLOAD = 32 * 1024 * 1024
-# Under the gateway relay's five-minute request limit.
-CLONE_TIMEOUT = 240
-GIT_URL = re.compile(r"https://[A-Za-z0-9.\-]+(:\d+)?/[\w.\-~/%+@]+")
 
 
 def read_web_build(assets: Path = ASSET_DIRECTORY) -> dict | None:
@@ -74,7 +70,6 @@ class WebSurface:
             web.get("/api/session", self.session),
             web.post("/api/uploads", self.upload),
             web.post("/api/workspace/upload", self.workspace_upload),
-            web.post("/api/workspace/clone", self.workspace_clone),
             web.get("/api/download", self.download),
         ]
 
@@ -298,58 +293,6 @@ class WebSurface:
                 if not completed:
                     staging.unlink(missing_ok=True)
         return web.json_response({"path": str(target), "size": count})
-
-    async def workspace_clone(self, request):
-        """Clone a public https Git repository into the user's workspace."""
-
-        self.auth.require(request)
-        root = workspace_root()
-        if root is None:
-            raise web.HTTPNotFound()
-        try:
-            body = await request.json()
-        except ValueError:
-            raise web.HTTPBadRequest(text="JSON body required") from None
-        url = str(body.get("url", "")).strip()
-        if not GIT_URL.fullmatch(url):
-            raise web.HTTPBadRequest(text="Use an https:// Git repository URL")
-        default = PurePosixPath(urlsplit(url).path).name.removesuffix(".git")
-        name = re.sub(r"[^\w.\-]", "_", str(body.get("name") or default))[:100].strip(".")
-        if not name:
-            raise web.HTTPBadRequest(text="Choose a folder name")
-        target = root / name
-        if target.exists() or target.is_symlink():
-            raise web.HTTPConflict(text=f"{name} already exists in your workspace")
-        process = await asyncio.create_subprocess_exec(
-            "git",
-            "-c",
-            "protocol.allow=never",
-            "-c",
-            "protocol.https.allow=always",
-            "clone",
-            "--depth",
-            "1",
-            "--",
-            url,
-            str(target),
-            stdin=asyncio.subprocess.DEVNULL,
-            stdout=asyncio.subprocess.DEVNULL,
-            stderr=asyncio.subprocess.PIPE,
-            env={**os.environ, "GIT_TERMINAL_PROMPT": "0"},
-        )
-        try:
-            _, stderr = await asyncio.wait_for(process.communicate(), CLONE_TIMEOUT)
-        except TimeoutError:
-            process.kill()
-            await process.wait()
-            await asyncio.to_thread(shutil.rmtree, target, True)
-            raise web.HTTPGatewayTimeout(text="Clone took too long") from None
-        if process.returncode != 0:
-            await asyncio.to_thread(shutil.rmtree, target, True)
-            lines = stderr.decode(errors="replace").strip().splitlines()
-            reason = lines[-1] if lines else "git clone failed"
-            raise web.HTTPBadRequest(text=reason[:300])
-        return web.json_response({"path": str(target)})
 
     async def _index_upload(self, context, filename: str) -> None:
         """Queue background document indexing for an uploaded document.

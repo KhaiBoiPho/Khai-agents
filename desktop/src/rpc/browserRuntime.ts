@@ -551,18 +551,6 @@ export class BrowserRuntime implements ClientRuntime {
       60000,
     );
   }
-  async cloneRepository(url: string): Promise<string> {
-    const response = await this.http(
-      "/api/workspace/clone",
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ url }),
-      },
-      300000,
-    );
-    return (await response.json()).path;
-  }
   async pickFile(threadId?: string): Promise<string | null> {
     return (await this.upload(threadId, false))[0] ?? null;
   }

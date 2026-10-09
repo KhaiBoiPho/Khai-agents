@@ -1,7 +1,7 @@
 """The one folder a hosted user's projects live in.
 
 A hosted worker (``KHAI_WORKSPACE_ROOT`` set by the gateway) only browses,
-opens, uploads into and clones into this folder. Without it, as on the
+opens and uploads into this folder. Without it, as on the
 desktop, every folder on the machine stays available.
 """
 

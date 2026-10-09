@@ -148,7 +148,6 @@ class ControlServer:
                 web.get("/api/rpc", self.business.handle),
                 web.post("/api/uploads", self.web_surface.upload),
                 web.post("/api/workspace/upload", self.web_surface.workspace_upload),
-                web.post("/api/workspace/clone", self.web_surface.workspace_clone),
                 web.get("/api/download", self.web_surface.download),
             ]
         )

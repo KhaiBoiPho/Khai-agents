@@ -162,7 +162,6 @@ class Gateway:
                 web.get("/api/rpc", self.rpc),
                 web.post("/api/uploads", self.upload),
                 web.post("/api/workspace/upload", self.upload),
-                web.post("/api/workspace/clone", self.upload),
                 web.get("/api/download", self.download),
             ]
         )
