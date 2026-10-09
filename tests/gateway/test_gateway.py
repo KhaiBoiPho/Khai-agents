@@ -337,3 +337,33 @@ def test_devices_are_listed_and_can_be_signed_out_one_by_one(tmp_path: Path) -> 
             await phone.close()
 
     _run(scenario, tmp_path)
+
+
+def test_only_administrators_get_the_servers_provider_keys(tmp_path: Path) -> None:
+    async def scenario(client, gateway, backend):
+        from dataclasses import replace
+
+        gateway.workers.settings = replace(
+            gateway.workers.settings,
+            extra_environment={"KHAI_DEFAULT_MODEL": "models/test"},
+            admin_environment={"GEMINI_API_KEY": "server-key"},
+        )
+        admin = await _register(client, "khai")
+        friend = await _register(client, "friend")
+        await _login(client, "khai")
+        await client.post(
+            f"/api/admin/users/{friend['id']}/approve", json={}, headers=_headers()
+        )
+        ws = await client.ws_connect("/api/rpc", headers=_headers())
+        await ws.close()
+        client.session.cookie_jar.clear()
+        await _login(client, "friend")
+        ws = await client.ws_connect("/api/rpc", headers=_headers())
+        await ws.close()
+
+        by_user = dict(zip(backend.started, backend.environments))
+        assert by_user[admin["id"]]["GEMINI_API_KEY"] == "server-key"
+        assert "GEMINI_API_KEY" not in by_user[friend["id"]]
+        assert by_user[friend["id"]]["KHAI_DEFAULT_MODEL"] == "models/test"
+
+    _run(scenario, tmp_path)

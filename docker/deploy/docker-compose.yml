@@ -56,6 +56,15 @@ services:
       KHAI_MAX_WORKERS: ${KHAI_MAX_WORKERS:-12}
       KHAI_WORKER_IDLE_SECONDS: ${KHAI_WORKER_IDLE_SECONDS:-1800}
       KHAI_WORKER_RUNTIME: ${KHAI_WORKER_RUNTIME:-}
+      # Default model for every worker; the provider keys go to
+      # administrators' workers only (members add their own in Settings).
+      KHAI_DEFAULT_CONNECTION: ${KHAI_DEFAULT_CONNECTION:-}
+      KHAI_DEFAULT_MODEL: ${KHAI_DEFAULT_MODEL:-}
+      KHAI_RAG_EMBEDDING_MODEL: ${KHAI_RAG_EMBEDDING_MODEL:-}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+      NVIDIA_API_KEY: ${NVIDIA_API_KEY:-}
+      FIRECRAWL_API_KEY: ${FIRECRAWL_API_KEY:-}
     volumes:
       # Same path inside and outside, so worker bind mounts line up.
       - ${KHAI_DATA_DIR}:${KHAI_DATA_DIR}

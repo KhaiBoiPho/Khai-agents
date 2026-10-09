@@ -7,7 +7,9 @@ see app_server/service.py) bound to one user:
   (core/auth/provisioning.py), so the database itself confines it;
 * its own home (sessions, settings, provider keys, MCP, skills) and
   workspace under ``<data root>/users/<id>/``;
-* a random bearer token only the gateway knows.
+* a random bearer token only the gateway knows;
+* the server's model provider keys, for administrators only (members add
+  their own in Settings, since a worker's code can read its environment).
 
 Two backends start workers. ``docker`` (the hosted deployment) runs one
 locked-down container per user: no capabilities, no new privileges, CPU,
@@ -76,6 +78,22 @@ class Backend(Protocol):
     async def alive(self, handle: object) -> bool: ...
 
 
+# Shared with every worker: which connection and model to start with.
+SHARED_VARIABLES = (
+    "DEEPCODE_LOG_LEVEL",
+    "KHAI_DEFAULT_CONNECTION",
+    "KHAI_DEFAULT_MODEL",
+    "KHAI_RAG_EMBEDDING_MODEL",
+)
+# The server's provider keys, given only to administrators' workers.
+ADMIN_VARIABLES = (
+    "GEMINI_API_KEY",
+    "OPENROUTER_API_KEY",
+    "NVIDIA_API_KEY",
+    "FIRECRAWL_API_KEY",
+)
+
+
 @dataclass(frozen=True, slots=True)
 class WorkerSettings:
     data_root: Path
@@ -85,14 +103,14 @@ class WorkerSettings:
     max_workers: int = 12
     start_timeout: float = 90.0
     extra_environment: dict[str, str] = field(default_factory=dict)
+    admin_environment: dict[str, str] = field(default_factory=dict)
 
     @classmethod
     def from_environment(cls, database_url: str) -> WorkerSettings:
         passthrough = {
-            name: os.environ[name]
-            for name in ("DEEPCODE_LOG_LEVEL",)
-            if os.environ.get(name)
+            name: os.environ[name] for name in SHARED_VARIABLES if os.environ.get(name)
         }
+        keys = {name: os.environ[name] for name in ADMIN_VARIABLES if os.environ.get(name)}
         return cls(
             data_root=Path(os.environ.get("KHAI_DATA_ROOT", "/data")).expanduser(),
             database_url=os.environ.get("KHAI_WORKER_DATABASE_URL", "") or database_url,
@@ -100,6 +118,7 @@ class WorkerSettings:
             idle_seconds=int(os.environ.get("KHAI_WORKER_IDLE_SECONDS", 30 * 60)),
             max_workers=int(os.environ.get("KHAI_MAX_WORKERS", 12)),
             extra_environment=passthrough,
+            admin_environment=keys,
         )
 
 
@@ -144,11 +163,14 @@ class WorkerManager:
     def user_directory(self, user_id: str) -> Path:
         return self.settings.data_root / "users" / UUID(user_id).hex
 
-    async def acquire(self, user_id: str, *, allow_commands: bool = False) -> Worker:
+    async def acquire(
+        self, user_id: str, *, allow_commands: bool = False, administrator: bool = False
+    ) -> Worker:
         """The user's running worker, started if needed.
 
-        ``allow_commands`` (the account's "run commands" permission) applies
-        when the worker starts; changing it means stopping the worker.
+        ``allow_commands`` (the account's "run commands" permission) and
+        ``administrator`` (whether it gets the server's provider keys) apply
+        when the worker starts; changing either means stopping the worker.
         """
 
         user_id = str(UUID(user_id))
@@ -166,7 +188,9 @@ class WorkerManager:
                     )
                 pending = asyncio.get_running_loop().create_future()
                 self._starting[user_id] = pending
-                asyncio.create_task(self._launch(user_id, pending, allow_commands))
+                asyncio.create_task(
+                    self._launch(user_id, pending, allow_commands, administrator)
+                )
         return await asyncio.shield(pending)
 
     async def stop(self, user_id: str) -> None:
@@ -176,10 +200,14 @@ class WorkerManager:
             await self._backend.stop(worker.handle)
 
     async def _launch(
-        self, user_id: str, future: asyncio.Future[Worker], allow_commands: bool
+        self,
+        user_id: str,
+        future: asyncio.Future[Worker],
+        allow_commands: bool,
+        administrator: bool,
     ) -> None:
         try:
-            worker = await self._start(user_id, allow_commands)
+            worker = await self._start(user_id, allow_commands, administrator)
         except BaseException as exc:  # noqa: BLE001 - handed to the waiters
             async with self._lock:
                 self._starting.pop(user_id, None)
@@ -195,12 +223,13 @@ class WorkerManager:
             self._workers[user_id] = worker
         future.set_result(worker)
 
-    async def _start(self, user_id: str, allow_commands: bool) -> Worker:
+    async def _start(self, user_id: str, allow_commands: bool, administrator: bool) -> Worker:
         role, password = await asyncio.to_thread(self._roles.issue, user_id)
         token = secrets.token_urlsafe(48)
         directory = self.user_directory(user_id)
         environment = {
             **self.settings.extra_environment,
+            **(self.settings.admin_environment if administrator else {}),
             "KHAI_USER_ID": user_id,
             "KHAI_WORKER_TOKEN": token,
             "KHAI_DATABASE_URL": _with_credentials(

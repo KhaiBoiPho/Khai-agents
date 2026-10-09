@@ -449,7 +449,7 @@ class Gateway:
 
     async def _warm(self, user: User) -> None:
         with contextlib.suppress(WorkerUnavailable):
-            await self.workers.acquire(user.id, allow_commands=user.can_execute)
+            await self._acquire(user)
 
     # -- administration ---------------------------------------------------------
 
@@ -546,9 +546,16 @@ class Gateway:
 
     # -- relays to the user's worker ------------------------------------------
 
+    def _acquire(self, user: User):
+        """Start options come from the account; changing them restarts the worker."""
+
+        return self.workers.acquire(
+            user.id, allow_commands=user.can_execute, administrator=user.is_admin
+        )
+
     async def _worker(self, user: User) -> Worker:
         try:
-            return await self.workers.acquire(user.id, allow_commands=user.can_execute)
+            return await self._acquire(user)
         except WorkerUnavailable as exc:
             raise web.HTTPServiceUnavailable(
                 text=json.dumps({"code": "WORKSPACE_UNAVAILABLE", "message": str(exc)}),
