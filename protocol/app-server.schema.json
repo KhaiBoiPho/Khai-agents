@@ -9085,6 +9085,13 @@
           ],
           "description": "What this key can still spend: the account remainder, capped by the key's own limit."
         },
+        "baselineUsd": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "The remainder when this key was first seen or last topped up: a meter's full width."
+        },
         "error": {
           "type": [
             "string",

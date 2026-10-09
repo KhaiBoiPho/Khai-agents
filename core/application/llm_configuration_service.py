@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import asyncio
 import getpass
+import hashlib
+import json
 import time
 
 import httpx
@@ -25,6 +27,7 @@ from core.application.provider_verification import (
 from core.config import (
     ConnectionProfileConfig,
     DeepCodeConfig,
+    deepcode_home,
     load_config,
     load_config_for_workspace,
 )
@@ -314,6 +317,11 @@ class LLMConfigurationService:
         OpenRouter does: ``/credits`` is the account's purchases and spend,
         ``/key`` the key's own spending limit. The smaller remainder is what
         this key can still spend. Other providers report nothing.
+
+        ``baselineUsd`` is the remainder when this key was first seen or last
+        topped up, so a meter can show what is left of that. It resets when
+        the key changes, the account's credits grow, or the remainder rises
+        above it (a raised key limit).
         """
 
         try:
@@ -332,6 +340,7 @@ class LLMConfigurationService:
             "totalUsage": None,
             "keyLimitRemaining": None,
             "remainingUsd": None,
+            "baselineUsd": None,
             "error": None,
         }
         try:
@@ -360,7 +369,50 @@ class LLMConfigurationService:
             if value is not None
         ]
         result["remainingUsd"] = max(0.0, min(remainders)) if remainders else None
+        result["baselineUsd"] = self._balance_baseline(
+            connection_id, connection.api_key, result
+        )
         return result
+
+    def _balance_baseline(
+        self, connection_id: str, api_key: str, balance: dict[str, Any]
+    ) -> float | None:
+        remaining = balance["remainingUsd"]
+        if remaining is None:
+            return None
+        path = deepcode_home() / "provider_balance.json"
+        try:
+            state = json.loads(path.read_text(encoding="utf-8"))
+            if not isinstance(state, dict):
+                state = {}
+        except (OSError, ValueError):
+            state = {}
+        # A digest, never the key: enough to notice a different key.
+        fingerprint = hashlib.sha256(api_key.encode("utf-8")).hexdigest()[:16]
+        credits = balance["totalCredits"]
+        previous = state.get(connection_id)
+        previous = previous if isinstance(previous, dict) else {}
+        baseline = _number(previous.get("baselineUsd"))
+        known_credits = _number(previous.get("totalCredits"))
+        if (
+            baseline is None
+            or previous.get("key") != fingerprint
+            or (credits is not None and known_credits is not None and credits > known_credits)
+            or remaining > baseline
+        ):
+            baseline = remaining
+        entry = {"key": fingerprint, "totalCredits": credits, "baselineUsd": baseline}
+        if previous != entry:
+            state[connection_id] = entry
+            try:
+                path.parent.mkdir(parents=True, exist_ok=True)
+                staging = path.with_suffix(".tmp")
+                staging.write_text(json.dumps(state), encoding="utf-8")
+                staging.chmod(0o600)
+                staging.replace(path)
+            except OSError:
+                pass  # The meter then measures from the current remainder.
+        return baseline
 
     def model_reasoning(
         self,

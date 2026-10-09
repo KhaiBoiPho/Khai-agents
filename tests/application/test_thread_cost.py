@@ -105,3 +105,37 @@ def test_balance_without_key_limit_and_for_other_providers(
     service = _service(tmp_path, monkeypatch, handler)
     assert service.balance("openrouter")["remainingUsd"] == 2.0
     assert service.balance("gemini") == {"supported": False}
+
+
+def test_balance_baseline_follows_spending_top_ups_and_new_keys(
+    tmp_path: Path, monkeypatch
+) -> None:
+    account = {"total_credits": 30.0, "total_usage": 29.0}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith("/credits"):
+            return httpx.Response(200, json={"data": dict(account)})
+        return httpx.Response(200, json={"data": {"limit_remaining": None}})
+
+    service = _service(tmp_path, monkeypatch, handler)
+    # First seen: the bar starts full at what is left now, not at $30.
+    first = service.balance("openrouter")
+    assert first["remainingUsd"] == pytest.approx(1.0)
+    assert first["baselineUsd"] == pytest.approx(1.0)
+    # Spending lowers the remainder against the same baseline.
+    account["total_usage"] = 29.75
+    spent = service.balance("openrouter")
+    assert spent["remainingUsd"] == pytest.approx(0.25)
+    assert spent["baselineUsd"] == pytest.approx(1.0)
+    # A top-up grows the account's credits: full again at the new remainder.
+    account["total_credits"] = 40.0
+    topped = service.balance("openrouter")
+    assert topped["remainingUsd"] == pytest.approx(10.25)
+    assert topped["baselineUsd"] == pytest.approx(10.25)
+    # A different key starts its own baseline.
+    account["total_usage"] = 35.0
+    monkeypatch.setenv("OPENROUTER_API_KEY", "sk-or-other")
+    other = service.balance("openrouter")
+    assert other["baselineUsd"] == pytest.approx(5.0)
+    stored = (tmp_path / "provider_balance.json").read_text()
+    assert "sk-or" not in stored

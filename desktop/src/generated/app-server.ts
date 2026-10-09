@@ -2052,6 +2052,10 @@ export interface ProviderBalanceResult {
    * What this key can still spend: the account remainder, capped by the key's own limit.
    */
   remainingUsd?: number | null;
+  /**
+   * The remainder when this key was first seen or last topped up: a meter's full width.
+   */
+  baselineUsd?: number | null;
   error?: string | null;
 }
 export interface Notifications {

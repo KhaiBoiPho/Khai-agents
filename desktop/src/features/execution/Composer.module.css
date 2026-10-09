@@ -1021,6 +1021,8 @@
 
 .chips {
   margin-bottom: 6px;
+  /* Clear the mascot that sits over the box's top-right corner. */
+  padding-right: 76px;
 }
 
 .chip,

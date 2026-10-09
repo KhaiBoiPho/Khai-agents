@@ -70,17 +70,16 @@ export function CreditBar({ runtime, threadId, connectionId, refreshKey }: Credi
   if (!snapshot) return null;
   const { balance, chatCostUsd } = snapshot;
   const remaining = balance.remainingUsd ?? null;
-  // The bar's full width is what the key started with: the account's
-  // credits, or the key's own limit when that is all OpenRouter reports.
-  const total =
-    balance.totalCredits ?? (remaining !== null ? remaining + (balance.totalUsage ?? 0) : null);
+  // Full width is what was left when this key was entered or last topped up.
+  const total = balance.baselineUsd ?? remaining;
   const share =
     remaining !== null && total ? Math.max(0, Math.min(100, (remaining / total) * 100)) : 100;
   const low = remaining !== null && remaining < LOW_BALANCE_USD;
   const details = [
     remaining !== null ? `OpenRouter credit left: ${usd(remaining)}` : null,
+    total !== null ? `Since the key was added or last topped up: ${usd(total)}` : null,
     balance.totalCredits != null && balance.totalUsage != null
-      ? `Used ${usd(balance.totalUsage)} of ${usd(balance.totalCredits)} on this account`
+      ? `Account: ${usd(balance.totalUsage)} used of ${usd(balance.totalCredits)} ever bought`
       : null,
     balance.keyLimitRemaining != null
       ? `This key's own limit has ${usd(balance.keyLimitRemaining)} left`
