@@ -1,0 +1,15 @@
+# Overlay for hosting behind Tailscale Funnel instead of Caddy: Tailscale
+# terminates TLS and forwards to the gateway on localhost.
+#
+#   docker compose -f docker-compose.yml -f tailscale.yml up -d
+#   tailscale funnel --bg ${KHAI_GATEWAY_PORT:-8090}
+#
+# KHAI_DOMAIN in .env is the machine's name, e.g. host.tailnet.ts.net.
+
+services:
+  caddy:
+    profiles: [caddy]
+
+  gateway:
+    ports:
+      - "127.0.0.1:${KHAI_GATEWAY_PORT:-8090}:8080"

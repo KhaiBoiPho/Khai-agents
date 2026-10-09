@@ -1,3 +1,5 @@
+import "./polyfills";
+
 const entry = import.meta.env.MODE === "web"
   ? import("./webMain")
   : import("./desktopMain");
