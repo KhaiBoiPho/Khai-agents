@@ -3,10 +3,12 @@ import {
   ChevronRight,
   Folder,
   FolderInput,
+  GitBranch,
   Home,
   Loader2,
+  Upload,
 } from "lucide-react";
-import { useCallback, useEffect, useState, type DragEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type DragEvent } from "react";
 
 import type { ClientRuntime } from "../rpc/contracts";
 import styles from "./FolderPicker.module.css";
@@ -15,7 +17,24 @@ interface Listing {
   path: string;
   parent: string | null;
   entries: Array<{ name: string; path: string }>;
+  /** Set on hosted web: the only folder this user can browse. */
+  workspaceRoot?: string | null;
 }
+
+/** Folders a browser upload leaves out: dependencies and build output. */
+const SKIPPED = new Set([
+  ".git",
+  "node_modules",
+  ".venv",
+  "venv",
+  "__pycache__",
+  ".next",
+  "dist",
+  "build",
+  "target",
+]);
+const MAX_FILE = 10 * 1024 * 1024;
+const MAX_FILES = 5000;
 
 interface FolderPickerProps {
   runtime: ClientRuntime;
@@ -35,6 +54,9 @@ export function FolderPicker({ runtime, onChoose, onCancel }: FolderPickerProps)
   const [error, setError] = useState<string | null>(null);
   const [dragging, setDragging] = useState(false);
   const [typed, setTyped] = useState("");
+  const [gitUrl, setGitUrl] = useState("");
+  const [busy, setBusy] = useState<string | null>(null);
+  const folderInput = useRef<HTMLInputElement>(null);
 
   const load = useCallback(
     async (path?: string) => {
@@ -78,6 +100,66 @@ export function FolderPicker({ runtime, onChoose, onCancel }: FolderPickerProps)
     }
   };
 
+  const root = listing?.workspaceRoot ?? null;
+
+  const afterImport = async (folder: string) => {
+    await load(root ?? undefined);
+    setSelected(folder);
+  };
+
+  const uploadFolder = async (list: FileList | null) => {
+    const upload = runtime.uploadWorkspaceFile?.bind(runtime);
+    if (!list?.length || !root || !upload) return;
+    const files = Array.from(list).filter((file) => {
+      const parts = file.webkitRelativePath.split("/");
+      return !parts.slice(0, -1).some((part) => SKIPPED.has(part));
+    });
+    const kept = files.filter((file) => file.size <= MAX_FILE);
+    if (kept.length > MAX_FILES) {
+      setError(`That folder has ${kept.length} files; upload at most ${MAX_FILES}.`);
+      return;
+    }
+    setError(null);
+    let done = 0;
+    try {
+      const queue = [...kept];
+      const worker = async () => {
+        for (let file = queue.shift(); file; file = queue.shift()) {
+          await upload(file.webkitRelativePath, file);
+          done += 1;
+          setBusy(`Uploading ${done}/${kept.length} files…`);
+        }
+      };
+      setBusy(`Uploading 0/${kept.length} files…`);
+      await Promise.all([worker(), worker(), worker(), worker()]);
+      const top = kept[0]?.webkitRelativePath.split("/")[0];
+      if (top) await afterImport(`${root}/${top}`);
+      const skipped = files.length - kept.length;
+      if (skipped)
+        setError(`Skipped ${skipped} file${skipped > 1 ? "s" : ""} over 10 MiB.`);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : String(cause));
+    } finally {
+      setBusy(null);
+      if (folderInput.current) folderInput.current.value = "";
+    }
+  };
+
+  const cloneRepository = async () => {
+    const url = gitUrl.trim();
+    if (!url || !runtime.cloneRepository) return;
+    setError(null);
+    setBusy("Cloning repository…");
+    try {
+      await afterImport(await runtime.cloneRepository(url));
+      setGitUrl("");
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : String(cause));
+    } finally {
+      setBusy(null);
+    }
+  };
+
   const crumbs = listing ? breadcrumbs(listing.path) : [];
   const choice = selected ?? listing?.path ?? null;
 
@@ -93,8 +175,56 @@ export function FolderPicker({ runtime, onChoose, onCancel }: FolderPickerProps)
       >
         <header className={styles.header}>
           <h2 id="folder-picker-title">Open a folder</h2>
-          <p>Choose a folder on the machine running Khai-Agents.</p>
+          <p>
+            {root
+              ? "Upload a folder from this computer, clone a Git repository, or pick one already in your workspace."
+              : "Choose a folder on the machine running Khai-Agents."}
+          </p>
         </header>
+
+        {root ? (
+          <div className={styles.imports}>
+            <input
+              ref={folderInput}
+              type="file"
+              hidden
+              // Non-standard attributes React does not type.
+              {...{ webkitdirectory: "", directory: "" }}
+              multiple
+              onChange={(event) => void uploadFolder(event.target.files)}
+            />
+            <button
+              type="button"
+              disabled={busy !== null}
+              onClick={() => folderInput.current?.click()}
+            >
+              <Upload size={14} /> Upload folder
+            </button>
+            <form
+              onSubmit={(event) => {
+                event.preventDefault();
+                void cloneRepository();
+              }}
+            >
+              <GitBranch size={14} />
+              <input
+                value={gitUrl}
+                onChange={(event) => setGitUrl(event.target.value)}
+                placeholder="https://github.com/user/repo.git"
+                aria-label="Git repository URL"
+                disabled={busy !== null}
+              />
+              <button type="submit" disabled={busy !== null || !gitUrl.trim()}>
+                Clone
+              </button>
+            </form>
+          </div>
+        ) : null}
+        {busy ? (
+          <p className={styles.status}>
+            <Loader2 size={14} className={styles.spin} /> {busy}
+          </p>
+        ) : null}
 
         <div className={styles.crumbs}>
           <button type="button" onClick={() => void load()} title="Home folder">

@@ -18,6 +18,7 @@ from app_server.protocol import methods as rpc_methods
 from app_server.protocol.codec import DEFAULT_MAX_MESSAGE_BYTES
 from app_server.protocol.models import Request
 from app_server.protocol.retry import retry_capabilities
+from app_server.workspace_root import within, workspace_root
 from core.agent_presets import METADATA_KEY as PRESET_METADATA_KEY
 from core.agent_presets import list_agent_presets
 from core.application.application import DeepCodeApplication
@@ -429,8 +430,12 @@ class Dispatcher:
             trust = TrustState(raw_trust)
         except ValueError as exc:
             raise InvalidParams("trustState must be untrusted or trusted") from exc
+        path = str(params.string("path"))
+        root = workspace_root()
+        if root is not None and not within(root, Path(path).expanduser()):
+            raise InvalidArgumentError("Projects must be in your workspace")
         project = self.application.projects.add(
-            str(params.string("path")),
+            path,
             display_name=params.string("displayName", required=False),
             trust_state=trust,
         )
@@ -1694,7 +1699,11 @@ class Dispatcher:
         """
         params.only("path")
         raw = params.string("path", required=False, allow_empty=True) or ""
-        target = Path(raw).expanduser().resolve() if raw else Path.home().resolve()
+        root = workspace_root()
+        start = root or Path.home().resolve()
+        target = Path(raw).expanduser().resolve() if raw else start
+        if root is not None and not within(root, target):
+            raise InvalidArgumentError("Only folders in your workspace are available")
         if not target.is_dir():
             raise InvalidArgumentError("directory/list path must be a directory")
         entries: list[dict[str, str]] = []
@@ -1713,10 +1722,12 @@ class Dispatcher:
         except OSError as exc:
             raise InvalidArgumentError(f"cannot list {target}: {exc.strerror}") from None
         entries.sort(key=lambda item: item["name"].lower())
+        at_top = target == root if root is not None else target.parent == target
         return {
             "path": str(target),
-            "parent": str(target.parent) if target.parent != target else None,
+            "parent": None if at_top else str(target.parent),
             "entries": entries[:500],
+            "workspaceRoot": str(root) if root is not None else None,
         }
 
     def _chats_workspace(self, params: Params) -> dict[str, Any]:

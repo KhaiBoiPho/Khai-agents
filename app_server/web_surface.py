@@ -8,13 +8,15 @@ import json
 import os
 import re
 import secrets
+import shutil
 import stat
-from pathlib import Path
-from urllib.parse import quote
+from pathlib import Path, PurePosixPath
+from urllib.parse import quote, urlsplit
 
 from aiohttp import web
 
 from app_server.browser_auth import BrowserAuth
+from app_server.workspace_root import relative_path, within, workspace_root
 from core.application.errors import ApplicationError
 from core.private_storage import ensure_private_file
 from core.version import __version__
@@ -22,6 +24,9 @@ from core.version import __version__
 ASSET_DIRECTORY = Path(__file__).with_name("web_assets")
 MAX_UPLOAD = 10 * 1024 * 1024
 MAX_DOWNLOAD = 32 * 1024 * 1024
+# Under the gateway relay's five-minute request limit.
+CLONE_TIMEOUT = 240
+GIT_URL = re.compile(r"https://[A-Za-z0-9.\-]+(:\d+)?/[\w.\-~/%+@]+")
 
 
 def read_web_build(assets: Path = ASSET_DIRECTORY) -> dict | None:
@@ -68,6 +73,8 @@ class WebSurface:
             web.get("/assets/{path:.*}", self.asset),
             web.get("/api/session", self.session),
             web.post("/api/uploads", self.upload),
+            web.post("/api/workspace/upload", self.workspace_upload),
+            web.post("/api/workspace/clone", self.workspace_clone),
             web.get("/api/download", self.download),
         ]
 
@@ -224,6 +231,125 @@ class WebSurface:
                         pass
                 if directory is not None:
                     os.close(directory)
+
+    async def workspace_upload(self, request):
+        """One file of a folder the browser uploads into the user's workspace.
+
+        ``path`` is relative to the workspace root, e.g. ``my-app/src/main.py``;
+        an existing file is replaced. Hosted workers only.
+        """
+
+        self.auth.require(request)
+        root = workspace_root()
+        if root is None:
+            raise web.HTTPNotFound()
+        if request.content_type != "application/octet-stream":
+            raise web.HTTPUnsupportedMediaType(text="Binary upload body required")
+        if request.content_length is not None and request.content_length > MAX_UPLOAD:
+            raise web.HTTPRequestEntityTooLarge(
+                max_size=MAX_UPLOAD, actual_size=request.content_length
+            )
+        try:
+            relative = relative_path(request.query.get("path", ""))
+        except ValueError:
+            raise web.HTTPBadRequest(text="Invalid file path") from None
+        target = root / relative
+
+        def prepare() -> None:
+            target.parent.mkdir(parents=True, exist_ok=True)
+            # A symlink the agent created must not lead an upload elsewhere.
+            if not within(root, target.parent) or target.is_symlink():
+                raise web.HTTPForbidden(text="Path leaves the workspace")
+
+        async with self._uploads:
+            await asyncio.to_thread(prepare)
+            staging = target.with_name(f".{target.name}.{secrets.token_hex(6)}.part")
+            descriptor = os.open(
+                staging,
+                os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0),
+                0o600,
+            )
+            completed = False
+            try:
+                count = 0
+                async for chunk in request.content.iter_chunked(64 * 1024):
+                    count += len(chunk)
+                    if count > MAX_UPLOAD:
+                        raise web.HTTPRequestEntityTooLarge(
+                            max_size=MAX_UPLOAD, actual_size=count
+                        )
+
+                    def write_all(data=chunk):
+                        view = memoryview(data)
+                        while view:
+                            written = os.write(descriptor, view)
+                            if not written:
+                                raise OSError("upload write made no progress")
+                            view = view[written:]
+
+                    await _file_io(write_all)
+                os.close(descriptor)
+                descriptor = None
+                os.replace(staging, target)
+                completed = True
+            finally:
+                if descriptor is not None:
+                    os.close(descriptor)
+                if not completed:
+                    staging.unlink(missing_ok=True)
+        return web.json_response({"path": str(target), "size": count})
+
+    async def workspace_clone(self, request):
+        """Clone a public https Git repository into the user's workspace."""
+
+        self.auth.require(request)
+        root = workspace_root()
+        if root is None:
+            raise web.HTTPNotFound()
+        try:
+            body = await request.json()
+        except ValueError:
+            raise web.HTTPBadRequest(text="JSON body required") from None
+        url = str(body.get("url", "")).strip()
+        if not GIT_URL.fullmatch(url):
+            raise web.HTTPBadRequest(text="Use an https:// Git repository URL")
+        default = PurePosixPath(urlsplit(url).path).name.removesuffix(".git")
+        name = re.sub(r"[^\w.\-]", "_", str(body.get("name") or default))[:100].strip(".")
+        if not name:
+            raise web.HTTPBadRequest(text="Choose a folder name")
+        target = root / name
+        if target.exists() or target.is_symlink():
+            raise web.HTTPConflict(text=f"{name} already exists in your workspace")
+        process = await asyncio.create_subprocess_exec(
+            "git",
+            "-c",
+            "protocol.allow=never",
+            "-c",
+            "protocol.https.allow=always",
+            "clone",
+            "--depth",
+            "1",
+            "--",
+            url,
+            str(target),
+            stdin=asyncio.subprocess.DEVNULL,
+            stdout=asyncio.subprocess.DEVNULL,
+            stderr=asyncio.subprocess.PIPE,
+            env={**os.environ, "GIT_TERMINAL_PROMPT": "0"},
+        )
+        try:
+            _, stderr = await asyncio.wait_for(process.communicate(), CLONE_TIMEOUT)
+        except TimeoutError:
+            process.kill()
+            await process.wait()
+            await asyncio.to_thread(shutil.rmtree, target, True)
+            raise web.HTTPGatewayTimeout(text="Clone took too long") from None
+        if process.returncode != 0:
+            await asyncio.to_thread(shutil.rmtree, target, True)
+            lines = stderr.decode(errors="replace").strip().splitlines()
+            reason = lines[-1] if lines else "git clone failed"
+            raise web.HTTPBadRequest(text=reason[:300])
+        return web.json_response({"path": str(target)})
 
     async def _index_upload(self, context, filename: str) -> None:
         """Queue background document indexing for an uploaded document.

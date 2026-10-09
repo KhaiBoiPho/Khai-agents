@@ -225,3 +225,55 @@
 .footer .primary:hover:not(:disabled) {
   background: var(--text-secondary);
 }
+
+.imports {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.imports button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  color: var(--text-primary);
+  font-size: var(--text-sm);
+  white-space: nowrap;
+}
+
+.imports button:hover:not(:disabled) {
+  background: var(--surface-hover);
+}
+
+.imports button:disabled {
+  opacity: 0.5;
+}
+
+.imports form {
+  display: flex;
+  min-width: 220px;
+  flex: 1;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-secondary);
+}
+
+.imports input {
+  min-width: 0;
+  flex: 1;
+  padding: 6px 10px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  outline: 0;
+  background: var(--surface-canvas);
+  color: var(--text-primary);
+  font-size: var(--text-sm);
+}
+
+.imports input:focus {
+  border-color: var(--border-emphasis);
+}

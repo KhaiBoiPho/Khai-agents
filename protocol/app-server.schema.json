@@ -7191,6 +7191,12 @@
               "items": {
                 "$ref": "#/$defs/DirectoryEntry"
               }
+            },
+            "workspaceRoot": {
+              "type": [
+                "string",
+                "null"
+              ]
             }
           },
           "required": [

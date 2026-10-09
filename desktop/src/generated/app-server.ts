@@ -906,6 +906,7 @@ export interface MethodResults {
     path: string;
     parent: string | null;
     entries: DirectoryEntry[];
+    workspaceRoot?: string | null;
   };
   "chats/workspace": {
     project: Project;

@@ -151,6 +151,8 @@ class Gateway:
                 web.post("/api/admin/users/{user_id}/{action}", self.administer),
                 web.get("/api/rpc", self.rpc),
                 web.post("/api/uploads", self.upload),
+                web.post("/api/workspace/upload", self.upload),
+                web.post("/api/workspace/clone", self.upload),
                 web.get("/api/download", self.download),
             ]
         )

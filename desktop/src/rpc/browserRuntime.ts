@@ -89,12 +89,16 @@ export class BrowserRuntime implements ClientRuntime {
     for (const receive of this.statuses) receive(this.state);
   }
 
-  private async http(path: string, init: RequestInit = {}): Promise<Response> {
+  private async http(
+    path: string,
+    init: RequestInit = {},
+    timeout = 15000,
+  ): Promise<Response> {
     const response = await fetch(path, {
       ...init,
       credentials: "same-origin",
       cache: "no-store",
-      signal: AbortSignal.timeout(15000),
+      signal: AbortSignal.timeout(timeout),
     });
     if (!response.ok) {
       if (response.status === 401)
@@ -535,6 +539,29 @@ export class BrowserRuntime implements ClientRuntime {
       threadId,
       files.flatMap((file) => (file.source instanceof File ? [file.source] : [])),
     );
+  }
+  async uploadWorkspaceFile(path: string, file: Blob): Promise<void> {
+    await this.http(
+      `/api/workspace/upload?${new URLSearchParams({ path })}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/octet-stream" },
+        body: file,
+      },
+      60000,
+    );
+  }
+  async cloneRepository(url: string): Promise<string> {
+    const response = await this.http(
+      "/api/workspace/clone",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url }),
+      },
+      300000,
+    );
+    return (await response.json()).path;
   }
   async pickFile(threadId?: string): Promise<string | null> {
     return (await this.upload(threadId, false))[0] ?? null;
