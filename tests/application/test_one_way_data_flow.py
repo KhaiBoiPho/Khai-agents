@@ -200,6 +200,56 @@ def test_user_input_provenance_survives_projection_rebuild(tmp_path, delivery):
         app.close()
 
 
+def test_turn_interrupt_marker_stays_in_model_history_but_not_chat_projection(
+    tmp_path: Path,
+) -> None:
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    store = SessionStore(tmp_path / "sessions")
+    session = store.create_session(
+        title="Stopped run",
+        metadata={"kind": "tui", "workspace": str(workspace)},
+    )
+    store.append_message(session.session_id, "user", "Write a report")
+    store.append_message(session.session_id, "assistant", "I started the report.")
+    marker = "[The previous Turn was interrupted before it completed.]"
+    store.append_message(
+        session.session_id,
+        "user",
+        marker,
+        metadata={
+            "source": "turn_interrupt",
+            "turnId": "turn-stopped",
+            "modelVisible": True,
+        },
+    )
+
+    app = DeepCodeApplication.open(tmp_path / "state.sqlite3", session_store=store)
+    try:
+        with app.database.read() as connection:
+            projected = ItemRepository(connection).conversation_for_thread(
+                session.session_id
+            )
+            turns = connection.execute(
+                "SELECT id FROM turns WHERE thread_id = ?",
+                (session.session_id,),
+            ).fetchall()
+            assert [item.payload["text"] for item in projected] == [
+                "Write a report",
+                "I started the report.",
+            ]
+            assert len(turns) == 1
+            assert not EventRepository(connection).has_type(
+                session.session_id, "thread.projection_conflict"
+            )
+        canonical = store.get_session(session.session_id)
+        assert canonical is not None
+        assert canonical.messages[-1].content == marker
+        assert canonical.messages[-1].metadata["modelVisible"] is True
+    finally:
+        app.close()
+
+
 def test_actual_transcript_disagreement_remains_visible(tmp_path):
     workspace = tmp_path / "workspace"
     workspace.mkdir()

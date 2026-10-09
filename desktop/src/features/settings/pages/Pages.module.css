@@ -239,3 +239,24 @@
 .status[data-off] {
   background: var(--border-emphasis);
 }
+
+/* Sign-in & security, Users */
+.statusOk,
+.statusError {
+  margin: 8px 0 0;
+  padding: 8px 12px;
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+}
+.statusOk {
+  background: var(--success-soft);
+  color: var(--success);
+}
+.statusError {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+.actions {
+  display: inline-flex;
+  gap: 8px;
+}

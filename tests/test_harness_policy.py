@@ -91,6 +91,34 @@ def test_none_config_preserves_legacy_cli_default():
     assert engine.rules == []
 
 
+def test_full_auto_bypasses_mcp_write_confirmation_but_keeps_denies(monkeypatch):
+    monkeypatch.delenv("DEEPCODE_PERMISSION_MODE", raising=False)
+    engine = build_permission_engine(
+        _cfg(mode="full_auto", permissions={"mcp__fixture__write": {"*": "deny"}}),
+        cwd="/w",
+    )
+    assert (
+        engine.evaluate_tool(
+            "mcp__fixture__write",
+            {},
+            read_only=False,
+            approval_mode="writes",
+        )[0]
+        is PermissionDecision.DENY
+    )
+
+    allow_engine = build_permission_engine(_cfg(mode="full_auto"), cwd="/w")
+    assert (
+        allow_engine.evaluate_tool(
+            "mcp__fixture__write",
+            {},
+            read_only=False,
+            approval_mode="writes",
+        )[0]
+        is PermissionDecision.ALLOW
+    )
+
+
 def test_client_default_applies_only_when_pydantic_field_was_not_configured():
     implicit = SecurityConfig()
     desktop = build_permission_engine(

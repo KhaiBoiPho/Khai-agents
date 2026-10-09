@@ -1,6 +1,7 @@
 import {
   Check,
   Circle,
+  ChevronDown,
   ListChecks,
   LoaderCircle,
 } from "lucide-react";
@@ -18,6 +19,8 @@ import styles from "./PlanProgress.module.css";
 
 interface PlanProgressProps {
   plan: TurnPlanState;
+  inline?: boolean;
+  onExpandedChange?(expanded: boolean): void;
 }
 
 function currentStepIndex(steps: TurnPlanStep[]): number {
@@ -40,7 +43,11 @@ function StepIcon({ step }: { step: TurnPlanStep }) {
   }
 }
 
-export function PlanProgress({ plan }: PlanProgressProps) {
+export function PlanProgress({
+  plan,
+  inline = false,
+  onExpandedChange,
+}: PlanProgressProps) {
   const rootRef = useRef<HTMLDivElement | null>(null);
   const popoverId = useId();
   const [open, setOpen] = useState(false);
@@ -62,6 +69,43 @@ export function PlanProgress({ plan }: PlanProgressProps) {
   }, [pinned]);
 
   if (plan.steps.length === 0) return null;
+
+  if (inline) {
+    const completedCount = plan.steps.filter(
+      (step) => step.status === "completed",
+    ).length;
+    return (
+      <details
+        className={styles.inlineProgress}
+        onToggle={(event) => onExpandedChange?.(event.currentTarget.open)}
+      >
+        <summary aria-label="Task progress">
+          <span className={styles.inlineTitle}>
+            <ListChecks size={14} aria-hidden="true" />
+            <strong>Task progress</strong>
+          </span>
+          <span className={styles.inlineStatus} data-complete={complete}>
+            {complete ? <Check size={13} aria-hidden="true" /> : null}
+            {complete ? "Completed" : "In progress"}
+          </span>
+          <small>{completedCount} / {plan.steps.length} steps</small>
+          <ChevronDown className={styles.inlineChevron} size={14} aria-hidden="true" />
+        </summary>
+        <ol>
+          {plan.steps.map((step, stepIndex) => (
+            <li
+              key={`${stepIndex}:${step.step}`}
+              data-status={step.status}
+              aria-current={step.status === "in_progress" ? "step" : undefined}
+            >
+              <span><StepIcon step={step} /></span>
+              <strong>{step.step}</strong>
+            </li>
+          ))}
+        </ol>
+      </details>
+    );
+  }
 
   const handleBlur = (event: FocusEvent<HTMLDivElement>) => {
     if (pinned || event.currentTarget.contains(event.relatedTarget)) return;

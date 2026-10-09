@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import logging
 import os
-import sqlite3
 import threading
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -28,7 +27,7 @@ from core.persistence.coordination_repository import (
     QueuedTurnCandidate,
     RuntimeCoordinationRepository,
 )
-from core.persistence.database import Database
+from core.persistence.database import Connection, Database
 
 logger = logging.getLogger(__name__)
 Clock = Callable[[], datetime]
@@ -394,7 +393,7 @@ class ExecutionCoordinator:
 
     def release_in_transaction(
         self,
-        connection: sqlite3.Connection,
+        connection: Connection,
         claim: ResourceClaim,
         *,
         reason: str,

@@ -15,7 +15,6 @@ from core.domain import ItemKind, ItemStatus, TurnExecutor, TurnStatus
 from core.domain.runtime_coordination import ExecutionClass
 from core.harness.tools import default_coding_tools
 from core.persistence import Database, ItemRepository, TurnRepository
-from core.persistence.migrations import LATEST_SCHEMA_VERSION, current_version
 
 _DEFAULT_TOOL_PARAMETERS = {
     "read": {
@@ -143,11 +142,11 @@ def test_tool_result_preserves_string_and_metadata_contract() -> None:
     assert ToolResult("plain").is_error is False
 
 
-def test_v1_turn_and_item_remain_readable_after_upgrade(tmp_path: Path) -> None:
-    """A Session persisted by the first schema survives every migration."""
+def test_rows_written_with_only_original_columns_stay_readable(tmp_path: Path) -> None:
+    """Rows that set only the first schema's columns read back with defaults."""
 
     database = Database(tmp_path / "legacy.sqlite3")
-    database.initialize(target_version=1)
+    database.initialize()
     workspace = tmp_path / "legacy-workspace"
     timestamp = "2025-01-02T03:04:05+00:00"
     legacy_payload = {
@@ -230,10 +229,7 @@ def test_v1_turn_and_item_remain_readable_after_upgrade(tmp_path: Path) -> None:
             ),
         )
 
-    database.initialize()
-
     with database.read() as connection:
-        assert current_version(connection) == LATEST_SCHEMA_VERSION
         turn = TurnRepository(connection).get("turn_legacy")
         item = ItemRepository(connection).get("item_legacy")
 

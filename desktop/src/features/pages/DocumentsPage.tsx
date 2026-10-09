@@ -1,16 +1,21 @@
 /**
  * Documents — every file uploaded into a chat and every document the agent
- * wrote, across all chats and projects (``documents/list``). Opening one
- * jumps to its chat and shows the file in the Files viewer.
+ * wrote, across all chats and projects (``documents/list``). Selecting one
+ * opens an in-place preview; its source chat is a separate action.
  */
 
-import { Download, MessageSquare, RefreshCw, Search } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { ArrowUpRight, Download, MessageSquare, RefreshCw, Search, X } from "lucide-react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from "react";
 
 import type { DocumentEntry } from "../../generated/app-server";
 import type { ClientRuntime } from "../../rpc/contracts";
 import { FileBadge } from "../../components/FileBadge";
+import { LoadingDots } from "../../components/Motion";
+import { MarkdownContent } from "../thread/MarkdownContent";
+import { documentKind } from "../inspector/documentKinds";
 import styles from "./Pages.module.css";
+
+const DocumentViewer = lazy(() => import("../inspector/DocumentViewer"));
 
 const TABS = [
   { id: "all", label: "All" },
@@ -33,6 +38,13 @@ export function DocumentsPage({ runtime, onOpen }: DocumentsPageProps) {
   const loading = loadedAt !== refreshes;
   const [tab, setTab] = useState<TabId>("all");
   const [query, setQuery] = useState("");
+  const [selected, setSelected] = useState<DocumentEntry | null>(null);
+  const loadSelected = useCallback(() => {
+    if (!selected || !runtime.readFileBytes) {
+      return Promise.reject(new Error("Document preview is unavailable."));
+    }
+    return runtime.readFileBytes(selected.threadId, selected.path);
+  }, [runtime, selected]);
 
   useEffect(() => {
     let cancelled = false;
@@ -73,7 +85,7 @@ export function DocumentsPage({ runtime, onOpen }: DocumentsPageProps) {
   );
 
   return (
-    <div className={styles.page}>
+    <div className={styles.page} data-preview={Boolean(selected) || undefined}>
       <header className={styles.header}>
         <h1>Documents</h1>
         <div className={styles.tabs} role="tablist">
@@ -125,48 +137,118 @@ export function DocumentsPage({ runtime, onOpen }: DocumentsPageProps) {
         </div>
       ) : null}
 
-      <div className={styles.docGrid}>
-        {visible.map((doc) => (
-          <article className={styles.docCard} key={doc.id}>
-            <button
-              type="button"
-              className={styles.docOpen}
-              onClick={() => onOpen(doc)}
-              title={`Open ${doc.name}`}
-            >
-              <div className={styles.docThumb}>
-                <FileBadge path={doc.name} size={44} />
-                <span className={styles.docExt}>{doc.extension.toUpperCase()}</span>
-              </div>
-              <strong>{doc.name}</strong>
-              <small>
-                {doc.source === "uploaded" ? "Uploaded" : "Created by agent"} ·{" "}
-                {formatSize(doc.size)} · {formatWhen(doc.modifiedAt)}
-              </small>
-              <small className={styles.docChat}>
-                <MessageSquare size={11} />
-                {doc.linked ? doc.threadTitle : "Chat deleted"}
-              </small>
-            </button>
-            {runtime.downloadFile ? (
+      <div className={selected ? styles.documentsWithPreview : undefined}>
+        <div className={styles.docGrid}>
+          {visible.map((doc) => (
+            <article className={styles.docCard} key={doc.id}>
               <button
                 type="button"
-                className={styles.docDownload}
-                onClick={() => void runtime.downloadFile?.(doc.threadId, doc.path)}
-                title="Download"
-                aria-label={`Download ${doc.name}`}
+                className={styles.docOpen}
+                onClick={() => setSelected(doc)}
+                aria-pressed={selected?.id === doc.id}
+                title={`Preview ${doc.name}`}
               >
-                <Download size={14} />
+                <div className={styles.docThumb}>
+                  <FileBadge path={doc.name} size={44} />
+                  <span className={styles.docExt}>{doc.extension.toUpperCase()}</span>
+                </div>
+                <strong>{doc.name}</strong>
+                <small>
+                  {doc.source === "uploaded" ? "Uploaded" : "Created by agent"} ·{" "}
+                  {formatSize(doc.size)} · {formatWhen(doc.modifiedAt)}
+                </small>
+                <small className={styles.docChat}>
+                  <MessageSquare size={11} />
+                  {doc.linked ? doc.threadTitle : "Chat deleted"}
+                </small>
               </button>
-            ) : null}
-          </article>
-        ))}
-        {documents && documents.length > 0 && visible.length === 0 ? (
-          <p className={styles.empty}>No documents match.</p>
+              {runtime.downloadFile ? (
+                <button
+                  type="button"
+                  className={styles.docDownload}
+                  onClick={() => void runtime.downloadFile?.(doc.threadId, doc.path)}
+                  title="Download"
+                  aria-label={`Download ${doc.name}`}
+                >
+                  <Download size={14} />
+                </button>
+              ) : null}
+            </article>
+          ))}
+          {documents && documents.length > 0 && visible.length === 0 ? (
+            <p className={styles.empty}>No documents match.</p>
+          ) : null}
+        </div>
+        {selected ? (
+          <aside className={styles.documentPreview} aria-label={`Preview ${selected.name}`}>
+            <header className={styles.previewHeader}>
+              <div>
+                <strong title={selected.name}>{selected.name}</strong>
+                <small>{selected.threadTitle || "Document preview"}</small>
+              </div>
+              <button type="button" className={styles.ghost} onClick={() => setSelected(null)} aria-label="Close preview">
+                <X size={16} />
+              </button>
+            </header>
+            <div className={styles.previewBody}>
+              {runtime.readFileBytes ? (
+                <Suspense fallback={<div className={styles.previewLoading}><LoadingDots /> Opening document</div>}>
+                  <DocumentPreview
+                    document={selected}
+                    load={loadSelected}
+                  />
+                </Suspense>
+              ) : (
+                <p className={styles.previewMessage}>Preview is unavailable in this runtime. Download the file to view it.</p>
+              )}
+            </div>
+            <footer className={styles.previewFooter}>
+              {runtime.downloadFile ? (
+                <button type="button" className={styles.ghost} onClick={() => void runtime.downloadFile?.(selected.threadId, selected.path)}>
+                  <Download size={14} /> Download
+                </button>
+              ) : null}
+              <button
+                type="button"
+                className={styles.openChat}
+                disabled={!selected.linked}
+                onClick={() => onOpen(selected)}
+                title={selected.linked ? "Open the chat that created this document" : "The source chat was deleted"}
+              >
+                <MessageSquare size={14} /> Open source chat <ArrowUpRight size={14} />
+              </button>
+            </footer>
+          </aside>
         ) : null}
       </div>
     </div>
   );
+}
+
+function DocumentPreview({
+  document,
+  load,
+}: {
+  document: DocumentEntry;
+  load(): Promise<ArrayBuffer>;
+}) {
+  const [text, setText] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const kind = documentKind(document.path);
+  useEffect(() => {
+    if (kind) return;
+    let live = true;
+    load()
+      .then((bytes) => live && setText(new TextDecoder().decode(bytes)))
+      .catch((cause: unknown) => live && setError(cause instanceof Error ? cause.message : String(cause)));
+    return () => { live = false; };
+  }, [document.id, kind, load]);
+
+  if (kind) return <DocumentViewer key={document.id} path={document.path} load={load} />;
+  if (error) return <p className={styles.previewMessage}>Could not load this file: {error}</p>;
+  if (text === null) return <div className={styles.previewLoading}><LoadingDots /> Opening document</div>;
+  if (/\.(md|mdx|markdown)$/i.test(document.path)) return <MarkdownContent>{text}</MarkdownContent>;
+  return <pre className={styles.plainPreview}>{text}</pre>;
 }
 
 function formatSize(bytes: number): string {

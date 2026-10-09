@@ -1,7 +1,8 @@
-# Khai-Agents hosted image: the web workbench served by the app service.
-#
-# Remote mode is driven entirely by environment variables (see
-# docker/entrypoint.sh and .env.example); nothing secret is baked in.
+# Khai-Agents image. One image, three roles chosen by entrypoint:
+#   docker/gateway-entrypoint.sh  hosted front door (docker/deploy)
+#   docker/worker-entrypoint.sh   one user's backend, started by the gateway
+#   docker/entrypoint.sh          single-user remote mode
+# Everything is configured through the environment; nothing secret is baked in.
 
 FROM node:22-bookworm-slim AS web
 WORKDIR /src
@@ -14,6 +15,7 @@ RUN mkdir -p app_server && npm --prefix desktop run build:web
 
 FROM python:3.12-slim-bookworm
 ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
     PIP_NO_CACHE_DIR=1 \
     DEEPCODE_HOME=/data/deepcode \
     KHAI_BIND_HOST=0.0.0.0 \
@@ -28,7 +30,7 @@ RUN pip install -r scripts/ci/requirements.lock
 COPY . .
 COPY --from=web /src/app_server/web_assets ./app_server/web_assets
 RUN pip install --no-deps --no-build-isolation -e . \
-    && chmod +x docker/entrypoint.sh \
+    && chmod +x docker/entrypoint.sh docker/gateway-entrypoint.sh docker/worker-entrypoint.sh \
     && mkdir -p /data/deepcode /workspace
 VOLUME ["/data", "/workspace"]
 EXPOSE 8080

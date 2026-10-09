@@ -1,23 +1,18 @@
 /**
  * History — every question asked in this chat, newest last, with when it was
  * sent, how it ended and which model answered. Clicking one scrolls the
- * transcript to that turn. A selected activity ("Inspect details") still
- * shows its details above the list.
+ * transcript to that turn.
  */
 
 import { CheckCircle2, CircleDashed, Clock3, XCircle } from "lucide-react";
 import { useMemo } from "react";
 
-import type { Item, Turn } from "../../generated/app-server";
-import { DetailsPanel } from "./DetailsPanel";
+import type { Turn } from "../../generated/app-server";
 import styles from "./HistoryPanel.module.css";
 
 interface HistoryPanelProps {
   threadId: string | null;
   turns: Turn[];
-  items: Item[];
-  selected: Item | null;
-  onSelectItem(itemId: string): void;
 }
 
 /** Drop what the composer appends to the typed prompt. */
@@ -52,9 +47,6 @@ function StatusIcon({ status }: { status: Turn["status"] }) {
 export function HistoryPanel({
   threadId,
   turns,
-  items,
-  selected,
-  onSelectItem,
 }: HistoryPanelProps) {
   const history = useMemo(
     () =>
@@ -72,13 +64,6 @@ export function HistoryPanel({
 
   return (
     <div className={styles.panel}>
-      {selected ? (
-        <section className={styles.selected}>
-          <p className={styles.label}>Selected activity</p>
-          <DetailsPanel selected={selected} items={items} onSelectItem={onSelectItem} />
-        </section>
-      ) : null}
-
       <header className={styles.header}>
         <h2>History</h2>
         <span>

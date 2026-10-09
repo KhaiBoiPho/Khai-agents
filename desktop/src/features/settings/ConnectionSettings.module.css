@@ -252,19 +252,19 @@
   inset: 0;
   display: grid;
   place-items: center;
-  padding: 28px;
-  background: rgb(18 22 20 / 32%);
-  backdrop-filter: blur(8px);
+  padding: 24px;
+  background: rgb(18 22 20 / 46%);
+  backdrop-filter: blur(12px);
 }
 
 .editor {
-  width: min(650px, 100%);
-  max-height: min(760px, calc(100vh - 56px));
+  width: min(760px, 100%);
+  max-height: min(820px, calc(100vh - 40px));
   overflow-y: auto;
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius-xl);
+  border: 1px solid color-mix(in srgb, var(--border-emphasis) 72%, transparent);
+  border-radius: 20px;
   background: var(--surface-raised);
-  box-shadow: var(--shadow-menu);
+  box-shadow: 0 24px 80px rgb(0 0 0 / 28%), var(--shadow-menu);
 }
 
 .editor > header {
@@ -272,10 +272,10 @@
   z-index: 2;
   top: 0;
   display: flex;
-  min-height: 68px;
+  min-height: 78px;
   align-items: center;
   justify-content: space-between;
-  padding: 0 18px;
+  padding: 0 24px;
   border-bottom: 1px solid var(--border-subtle);
   background: color-mix(in srgb, var(--surface-raised) 92%, transparent);
   backdrop-filter: blur(14px);
@@ -320,20 +320,20 @@
 .form {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 14px;
-  padding: 20px;
+  gap: 18px;
+  padding: 24px;
 }
 
 .providerSummary {
   display: grid;
-  min-height: 54px;
+  min-height: 68px;
   grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
-  gap: 10px;
-  padding: 10px 12px;
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-md);
-  background: var(--surface-canvas);
+  gap: 12px;
+  padding: 14px 16px;
+  border: 1px solid color-mix(in srgb, var(--signal) 24%, var(--border-subtle));
+  border-radius: 14px;
+  background: linear-gradient(135deg, color-mix(in srgb, var(--signal-soft) 70%, var(--surface-canvas)), var(--surface-canvas));
   color: var(--signal);
 }
 
@@ -430,10 +430,10 @@
 .form textarea {
   width: 100%;
   min-width: 0;
-  min-height: 41px;
-  padding: 9px 11px;
+  min-height: 44px;
+  padding: 10px 13px;
   border: 1px solid var(--border-strong);
-  border-radius: var(--radius-sm);
+  border-radius: 10px;
   outline: 0;
   /* See ManagementWorkspace: the shorthand would drop the select chevron. */
   background-color: var(--surface-canvas);
@@ -559,7 +559,7 @@
   display: grid;
   gap: 9px;
   margin: 0;
-  padding: 12px;
+  padding: 16px;
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-md);
 }
@@ -608,20 +608,35 @@
 
 .modelPicker {
   display: grid;
-  max-height: 218px;
+  max-height: 250px;
   margin: 0;
   padding: 0;
-  gap: 2px;
+  gap: 4px;
   list-style: none;
   overflow-y: auto;
+}
+
+.modelGroup {
+  display: grid;
+  gap: 6px;
+}
+
+.modelGroup h4 {
+  margin: 6px 0 0;
+  color: var(--text-secondary);
+  font-size: var(--text-micro);
+  font-weight: var(--weight-bold);
+  letter-spacing: var(--tracking-caps);
+  text-transform: uppercase;
 }
 
 .modelPicker label {
   display: flex;
   align-items: center;
   gap: 9px;
-  padding: 5px 7px;
-  border-radius: var(--radius-sm);
+  min-height: 42px;
+  padding: 7px 9px;
+  border-radius: 9px;
 }
 
 .modelPicker label:hover {

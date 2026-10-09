@@ -206,6 +206,12 @@ class McpConnection:
     async def _open_transport(self, stack: AsyncExitStack) -> tuple[Any, Any]:
         definition = self.server.definition
         if definition.type == "stdio":
+            from core.hosting import COMMANDS_DISABLED_MESSAGE, commands_allowed
+
+            # A local server runs a command of the user's choosing; built-in
+            # ones (shipped with the app) are not the user's commands.
+            if self.server.source != McpServerSource.BUILTIN and not commands_allowed():
+                raise PermissionError(COMMANDS_DISABLED_MESSAGE)
             from mcp import StdioServerParameters
             from mcp.client.stdio import stdio_client
 

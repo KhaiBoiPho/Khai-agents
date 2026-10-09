@@ -177,6 +177,15 @@ function DocxView({ bytes }: { bytes: ArrayBuffer }) {
         breakPages: true,
         experimental: true,
       });
+      // Word tables often encode their header row without docx-preview
+      // promoting it to <thead>. Promote that row so a continued table keeps
+      // its column labels when the browser paginates the preview.
+      host.querySelectorAll("table").forEach((table) => {
+        const rows = Array.from(table.rows);
+        if (rows.length < 2 || table.tHead) return;
+        const head = table.createTHead();
+        head.append(rows[0]);
+      });
     },
     [bytes],
   );

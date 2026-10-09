@@ -169,8 +169,8 @@ def test_default_store_lives_under_the_deepcode_home(
     from core.schedule.monitor import MonitorStore, default_monitor_store_path
 
     monkeypatch.setenv("DEEPCODE_HOME", str(tmp_path / "home"))
-    expected = tmp_path / "home" / "state" / "monitor.sqlite3"
+    expected = tmp_path / "home" / "state" / "monitor"
     assert default_monitor_store_path() == expected.resolve()
     store = MonitorStore()
     store.save_job("j", "h", "s")
-    assert expected.exists()
+    assert len(list(expected.glob("*.json"))) == 1

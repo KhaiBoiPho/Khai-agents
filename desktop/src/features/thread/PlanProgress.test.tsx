@@ -1,5 +1,5 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { TurnPlanState } from "../../app/workspaceState";
 import { PlanProgress } from "./PlanProgress";
@@ -46,5 +46,17 @@ describe("PlanProgress", () => {
     expect(
       screen.queryByRole("region", { name: "Execution plan" }),
     ).toBeNull();
+  });
+
+  it("reports inline expansion so the chat can make room for the steps", () => {
+    const onExpandedChange = vi.fn();
+    const { container } = render(
+      <PlanProgress inline plan={plan} onExpandedChange={onExpandedChange} />,
+    );
+
+    const details = container.querySelector("details")!;
+    fireEvent.click(container.querySelector("summary")!);
+    fireEvent(details, new Event("toggle"));
+    expect(onExpandedChange).toHaveBeenCalledWith(true);
   });
 });

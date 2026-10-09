@@ -93,4 +93,38 @@ describe("TurnBlock", () => {
         Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
   });
+
+  it("shows an orange interruption notice and the final turn time", () => {
+    const interruptedTurn = { ...turn, status: "interrupted" as const };
+    const [group] = buildConversationTurns(
+      [interruptedTurn],
+      [
+        item("user", 1, "user_message", turn.prompt, { text: turn.prompt }),
+      ],
+    );
+
+    render(
+      <TurnBlock
+        group={group}
+        approvalsByItem={new Map()}
+        selectedItemId={null}
+        transcriptMode="normal"
+        busy={false}
+        onSelectItem={vi.fn()}
+        onOpenInspector={vi.fn()}
+        onRespondToApproval={vi.fn()}
+        onRetryTurn={vi.fn()}
+        onCancelQueuedTurn={vi.fn()}
+      />,
+    );
+
+    expect(
+      screen
+        .getByText(
+          "Nothing was done on this turn — no answer came back and no tool ran. Please try again.",
+        )
+        .getAttribute("role"),
+    ).toBe("status");
+    expect(document.querySelector("time[datetime]")).not.toBeNull();
+  });
 });

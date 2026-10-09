@@ -12,7 +12,6 @@ from __future__ import annotations
 import hashlib
 import json
 import os
-import sqlite3
 import subprocess
 import threading
 import time
@@ -59,7 +58,7 @@ class RepoMap:
         cache_dir = Path(cache_dir)
         cache_dir.mkdir(parents=True, exist_ok=True)
         key = hashlib.sha256(str(self.root).encode()).hexdigest()[:20]
-        self._db_path = cache_dir / f"{key}.sqlite3"
+        self._cache_path = cache_dir / f"{key}.json"
         self._lock = threading.Lock()
 
     # ---- files --------------------------------------------------------------
@@ -95,16 +94,26 @@ class RepoMap:
 
     # ---- tag cache ------------------------------------------------------------
 
-    def _connect(self) -> sqlite3.Connection:
-        connection = sqlite3.connect(self._db_path, timeout=10)
-        connection.execute(
-            "CREATE TABLE IF NOT EXISTS tags (path TEXT PRIMARY KEY, mtime_ns INTEGER,"
-            " size INTEGER, data TEXT)"
+    def _load_cache(self) -> dict[str, list]:
+        """path -> [mtime_ns, size, tags]; a missing or corrupt cache is empty."""
+        try:
+            value = json.loads(self._cache_path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return {}
+        return value if isinstance(value, dict) else {}
+
+    def _save_cache(self, cache: dict[str, list]) -> None:
+        temporary = self._cache_path.with_name(
+            f".{self._cache_path.name}.{os.getpid()}.tmp"
         )
-        return connection
+        try:
+            temporary.write_text(json.dumps(cache, separators=(",", ":")), encoding="utf-8")
+            os.replace(temporary, self._cache_path)
+        except OSError:
+            temporary.unlink(missing_ok=True)
 
     def _tags_for(
-        self, connection: sqlite3.Connection, path: str
+        self, cache: dict[str, list], path: str
     ) -> tuple[list[Tag], bool] | None:
         """(tags, from_cache) or None when the file cannot be read."""
         full = self.root / path
@@ -114,21 +123,19 @@ class RepoMap:
             return None
         if stat.st_size > MAX_FILE_BYTES:
             return [], True
-        row = connection.execute(
-            "SELECT mtime_ns, size, data FROM tags WHERE path = ?", (path,)
-        ).fetchone()
-        if row and row[0] == stat.st_mtime_ns and row[1] == stat.st_size:
-            return [Tag(*entry) for entry in json.loads(row[2])], True
+        entry = cache.get(path)
+        if entry and entry[0] == stat.st_mtime_ns and entry[1] == stat.st_size:
+            return [Tag(*tag) for tag in entry[2]], True
         try:
             source = full.read_text(encoding="utf-8", errors="replace")
         except OSError:
             return None
         tags = extract(path, source)
-        connection.execute(
-            "INSERT OR REPLACE INTO tags VALUES (?, ?, ?, ?)",
-            (path, stat.st_mtime_ns, stat.st_size,
-             json.dumps([(tag.name, tag.kind, tag.line) for tag in tags])),
-        )
+        cache[path] = [
+            stat.st_mtime_ns,
+            stat.st_size,
+            [(tag.name, tag.kind, tag.line) for tag in tags],
+        ]
         return tags, False
 
     # ---- rendering ------------------------------------------------------------
@@ -149,19 +156,21 @@ class RepoMap:
         scanned = 0
         complete = True
         with self._lock:
-            connection = self._connect()
+            cache = self._load_cache()
+            changed = False
             try:
-                for index, path in enumerate(files):
+                for path in files:
                     if (
                         time_budget is not None
                         and time.monotonic() - started > time_budget
                     ):
                         complete = False
                         break
-                    found = self._tags_for(connection, path)
+                    found = self._tags_for(cache, path)
                     if found is None:
                         continue
-                    tags, _ = found
+                    tags, cached = found
+                    changed = changed or not cached
                     scanned += 1
                     for tag in tags:
                         if tag.kind == "def":
@@ -169,11 +178,9 @@ class RepoMap:
                             definition_lines[(path, tag.name)].add(tag.line)
                         else:
                             references[tag.name].append(path)
-                    if index % 200 == 0:
-                        connection.commit()
-                connection.commit()
             finally:
-                connection.close()
+                if changed:
+                    self._save_cache(cache)
 
         ranked = rank_definitions(
             defines, references, files[:scanned] if not complete else files,

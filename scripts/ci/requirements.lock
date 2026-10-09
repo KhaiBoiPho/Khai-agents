@@ -34,6 +34,10 @@ anyio==4.14.2
     #   openai
     #   sse-starlette
     #   starlette
+argon2-cffi==25.1.0
+    # via deepcode-hku
+argon2-cffi-bindings==26.1.0
+    # via argon2-cffi
 asyncio-mqtt==0.16.2
     # via deepcode-hku
 attrs==26.1.0
@@ -50,9 +54,10 @@ certifi==2026.6.17
     #   httpcore
     #   httpx
     #   requests
-cffi==2.1.0 ; platform_python_implementation != 'PyPy'
+cffi==2.1.0
     # via
     #   -c scripts/ci/../../desktop/sidecar-requirements.lock
+    #   argon2-cffi-bindings
     #   cryptography
 cfgv==3.5.0
     # via pre-commit
@@ -246,11 +251,17 @@ propcache==0.5.2
     #   -c scripts/ci/../../desktop/sidecar-requirements.lock
     #   aiohttp
     #   yarl
+psycopg==3.3.6
+    # via deepcode-hku
+psycopg-binary==3.3.6 ; implementation_name != 'pypy'
+    # via psycopg
+psycopg-pool==3.3.3
+    # via deepcode-hku
 pyasn1==0.6.4
     # via pyasn1-modules
 pyasn1-modules==0.4.2
     # via google-auth
-pycparser==3.0 ; implementation_name != 'PyPy' and platform_python_implementation != 'PyPy'
+pycparser==3.0 ; implementation_name != 'PyPy'
     # via
     #   -c scripts/ci/../../desktop/sidecar-requirements.lock
     #   cffi
@@ -318,6 +329,8 @@ pyyaml==6.0.3
     #   pre-commit
 readme-renderer==46.0
     # via twine
+redis==8.1.0
+    # via deepcode-hku
 referencing==0.37.0
     # via
     #   -c scripts/ci/../../desktop/sidecar-requirements.lock
@@ -388,6 +401,8 @@ typing-extensions==4.16.0
     #   google-genai
     #   mcp
     #   openai
+    #   psycopg
+    #   psycopg-pool
     #   pydantic
     #   pydantic-core
     #   pytest-asyncio
@@ -400,6 +415,8 @@ typing-inspection==0.4.2
     #   mcp
     #   pydantic
     #   pydantic-settings
+tzdata==2026.5 ; sys_platform == 'win32'
+    # via psycopg
 urllib3==2.7.0
     # via
     #   -c scripts/ci/../../desktop/sidecar-requirements.lock

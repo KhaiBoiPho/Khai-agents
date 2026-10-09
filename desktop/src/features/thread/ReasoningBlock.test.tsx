@@ -54,7 +54,7 @@ describe("ReasoningBlock", () => {
     );
 
     expect(details?.open).toBe(false);
-    expect(screen.getByText("Thought for 2s")).toBeTruthy();
+    expect(screen.getByText("Thought for 2 seconds")).toBeTruthy();
   });
 
   it("keeps provider trace behind a second disclosure in normal mode", () => {
@@ -74,7 +74,7 @@ describe("ReasoningBlock", () => {
 
     const outer = container.querySelector("details");
     expect(outer?.open).toBe(false);
-    fireEvent.click(screen.getByText("Thought for 1s"));
+    fireEvent.click(screen.getByText("Thought for 1 second"));
     expect(outer?.open).toBe(true);
     expect(
       screen.getByText("Provider reasoning details").closest("details")?.open,
@@ -103,6 +103,31 @@ describe("ReasoningBlock", () => {
     expect(screen.getByText("Provider trace detail.")).toBeTruthy();
   });
 
+  it("keeps the Thought row visible while the global collapse hides its content", () => {
+    const { container } = render(
+      <ReasoningBlock
+        item={reasoningItem("completed", {
+          schemaVersion: 1,
+          summaryText: "Thought details remain available on demand.",
+          traceText: "",
+          availability: "available",
+          durationMs: 11_000,
+          streaming: false,
+        })}
+        mode="verbose"
+        forceCollapsed
+      />,
+    );
+
+    expect(container.querySelector("details")?.open).toBe(false);
+    expect(screen.getByText("Thought for 11 seconds")).toBeTruthy();
+    expect(
+      screen
+        .getByText("Thought details remain available on demand.")
+        .closest("details")?.open,
+    ).toBe(false);
+  });
+
   it("does not let an automatic mode change erase a manual disclosure choice", () => {
     const item = reasoningItem("completed", {
       schemaVersion: 1,
@@ -117,7 +142,7 @@ describe("ReasoningBlock", () => {
     );
     const details = container.querySelector("details");
 
-    fireEvent.click(screen.getByText("Thought for 1s"));
+    fireEvent.click(screen.getByText("Thought for 1 second"));
     expect(details?.open).toBe(false);
     rerender(<ReasoningBlock item={item} mode="normal" />);
     expect(details?.open).toBe(false);

@@ -1,8 +1,98 @@
-"""Test-wide isolation for DeepCode's process-global SessionStore."""
+"""Test-wide isolation for DeepCode's process-global SessionStore and the
+application database."""
 
 from __future__ import annotations
 
+import os
+import secrets
+from pathlib import Path
+
 import pytest
+
+# Every Database path a test opens gets its own PostgreSQL schema under this
+# run's prefix; the session fixture below drops them at the end.
+_SCHEMA_PREFIX = f"t_{secrets.token_hex(4)}"
+
+
+def _test_database_url() -> str | None:
+    url = os.environ.get("KHAI_TEST_DATABASE_URL", "").strip()
+    if url:
+        return url
+    env_file = Path(__file__).resolve().parents[1] / "docker" / "stack" / ".env"
+    try:
+        values = dict(
+            line.split("=", 1)
+            for line in env_file.read_text(encoding="utf-8").splitlines()
+            if "=" in line and not line.startswith("#")
+        )
+    except OSError:
+        return None
+    password = values.get("KHAI_PG_APP_PASSWORD")
+    port = values.get("KHAI_PG_PORT", "5452")
+    return f"postgresql://khai:{password}@127.0.0.1:{port}/khai" if password else None
+
+
+_DATABASE_URL = _test_database_url()
+
+
+def _test_redis_url() -> str | None:
+    url = os.environ.get("KHAI_TEST_REDIS_URL", "").strip()
+    if url:
+        return url
+    env_file = Path(__file__).resolve().parents[1] / "docker" / "stack" / ".env"
+    try:
+        values = dict(
+            line.split("=", 1)
+            for line in env_file.read_text(encoding="utf-8").splitlines()
+            if "=" in line and not line.startswith("#")
+        )
+    except OSError:
+        return None
+    password = values.get("KHAI_REDIS_PASSWORD")
+    port = values.get("KHAI_REDIS_PORT", "6392")
+    return f"redis://:{password}@127.0.0.1:{port}/15" if password else None
+
+
+TEST_REDIS_URL = _test_redis_url()
+
+
+@pytest.fixture(autouse=True)
+def _isolate_database(monkeypatch):
+    if _DATABASE_URL:
+        monkeypatch.setenv("KHAI_DATABASE_URL", _DATABASE_URL)
+    monkeypatch.setenv("KHAI_DATABASE_SCHEMA_PER_PATH", _SCHEMA_PREFIX)
+    monkeypatch.delenv("KHAI_MULTI_USER", raising=False)
+    yield
+
+
+@pytest.fixture(scope="session", autouse=True)
+def _drop_test_schemas():
+    yield
+    if not _DATABASE_URL:
+        return
+    import psycopg
+
+    from core.persistence.database import close_pools
+
+    close_pools()
+    try:
+        with psycopg.connect(_DATABASE_URL, autocommit=True) as connection:
+            schemas = [
+                row[0]
+                for row in connection.execute(
+                    "SELECT nspname FROM pg_namespace WHERE starts_with(nspname, %s)",
+                    (_SCHEMA_PREFIX + "_",),
+                )
+            ]
+            # Threads a test leaked may still hold locks; never wait on them.
+            connection.execute("SET lock_timeout = '5s'")
+            for schema in schemas:
+                try:
+                    connection.execute(f'DROP SCHEMA "{schema}" CASCADE')
+                except psycopg.errors.LockNotAvailable:
+                    pass
+    except psycopg.Error:
+        pass
 
 
 @pytest.fixture(autouse=True)

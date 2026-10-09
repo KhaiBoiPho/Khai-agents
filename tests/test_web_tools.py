@@ -11,6 +11,7 @@ from core.network.safe_http import (
     NetworkTransportError,
     ResponseTooLargeError,
     SafeHttpResponse,
+    SafeHttpClient,
     UnexpectedContentTypeError,
     UnsafeUrlError,
 )
@@ -68,6 +69,14 @@ def test_web_fetch_accepts_only_one_required_url() -> None:
         "required": ["url"],
         "additionalProperties": False,
     }
+
+
+def test_web_fetch_uses_a_bounded_larger_body_limit_than_generic_http() -> None:
+    client = SafeHttpClient()
+    tool = WebFetchTool()
+
+    assert tool._client.policy.max_response_bytes > client.policy.max_response_bytes
+    assert tool._client.policy.max_response_bytes == 8 * 1024 * 1024
 
 
 @pytest.mark.asyncio

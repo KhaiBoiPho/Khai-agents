@@ -25,6 +25,7 @@ import {
 } from "./settingsSections";
 import styles from "./SettingsDialog.module.css";
 import { Select } from "../../components/Select";
+import { useAccount } from "../account/AccountContext";
 
 const RAIL_GROUPS = [
   { id: "settings", labelKey: "settings.group.settings", label: "Settings" },
@@ -62,10 +63,17 @@ export function SettingsDialog({
   onCreateSkill,
 }: SettingsDialogProps) {
   const { t } = useTranslation();
+  const account = useAccount();
+  // Account sections exist only with accounts; Users only for administrators.
+  const sections = SETTINGS_SECTIONS.filter(
+    (section) =>
+      (!section.requiresAccount || account !== null) &&
+      (!section.adminOnly || account?.role === "admin"),
+  );
   const [activeId, setActiveId] = useState<SettingsSectionId>(
     () =>
-      SETTINGS_SECTIONS.find((section) => section.id === initialSection)?.id ??
-      SETTINGS_SECTIONS[0].id,
+      sections.find((section) => section.id === initialSection)?.id ??
+      sections[0].id,
   );
   const [scope, setScope] = useState<ConfigScope>("user");
   const [openError, setOpenError] = useState<string | null>(null);
@@ -74,8 +82,7 @@ export function SettingsDialog({
   const effectiveScope: ConfigScope =
     scope === "project" && canWriteProject ? "project" : "user";
   const active =
-    SETTINGS_SECTIONS.find((section) => section.id === activeId) ??
-    SETTINGS_SECTIONS[0];
+    sections.find((section) => section.id === activeId) ?? sections[0];
   const ActiveSection = active.component;
 
   // The dialog is the outermost Escape layer: a nested editor that opens
@@ -142,7 +149,7 @@ export function SettingsDialog({
           </h1>
           {RAIL_GROUPS.map((group) => {
             const query = filter.trim().toLocaleLowerCase();
-            const entries = SETTINGS_SECTIONS.filter(
+            const entries = sections.filter(
               (section) =>
                 section.group === group.id &&
                 (!query ||

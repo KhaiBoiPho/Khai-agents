@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-import sqlite3
+from core.persistence.database import Connection, Row
 from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import datetime
@@ -58,7 +58,7 @@ class UsageRecord:
 
 
 class UsageRepository:
-    def __init__(self, connection: sqlite3.Connection) -> None:
+    def __init__(self, connection: Connection) -> None:
         self.connection = connection
 
     def record(
@@ -88,10 +88,10 @@ class UsageRepository:
                 turn_id, thread_id
             )
         cursor = self.connection.execute(
-            "INSERT OR IGNORE INTO usage_records (id, thread_id, turn_id, "
+            "INSERT INTO usage_records (id, thread_id, turn_id, "
             "response_ordinal, source, connection_id, provider_name, model_id, "
             "input_tokens, output_tokens, cached_input_tokens, recorded_at) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT DO NOTHING",
             (
                 new_id("usage"),
                 thread_id,
@@ -167,7 +167,7 @@ class UsageRepository:
         ]
 
     @staticmethod
-    def _from_row(row: sqlite3.Row) -> UsageRecord:
+    def _from_row(row: Row) -> UsageRecord:
         return UsageRecord(
             thread_id=row["thread_id"],
             turn_id=row["turn_id"],

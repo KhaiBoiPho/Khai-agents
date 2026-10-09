@@ -225,6 +225,9 @@ class ConnectionProfileConfig(_Base):
     adapter: Literal["openai_compat", "anthropic"] | None = None
     protocol: ProviderProtocol = "auto"
     auth: Literal["api_key", "none", "oauth"] = "api_key"
+    # Stable local owner key for provider/model preferences. This is not an
+    # OAuth account and can later be replaced by a real signed-in user id.
+    account_id: str | None = None
     compat: ProviderCompat = Field(default_factory=ProviderCompat)
     api_base: str | None = None
     api_key_env: str | None = None

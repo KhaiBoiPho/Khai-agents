@@ -1,4 +1,3 @@
-import sqlite3
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import replace
 from datetime import timedelta
@@ -44,76 +43,38 @@ from core.persistence.automation_repository import (
     AutomationOccurrenceRepository,
     AutomationRevisionRepository,
 )
-from core.persistence.migrations import LATEST_SCHEMA_VERSION, current_version, migrate
+from core.persistence.database import LATEST_SCHEMA_VERSION
+from core.persistence.errors import IntegrityError
 
 
-def test_database_enables_wal_foreign_keys_and_migrations(tmp_path: Path) -> None:
-    database = Database(tmp_path / "state.sqlite3")
+def test_initialize_installs_the_schema_once(tmp_path: Path) -> None:
+    database = Database(tmp_path / "state")
+    assert database.schema_version() == 0
     database.initialize()
+    database.initialize()
+    assert database.schema_version() == LATEST_SCHEMA_VERSION
     with database.read() as connection:
-        assert current_version(connection) == LATEST_SCHEMA_VERSION
-        assert connection.execute("PRAGMA journal_mode").fetchone()[0] == "wal"
-        assert connection.execute("PRAGMA foreign_keys").fetchone()[0] == 1
-        migrate(connection, 0)
-        assert current_version(connection) == 0
-        migrate(connection, LATEST_SCHEMA_VERSION)
-        assert current_version(connection) == LATEST_SCHEMA_VERSION
-
-
-def test_concurrent_initialization_converges_on_one_schema(tmp_path: Path) -> None:
-    path = tmp_path / "state.sqlite3"
-    with ThreadPoolExecutor(max_workers=8) as pool:
-        list(pool.map(lambda _: Database(path).initialize(), range(16)))
-    with Database(path).read() as connection:
-        assert current_version(connection) == LATEST_SCHEMA_VERSION
         assert (
             connection.execute("SELECT COUNT(*) FROM schema_migrations").fetchone()[0]
             == LATEST_SCHEMA_VERSION
         )
 
 
-def test_upgrade_creates_one_consistent_backup_before_concurrent_migration(
-    tmp_path: Path,
-) -> None:
-    path = tmp_path / "state.sqlite3"
-    database = Database(path)
-    database.initialize(target_version=1)
-    project = Project(canonical_path=str(tmp_path), display_name="Before upgrade")
-    with database.transaction() as connection:
-        ProjectRepository(connection).add(project)
-
+def test_concurrent_initialization_converges_on_one_schema(tmp_path: Path) -> None:
+    path = tmp_path / "state"
     with ThreadPoolExecutor(max_workers=8) as pool:
         list(pool.map(lambda _: Database(path).initialize(), range(16)))
-
-    backups = list(
-        (tmp_path / "backups").glob(
-            f"state.pre-v1-to-v{LATEST_SCHEMA_VERSION}-*.sqlite3"
-        )
-    )
-    assert len(backups) == 1
-    with sqlite3.connect(backups[0]) as backup:
-        assert current_version(backup) == 1
-        assert backup.execute(
-            "SELECT display_name FROM projects WHERE id = ?", (project.id,)
-        ).fetchone() == ("Before upgrade",)
-        assert backup.execute("PRAGMA quick_check").fetchone() == ("ok",)
+    database = Database(path)
+    assert database.schema_version() == LATEST_SCHEMA_VERSION
     with database.read() as connection:
-        assert current_version(connection) == LATEST_SCHEMA_VERSION
-
-
-def test_fresh_and_current_database_do_not_create_migration_backups(
-    tmp_path: Path,
-) -> None:
-    database = Database(tmp_path / "state.sqlite3")
-
-    database.initialize()
-    database.initialize()
-
-    assert not (tmp_path / "backups").exists()
+        assert (
+            connection.execute("SELECT COUNT(*) FROM schema_migrations").fetchone()[0]
+            == LATEST_SCHEMA_VERSION
+        )
 
 
 def test_transaction_rolls_back_the_whole_write(tmp_path: Path) -> None:
-    database = Database(tmp_path / "state.sqlite3")
+    database = Database(tmp_path / "state")
     database.initialize()
     with pytest.raises(RuntimeError):
         with database.transaction() as connection:
@@ -126,7 +87,7 @@ def test_transaction_rolls_back_the_whole_write(tmp_path: Path) -> None:
 
 
 def test_repositories_round_trip_every_p1_entity(tmp_path: Path) -> None:
-    database = Database(tmp_path / "state.sqlite3")
+    database = Database(tmp_path / "state")
     database.initialize()
     project = Project(canonical_path=str(tmp_path), display_name="DeepCode")
     thread = Thread(
@@ -211,7 +172,7 @@ def test_repositories_round_trip_every_p1_entity(tmp_path: Path) -> None:
 def test_automation_repositories_round_trip_and_find_due_jobs(
     tmp_path: Path,
 ) -> None:
-    database = Database(tmp_path / "state.sqlite3")
+    database = Database(tmp_path / "state")
     database.initialize()
     now = utc_now()
     project = Project(canonical_path=str(tmp_path), display_name="Automation")
@@ -276,7 +237,7 @@ def test_automation_repositories_round_trip_and_find_due_jobs(
 def test_due_automation_is_claimed_once_across_connections(
     tmp_path: Path,
 ) -> None:
-    database = Database(tmp_path / "state.sqlite3")
+    database = Database(tmp_path / "state")
     database.initialize()
     now = utc_now()
     project = Project(canonical_path=str(tmp_path), display_name="Claim")
@@ -329,7 +290,7 @@ def test_due_automation_is_claimed_once_across_connections(
 
 
 def test_database_foreign_keys_reject_orphans(tmp_path: Path) -> None:
-    database = Database(tmp_path / "state.sqlite3")
+    database = Database(tmp_path / "state")
     database.initialize()
     orphan = Thread(
         project_id="proj_missing",
@@ -337,13 +298,13 @@ def test_database_foreign_keys_reject_orphans(tmp_path: Path) -> None:
         mode=ThreadMode.CODE,
         workspace_path=str(tmp_path),
     )
-    with pytest.raises(sqlite3.IntegrityError):
+    with pytest.raises(IntegrityError):
         with database.transaction() as connection:
             ThreadRepository(connection).add(orphan)
 
 
 def test_database_rejects_cross_thread_execution_records(tmp_path: Path) -> None:
-    database = Database(tmp_path / "state.sqlite3")
+    database = Database(tmp_path / "state")
     database.initialize()
     project = Project(canonical_path=str(tmp_path), display_name="Scope")
     first = Thread(
@@ -372,45 +333,6 @@ def test_database_rejects_cross_thread_execution_records(tmp_path: Path) -> None
         ThreadRepository(connection).add(first)
         ThreadRepository(connection).add(second)
         TurnRepository(connection).add(turn)
-    with pytest.raises(sqlite3.IntegrityError):
+    with pytest.raises(IntegrityError):
         with database.transaction() as connection:
             ItemRepository(connection).add(cross_thread_item)
-
-
-def test_an_existing_database_is_not_restricted_again_on_every_open(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
-    """Opening the database must not re-apply the ACL (3 ``icacls`` spawns/file).
-
-    ``_harden_files`` runs on every connect, read and transaction. Re-applying
-    the restriction there contradicts the "restrict at creation, not per open"
-    contract (tests/test_private_storage_acl_once.py) and spawned tens of
-    thousands of ``icacls`` processes per suite run — and under that much
-    process-creation pressure ``CreateProcess`` was observed to block for
-    minutes, which is how a TUI test (and the overnight suite) wedged on
-    2026-09-14. New ``-wal``/``-shm`` files inherit the restricted directory
-    ACL, so one repair per file identity is enough.
-    """
-
-    import core.persistence.database as database_module
-
-    hardened: list[str] = []
-    monkeypatch.setattr(
-        database_module,
-        "ensure_private_file",
-        lambda path: hardened.append(Path(path).name),
-    )
-    monkeypatch.setattr(database_module, "_hardened_files", set())
-
-    database = Database(tmp_path / "state" / "deepcode.sqlite3")
-    database.initialize()
-
-    assert hardened.count("deepcode.sqlite3") == 1
-
-    for _ in range(5):
-        with database.read():
-            pass
-        with database.transaction():
-            pass
-
-    assert hardened.count("deepcode.sqlite3") == 1, "an existing file is repaired once"

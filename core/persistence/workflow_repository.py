@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-import sqlite3
+from core.persistence.database import Connection, Row, Cursor
 
 from core.domain.artifact import Artifact
 from core.domain.workflow import WorkflowRun, WorkflowStatus
@@ -16,7 +16,7 @@ from core.persistence.serde import (
 
 
 class WorkflowRepository:
-    def __init__(self, connection: sqlite3.Connection) -> None:
+    def __init__(self, connection: Connection) -> None:
         self.connection = connection
 
     def add(self, run: WorkflowRun) -> None:
@@ -82,7 +82,7 @@ class WorkflowRepository:
         *,
         where: str = "id = ?",
         where_values: tuple[object, ...] | None = None,
-    ) -> sqlite3.Cursor:
+    ) -> Cursor:
         values = (
             run.status.value,
             dump_json(run.input),
@@ -148,7 +148,7 @@ class WorkflowRepository:
         return [self._from_row(row) for row in rows]
 
     @staticmethod
-    def _from_row(row: sqlite3.Row) -> WorkflowRun:
+    def _from_row(row: Row) -> WorkflowRun:
         error_code = row["error_code"]
         if row["status"] == WorkflowStatus.FAILED.value and not error_code:
             error_code = "WORKFLOW_FAILED"
@@ -176,7 +176,7 @@ class WorkflowRepository:
 
 
 class ArtifactRepository:
-    def __init__(self, connection: sqlite3.Connection) -> None:
+    def __init__(self, connection: Connection) -> None:
         self.connection = connection
 
     def add(self, artifact: Artifact) -> None:
@@ -223,7 +223,7 @@ class ArtifactRepository:
         return [self._from_row(row) for row in rows]
 
     @staticmethod
-    def _from_row(row: sqlite3.Row) -> Artifact:
+    def _from_row(row: Row) -> Artifact:
         return Artifact(
             id=row["id"],
             thread_id=row["thread_id"],

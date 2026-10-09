@@ -32,7 +32,7 @@ from core.rag.extract import (
 )
 from core.rag.index import DocumentIndex
 from core.rag.service import RagService, openrouter_embedder_factory
-from core.rag.store import IndexStore
+from tests.rag.memory_store import MemoryStore
 
 # ---------------------------------------------------------------------------
 # Fixtures: tiny real documents built with the standard library / reportlab
@@ -323,7 +323,7 @@ def _workspace(tmp_path: Path) -> Path:
 
 def test_index_and_search_returns_cited_hits(tmp_path: Path) -> None:
     root = _workspace(tmp_path)
-    index = DocumentIndex(root, IndexStore(tmp_path / "index.sqlite3"))
+    index = DocumentIndex(root, MemoryStore())
     embedder = StubEmbedder()
     report = index.index(embedder)
     assert sorted(report.indexed) == [
@@ -344,7 +344,7 @@ def test_index_and_search_returns_cited_hits(tmp_path: Path) -> None:
 
 def test_incremental_reindex_changes_and_deletions(tmp_path: Path) -> None:
     root = _workspace(tmp_path)
-    index = DocumentIndex(root, IndexStore(tmp_path / "index.sqlite3"))
+    index = DocumentIndex(root, MemoryStore())
     first = StubEmbedder()
     index.index(first)
 
@@ -382,7 +382,7 @@ def test_failed_documents_are_recorded_and_not_retried(tmp_path: Path) -> None:
     root = tmp_path / "ws"
     root.mkdir()
     (root / "bad.docx").write_bytes(b"garbage")
-    index = DocumentIndex(root, IndexStore(tmp_path / "index.sqlite3"))
+    index = DocumentIndex(root, MemoryStore())
     report = index.index(StubEmbedder())
     assert "bad.docx" in report.failed
     documents, _ = index.document_statuses("stub/bow-64")
@@ -392,7 +392,7 @@ def test_failed_documents_are_recorded_and_not_retried(tmp_path: Path) -> None:
 
 def test_embedding_outage_keeps_files_pending(tmp_path: Path) -> None:
     root = _workspace(tmp_path)
-    index = DocumentIndex(root, IndexStore(tmp_path / "index.sqlite3"))
+    index = DocumentIndex(root, MemoryStore())
 
     class Down(StubEmbedder):
         def embed(self, texts):
@@ -406,7 +406,7 @@ def test_embedding_outage_keeps_files_pending(tmp_path: Path) -> None:
 
 def test_indexing_honours_a_deadline(tmp_path: Path) -> None:
     root = _workspace(tmp_path)
-    index = DocumentIndex(root, IndexStore(tmp_path / "index.sqlite3"))
+    index = DocumentIndex(root, MemoryStore())
     report = index.index(StubEmbedder(), deadline=time.monotonic() - 1)
     assert report.indexed == [] and len(report.remaining) == 5
 
@@ -418,7 +418,7 @@ def test_indexing_honours_a_deadline(tmp_path: Path) -> None:
 
 def test_service_status_and_background_indexing(tmp_path: Path) -> None:
     root = _workspace(tmp_path)
-    service = RagService(home=tmp_path / "rag")
+    service = RagService(store_factory=lambda _key: MemoryStore())
     try:
         status = service.status(root, configured=True, model="stub/bow-64")
         assert status["counts"] == {"total": 5, "indexed": 0, "pending": 5, "failed": 0}
@@ -439,7 +439,7 @@ def test_search_documents_tool_output_shape(tmp_path: Path) -> None:
     from core.harness.tools.documents import SearchDocumentsTool
 
     root = _workspace(tmp_path)
-    service = RagService(home=tmp_path / "rag")
+    service = RagService(store_factory=lambda _key: MemoryStore())
     try:
         tool = SearchDocumentsTool(root, StubEmbedder, service=service)
         assert tool.name == "search_documents" and tool.read_only
@@ -467,7 +467,7 @@ def test_search_documents_tool_output_shape(tmp_path: Path) -> None:
 def test_search_documents_tool_reports_missing_key(tmp_path: Path) -> None:
     from core.harness.tools.documents import SearchDocumentsTool
 
-    service = RagService(home=tmp_path / "rag")
+    service = RagService(store_factory=lambda _key: MemoryStore())
     try:
         tool = SearchDocumentsTool(
             tmp_path, openrouter_embedder_factory(lambda: None), service=service
@@ -541,7 +541,7 @@ def test_factory_falls_back_to_environment_key(monkeypatch) -> None:
 
 
 def test_normalized_scores_are_cosine(tmp_path: Path) -> None:
-    store = IndexStore(tmp_path / "s.sqlite3")
+    store = MemoryStore()
     from core.rag.chunking import Chunk
     from core.rag.store import DocumentRecord
 
@@ -573,7 +573,7 @@ def test_rag_rpcs_report_and_start_indexing(tmp_path: Path, monkeypatch) -> None
 
     root = _workspace(tmp_path)
     application = DeepCodeApplication.open(tmp_path / "state.sqlite3")
-    reset_rag_service(RagService(home=tmp_path / "rag"))
+    reset_rag_service(RagService(store_factory=lambda _key: MemoryStore()))
     try:
         project = application.projects.add(str(root), trust_state=TrustState.TRUSTED)
         thread = application.threads.start(project.id, title="Docs")
@@ -627,7 +627,7 @@ def test_upload_hook_starts_background_indexing(tmp_path: Path, monkeypatch) -> 
 
     root = _workspace(tmp_path)
     application = DeepCodeApplication.open(tmp_path / "state.sqlite3")
-    reset_rag_service(RagService(home=tmp_path / "rag"))
+    reset_rag_service(RagService(store_factory=lambda _key: MemoryStore()))
     monkeypatch.setattr(
         dispatcher_module, "rag_embedder_factory", lambda _a, _p: StubEmbedder
     )

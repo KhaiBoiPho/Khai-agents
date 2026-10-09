@@ -52,7 +52,10 @@
 }
 
 .khaidocs-root .mantine-AppShell-main {
+  height: 100cqh;
   min-height: 100cqh;
+  overflow-x: hidden;
+  overflow-y: auto;
 }
 
 .khaidocs-root .mantine-Modal-root {

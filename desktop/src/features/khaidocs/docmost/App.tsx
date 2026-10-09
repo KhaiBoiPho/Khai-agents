@@ -12,7 +12,12 @@ import { DefaultSpaceRedirect } from "@/components/khaidocs/default-space.tsx";
 
 
 const SetupWorkspace = lazy(() => import("@/pages/auth/setup-workspace.tsx"));
-const LoginPage = lazy(() => import("@/pages/auth/login"));
+// KhaiDocs: single-user mode signs in through the proxy, never with a form.
+const LoginPage = lazy(() =>
+  SINGLE_USER
+    ? import("@/components/khaidocs/auto-sign-in.tsx")
+    : import("@/pages/auth/login"),
+);
 const Home = lazy(() => import("@/pages/dashboard/home"));
 const Page = lazy(() => import("@/pages/page/page"));
 const AccountSettings = lazy(

@@ -5,7 +5,6 @@ from __future__ import annotations
 import os
 import platform
 import shutil
-import sqlite3
 import sys
 from pathlib import Path
 from typing import Any
@@ -17,7 +16,7 @@ from core.config import (
     project_config_path,
 )
 from core.persistence.database import Database
-from core.persistence.migrations import current_version
+from core.persistence.errors import DatabaseError
 from core.sessions import SessionStore
 from core.version import __version__
 
@@ -100,7 +99,12 @@ class DiagnosticsService:
             automation_count = int(
                 connection.execute("SELECT COUNT(*) FROM automations").fetchone()[0]
             )
-            schema_version = current_version(connection)
+            database_bytes = int(
+                connection.execute(
+                    "SELECT pg_database_size(current_database())"
+                ).fetchone()[0]
+            )
+        schema_version = self.database.schema_version()
 
         return {
             "appVersion": __version__,
@@ -111,7 +115,7 @@ class DiagnosticsService:
             "processId": os.getpid(),
             "databasePath": str(self.database.path),
             "databaseSchemaVersion": schema_version,
-            "databaseBytes": _file_size(self.database.path),
+            "databaseBytes": database_bytes,
             "sessionStorePath": str(self.session_store.root),
             "sessionCount": len(self.session_store.list_sessions(limit=100_000)),
             "projectCount": project_count,
@@ -146,10 +150,10 @@ class DiagnosticsService:
 
     def _database_health(self) -> bool:
         try:
-            with sqlite3.connect(self.database.path) as connection:
-                row = connection.execute("PRAGMA quick_check").fetchone()
-            return bool(row and row[0] == "ok")
-        except sqlite3.Error:
+            with self.database.read() as connection:
+                row = connection.execute("SELECT 1").fetchone()
+            return bool(row and row[0] == 1)
+        except DatabaseError:
             return False
 
 
@@ -161,9 +165,3 @@ def _writable_location(path: Path) -> bool:
     candidate = path if path.exists() else path.parent
     return candidate.exists() and os.access(candidate, os.W_OK)
 
-
-def _file_size(path: Path) -> int:
-    try:
-        return path.stat().st_size
-    except OSError:
-        return 0

@@ -42,6 +42,33 @@ function item(
 }
 
 describe("conversationModel", () => {
+  it("does not render the internal stop marker as a user message or empty turn", () => {
+    const markerText = "[The previous Turn was interrupted before it completed.]";
+    const markerTurn: Turn = {
+      ...turn,
+      id: "turn-stop-marker",
+      ordinal: 2,
+      prompt: markerText,
+    };
+    const marker = {
+      ...item("stop-marker", 1, "user_message", markerText, {
+        text: markerText,
+        source: "turn_interrupt",
+      }),
+      turnId: markerTurn.id,
+    };
+
+    const groups = buildConversationTurns(
+      [turn, markerTurn],
+      [item("user", 1, "user_message", "Stop this run"), marker],
+    );
+
+    expect(groups.map((group) => group.id)).toEqual([turn.id]);
+    expect(groups[0]?.userMessages.map((message) => message.summary)).toEqual([
+      "Stop this run",
+    ]);
+  });
+
   it("keeps assistant messages and execution items in true ordinal order", () => {
     const items = [
       item("assistant-final", 6, "assistant_message", "Final answer"),

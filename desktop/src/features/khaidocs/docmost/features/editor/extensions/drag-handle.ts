@@ -7,6 +7,7 @@ import {
 } from "@tiptap/pm/state";
 import { Fragment, Slice, Node } from "@tiptap/pm/model";
 import { EditorView } from "@tiptap/pm/view";
+import { BLOCK_HANDLE_MENU_EVENT } from "../components/block-actions-menu";
 
 export interface GlobalDragHandleOptions {
   /**
@@ -39,6 +40,20 @@ export interface GlobalDragHandleOptions {
 }
 function absoluteRect(node: Element) {
   const data = node.getBoundingClientRect();
+  // KhaiDocs applies `contain: layout paint` to its root, which makes that
+  // root the containing block for this fixed-position handle. Convert the
+  // viewport coordinates into the root's local coordinates before assigning
+  // `left`/`top`, otherwise the app/sidebar offset is added a second time.
+  const appRoot = node.closest<HTMLElement>(".khaidocs-root");
+  if (appRoot) {
+    const rootRect = appRoot.getBoundingClientRect();
+    return {
+      top: data.top - rootRect.top,
+      left: data.left - rootRect.left,
+      width: data.width,
+    };
+  }
+
   const modal = node.closest('[role="dialog"]');
 
   if (modal && window.getComputedStyle(modal).transform !== "none") {
@@ -354,7 +369,38 @@ export function DragHandlePlugin(
         }
       }
 
+      function onDragHandleClick(event: MouseEvent) {
+        event.preventDefault();
+        event.stopPropagation();
+        const node = nodeDOMAtCoords(
+          {
+            x: event.clientX + 50 + options.dragHandleWidth,
+            y: event.clientY,
+          },
+          options,
+          view,
+        );
+        if (!(node instanceof Element)) return;
+        const rawPosition = nodePosAtDOM(node, view, options);
+        if (rawPosition == null || rawPosition < 0) return;
+        const position = calcNodePos(rawPosition, view);
+        const selectedNode = view.state.doc.nodeAt(position);
+        if (!selectedNode || !NodeSelection.isSelectable(selectedNode)) return;
+        view.dispatch(
+          view.state.tr
+            .setSelection(NodeSelection.create(view.state.doc, position))
+            .scrollIntoView(),
+        );
+        view.focus();
+        window.dispatchEvent(
+          new CustomEvent(BLOCK_HANDLE_MENU_EVENT, {
+            detail: { x: event.clientX, y: event.clientY },
+          }),
+        );
+      }
+
       dragHandleElement.addEventListener("drag", onDragHandleDrag);
+      dragHandleElement.addEventListener("click", onDragHandleClick);
 
       hideDragHandle();
 
@@ -372,6 +418,7 @@ export function DragHandlePlugin(
             dragHandleElement?.remove?.();
           }
           dragHandleElement?.removeEventListener("drag", onDragHandleDrag);
+          dragHandleElement?.removeEventListener("click", onDragHandleClick);
           dragHandleElement?.removeEventListener(
             "dragstart",
             onDragHandleDragStart,

@@ -1,0 +1,86 @@
+# Khai-Agents data services: one Postgres (application state with row-level
+# security, plus Docmost's database), Redis (browser sessions, rate limits,
+# per-user event fan-out) and Qdrant (RAG vectors).
+#
+#   docker/stack/up.sh        # first run writes .env with random secrets
+#
+# Every port binds to localhost; in the hosted deployment only the app
+# container reaches these services, over the compose network.
+
+name: khai-stack
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${KHAI_PG_SUPERUSER_PASSWORD:?run ./up.sh to create .env}
+      POSTGRES_DB: postgres
+      # Read by initdb/01-roles.sh on the first start only.
+      KHAI_PG_APP_PASSWORD: ${KHAI_PG_APP_PASSWORD:?run ./up.sh to create .env}
+      KHAI_PG_DOCMOST_PASSWORD: ${KHAI_PG_DOCMOST_PASSWORD:?run ./up.sh to create .env}
+    command: ["postgres", "-c", "password_encryption=scram-sha-256"]
+    ports:
+      - "127.0.0.1:${KHAI_PG_PORT:-5452}:5432"
+    volumes:
+      - pg-data:/var/lib/postgresql/data
+      - ./initdb:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  redis:
+    image: redis:8-alpine
+    restart: unless-stopped
+    command:
+      - sh
+      - -c
+      - exec redis-server --appendonly yes --requirepass "$$KHAI_REDIS_PASSWORD"
+    environment:
+      KHAI_REDIS_PASSWORD: ${KHAI_REDIS_PASSWORD:?run ./up.sh to create .env}
+    ports:
+      - "127.0.0.1:${KHAI_REDIS_PORT:-6392}:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a \"$$KHAI_REDIS_PASSWORD\" --no-auth-warning ping | grep -q PONG"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  qdrant:
+    image: qdrant/qdrant:v1.15.4
+    restart: unless-stopped
+    environment:
+      QDRANT__SERVICE__API_KEY: ${KHAI_QDRANT_API_KEY:?run ./up.sh to create .env}
+      # Per-user tokens (app_server/gateway/qdrant.py) open only their collections.
+      QDRANT__SERVICE__JWT_RBAC: "true"
+    ports:
+      - "127.0.0.1:${KHAI_QDRANT_PORT:-6353}:6333"
+    volumes:
+      - qdrant-data:/qdrant/storage
+
+  docmost:
+    image: docmost/docmost:0.96.0
+    restart: unless-stopped
+    depends_on:
+      postgres: {condition: service_healthy}
+      redis: {condition: service_healthy}
+    environment:
+      APP_URL: ${KHAI_DOCMOST_APP_URL:-http://127.0.0.1:8090}
+      APP_SECRET: ${KHAI_DOCMOST_APP_SECRET:?run ./up.sh to create .env}
+      DATABASE_URL: postgresql://docmost:${KHAI_PG_DOCMOST_PASSWORD}@postgres:5432/docmost
+      REDIS_URL: redis://:${KHAI_REDIS_PASSWORD}@redis:6379/1
+    ports:
+      - "127.0.0.1:${KHAI_DOCMOST_PORT:-3466}:3000"
+    volumes:
+      - docmost-data:/app/data/storage
+
+volumes:
+  docmost-data:
+  pg-data:
+  redis-data:
+  qdrant-data:

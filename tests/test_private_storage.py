@@ -7,7 +7,6 @@ from pathlib import Path
 import pytest
 
 from core.application.config_store import ConfigStore
-from core.persistence.database import Database
 from core.private_storage import harden_private_tree
 from core.providers.credentials import CredentialStore
 from core.sessions.store import SessionStore
@@ -35,8 +34,6 @@ def test_runtime_state_is_created_with_user_only_permissions(tmp_path: Path) -> 
     )
     store.update_settings(session.session_id, model="example/model")
 
-    database = Database(tmp_path / "home" / "state" / "deepcode.sqlite3")
-    database.initialize()
     ConfigStore(tmp_path / "home" / "deepcode_config.json").mutate(lambda _: {})
     CredentialStore(tmp_path / "home" / "credentials.json").set(
         "example",
@@ -49,16 +46,13 @@ def test_runtime_state_is_created_with_user_only_permissions(tmp_path: Path) -> 
         sessions,
         sessions / ".locks",
         session_directory,
-        database.path.parent,
     ):
         assert _mode(directory) == 0o700
 
     for path in (
-        sessions / "index.db",
         session_directory / "session.jsonl",
         session_directory / "tasks.jsonl",
         session_directory / "settings.json",
-        database.path,
         tmp_path / "home" / "deepcode_config.json",
         tmp_path / "home" / "credentials.json",
     ):

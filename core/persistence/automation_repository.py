@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-import sqlite3
+from core.persistence.database import Connection, Row
 from datetime import datetime
 
 from core.domain.automation import (
@@ -52,7 +52,7 @@ _OPEN_RUN_STATUSES = (
 
 
 class AutomationRepository:
-    def __init__(self, connection: sqlite3.Connection) -> None:
+    def __init__(self, connection: Connection) -> None:
         self.connection = connection
 
     def add(self, automation: Automation) -> None:
@@ -261,7 +261,7 @@ class AutomationRepository:
             )
 
     @staticmethod
-    def _from_row(row: sqlite3.Row) -> Automation:
+    def _from_row(row: Row) -> Automation:
         return Automation(
             id=row["id"],
             project_id=row["project_id"],
@@ -280,7 +280,7 @@ class AutomationRepository:
 
 
 class AutomationRevisionRepository:
-    def __init__(self, connection: sqlite3.Connection) -> None:
+    def __init__(self, connection: Connection) -> None:
         self.connection = connection
 
     def add(self, revision: AutomationRevision) -> None:
@@ -335,7 +335,7 @@ class AutomationRevisionRepository:
         return [self._from_row(row) for row in rows]
 
     @staticmethod
-    def _from_row(row: sqlite3.Row) -> AutomationRevision:
+    def _from_row(row: Row) -> AutomationRevision:
         return AutomationRevision(
             id=row["id"],
             automation_id=row["automation_id"],
@@ -346,7 +346,7 @@ class AutomationRevisionRepository:
 
 
 class AutomationOccurrenceRepository:
-    def __init__(self, connection: sqlite3.Connection) -> None:
+    def __init__(self, connection: Connection) -> None:
         self.connection = connection
 
     def add(self, occurrence: AutomationOccurrence) -> None:
@@ -385,7 +385,7 @@ class AutomationOccurrenceRepository:
         return self._from_row(row) if row is not None else None
 
     @staticmethod
-    def _from_row(row: sqlite3.Row) -> AutomationOccurrence:
+    def _from_row(row: Row) -> AutomationOccurrence:
         return AutomationOccurrence(
             id=row["id"],
             automation_id=row["automation_id"],
@@ -397,7 +397,7 @@ class AutomationOccurrenceRepository:
 
 
 class AutomationRunRepository:
-    def __init__(self, connection: sqlite3.Connection) -> None:
+    def __init__(self, connection: Connection) -> None:
         self.connection = connection
 
     def add(self, run: AutomationRun) -> None:
@@ -577,7 +577,7 @@ class AutomationRunRepository:
         return [self._from_row(row) for row in rows]
 
     @staticmethod
-    def _from_row(row: sqlite3.Row) -> AutomationRun:
+    def _from_row(row: Row) -> AutomationRun:
         return AutomationRun(
             id=row["id"],
             automation_id=row["automation_id"],

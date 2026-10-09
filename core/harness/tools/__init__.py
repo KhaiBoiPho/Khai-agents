@@ -78,6 +78,7 @@ def default_coding_tools(
     """
     from core.agent_runtime.tools.registry import ToolRegistry
     from core.harness.memory import MemoryTool
+    from core.hosting import commands_allowed
     from core.harness.skills import SkillTool, discover_skills
     from core.harness.tools.goal import GetGoalTool, UpdateGoalTool
     from core.harness.tools.plan import UpdatePlanTool
@@ -114,13 +115,15 @@ def default_coding_tools(
             workspace,
             allow_outside_workspace=allow_outside_workspace,
         ),
-        BashTool(workspace, sandbox_enabled=command_sandbox),
         GrepTool(workspace),
         GlobTool(workspace),
         MemoryTool(workspace),
         UpdatePlanTool(),  # the agent's self-driven TODO plan
         WebFetchTool(),
     ]
+    if commands_allowed():
+        # Hosted accounts run commands only once an administrator allows it.
+        tools.insert(4, BashTool(workspace, sandbox_enabled=command_sandbox))
     # Standalone fallback is workspace-hermetic (no ambient ~/.claude scan);
     # build_agent_session passes the full project+user set via `skills`.
     if skill_runtime is not None:

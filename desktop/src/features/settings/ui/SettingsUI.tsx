@@ -342,15 +342,21 @@ export function TextInput({
   onChange,
   placeholder,
   label,
+  type = "text",
+  autoComplete,
 }: {
   value: string;
   onChange(value: string): void;
   placeholder?: string;
   label: string;
+  type?: "text" | "password";
+  autoComplete?: string;
 }) {
   return (
     <input
       className={styles.input}
+      type={type}
+      autoComplete={autoComplete}
       value={value}
       onChange={(event) => onChange(event.target.value)}
       placeholder={placeholder}

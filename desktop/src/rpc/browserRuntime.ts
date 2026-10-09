@@ -385,13 +385,15 @@ export class BrowserRuntime implements ClientRuntime {
         (values[key] as string).trim().length > 0);
     for (let attempt = 0; ; attempt++) {
       try {
-        if (this.state.phase !== "ready") {
-          if (!safe)
-            throw new BrowserRuntimeError(
-              "NOT_CONNECTED",
-              "Not connected; the request was not sent",
-              true,
-            );
+        if (
+          this.state.phase !== "ready" ||
+          !this.socket ||
+          this.socket.readyState !== WebSocket.OPEN
+        ) {
+          // The server advertises retry policy during `initialize`; before
+          // that first handshake there is no policy yet. Establishing a
+          // socket never sends the caller's operation, so it is safe for
+          // both reads and user-initiated mutations to connect first.
           await this.connect();
         }
         if (attempt > 0) {

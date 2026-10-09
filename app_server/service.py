@@ -19,7 +19,7 @@ import time
 
 from aiohttp import web
 
-from app_server.browser_auth import BrowserAuth
+from app_server.browser_auth import BrowserAuth, WorkerAuth
 from app_server.host import ServiceHost
 from app_server.errors import RpcError
 from app_server.protocol.codec import decode_request
@@ -67,6 +67,10 @@ class ControlServer:
         self.record = record
         self._token = token
         self.public_origin, _bind, self._access_password = _remote_settings()
+        # A user's worker in the hosted deployment: reachable only from its
+        # gateway, which presents KHAI_WORKER_TOKEN on every request.
+        worker_token = os.environ.get("KHAI_WORKER_TOKEN", "")
+        self.worker_auth = WorkerAuth(worker_token) if worker_token else None
         self.public_host = (
             self.public_origin.split("://", 1)[-1] if self.public_origin else ""
         )
@@ -76,7 +80,7 @@ class ControlServer:
         self.phase = "ready"
         self._operation = asyncio.Lock()
         database = Path(record.database)
-        self.browser_auth = BrowserAuth(
+        self.browser_auth = self.worker_auth or BrowserAuth(
             record.instance_id,
             store=database.with_name(database.name + ".service") / "browser-sessions.json",
             cookie_key=hashlib.sha256(str(database).encode()).hexdigest()[:16],
@@ -87,7 +91,9 @@ class ControlServer:
         self.business = WebSocketTransport(
             host,
             self.browser_auth,
-            native_authenticated=self._authenticated,
+            native_authenticated=(
+                self.worker_auth.authenticated if self.worker_auth else self._authenticated
+            ),
             phase=lambda: self.phase,
             service_info=lambda: {
                 "instanceId": record.instance_id,
@@ -99,6 +105,8 @@ class ControlServer:
         )
 
     def application(self) -> web.Application:
+        if self.worker_auth is not None:
+            return self._worker_application()
         app = web.Application(
             client_max_size=MAX_CONTROL_BYTES, middlewares=[self._local_only]
         )
@@ -124,6 +132,42 @@ class ControlServer:
         app.on_cleanup.append(self.business.cleanup)
         app.on_response_prepare.append(self._private_response)
         return app
+
+    def _worker_application(self) -> web.Application:
+        """Business RPC, uploads and downloads for one user's gateway only."""
+
+        app = web.Application(
+            client_max_size=MAX_CONTROL_BYTES, middlewares=[self._worker_only]
+        )
+        app.add_routes(
+            [
+                web.get("/health/live", self._health),
+                web.get("/health/ready", self._health),
+                web.get("/control/identity", self._identity),
+                web.post("/control/rpc", self._rpc),
+                web.get("/api/rpc", self.business.handle),
+                web.post("/api/uploads", self.web_surface.upload),
+                web.get("/api/download", self.web_surface.download),
+            ]
+        )
+        app.on_shutdown.append(self.business.shutdown)
+        app.on_cleanup.append(self.business.cleanup)
+        app.on_response_prepare.append(self._private_response)
+        return app
+
+    @web.middleware
+    async def _worker_only(self, request: web.Request, handler):
+        if request.path in {"/health/live", "/health/ready"}:
+            return await handler(request)
+        if request.path.startswith("/control/"):
+            # In-container management (the service CLI) stays loopback-only.
+            if request.remote not in {"127.0.0.1", "::1"}:
+                raise web.HTTPForbidden(text="Local service management only")
+            return await handler(request)
+        if "Origin" in request.headers:
+            raise web.HTTPForbidden(text="Workers are not reachable from browsers")
+        self.worker_auth.require(request)
+        return await handler(request)
 
     @web.middleware
     async def _local_only(self, request: web.Request, handler):
@@ -458,16 +502,14 @@ async def serve(files: ServiceFiles, port: int) -> None:
                 continue
             installed_signals.append(sig)
         files.publish(record, token)
-        # KhaiDocs comes up alongside the service and signs in on its own.
-        from app_server import khaidocs_stack
+        if control.worker_auth is None:
+            # KhaiDocs comes up alongside the service and signs in on its own.
+            # (In the hosted deployment the gateway serves it instead.)
+            from app_server import khaidocs_stack
 
-        khaidocs_stack.start_in_background(
-            control.khaidocs.server, control.khaidocs.set_credentials
-        )
-        # So is the document index's Postgres + Qdrant stack.
-        from core.rag import stack as rag_stack
-
-        rag_stack.start_in_background()
+            khaidocs_stack.start_in_background(
+                control.khaidocs.server, control.khaidocs.set_credentials
+            )
         logger.info("Service ready at %s (pid %d)", record.url, record.pid)
         await control.stopped.wait()
     finally:

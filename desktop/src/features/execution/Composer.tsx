@@ -84,6 +84,8 @@ import { ModelPicker } from "./ModelPicker";
 import { ContextRing } from "./ContextRing";
 import { FileCard } from "../../components/FileCard";
 import type { ContextUsage } from "../../app/workspaceState";
+import type { TurnPlanState } from "../../app/workspaceState";
+import { PlanProgress } from "../thread/PlanProgress";
 
 interface ComposerProps {
   editable: boolean;
@@ -92,6 +94,8 @@ interface ComposerProps {
   /** True once this thread has any Turn — the agent preset is then fixed. */
   conversationStarted: boolean;
   executingTurn: Turn | null;
+  planProgress?: TurnPlanState | null;
+  onPlanProgressExpandedChange?(expanded: boolean): void;
   queuedTurns: readonly Turn[];
   runtime: ClientRuntime;
   project: Project | null;
@@ -156,6 +160,8 @@ export function Composer({
   busy,
   conversationStarted,
   executingTurn,
+  planProgress = null,
+  onPlanProgressExpandedChange,
   queuedTurns,
   runtime,
   project,
@@ -643,6 +649,13 @@ export function Composer({
         ) : null}
       </div>
       <div className={styles.composer}>
+        {planProgress?.steps.length ? (
+          <PlanProgress
+            inline
+            plan={planProgress}
+            onExpandedChange={onPlanProgressExpandedChange}
+          />
+        ) : null}
         {conversationStarted ? (
           <img src={mascotUrl} alt="" className={styles.mascot} />
         ) : null}

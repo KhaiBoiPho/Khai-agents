@@ -28,6 +28,13 @@ runs `scripts/setup-genoffice.sh`) instead of hand-writing Office XML.
   whole batch (atomic `apply` wrote nothing). Never parse `message`.
 - `create_*` and `convert` refuse to overwrite (`output_exists`): choose a new
   name, or `force: true` only when the user asked to replace the file.
+- For `create_docx`, prefer non-empty Markdown. If using HTML, provide a
+  non-empty restricted-HTML fragment with supported readable body elements,
+  not a full document wrapper (`<!doctype>`, `<html>`, `<head>`, `<body>`) or
+  unsupported markup. If creation reports that no content could be parsed,
+  retry once with equivalent Markdown; do not resend the same HTML.
+- For `pdf_read`, pass at most one of `page` or `range`; use `range` alone for
+  multiple pages, or omit both to read the default first pages.
 - Look up op fields with `guide` (`guide {domain: "docs"|"sheets"|"slides",
   topic?}`) before writing ops; the schemas advertised for `ops`, `cells` and
   `data` are intentionally untyped to save context, the guide is the

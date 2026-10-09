@@ -14,16 +14,18 @@ desktop/dist
 *.egg-info
 .eggs
 .venv
+.venv-*
 venv
 env
 
 # Built in the image's web stage
 app_server/web_assets
 
-# Secrets
-.env
-.env.*
+# Secrets (anywhere: docker/stack/.env and docker/deploy/.env hold passwords)
+**/.env
+**/.env.*
 !.env.example
+docker/stack/backups
 
 # IDE
 .vscode
@@ -41,3 +43,6 @@ logs
 # Not needed in the image
 eval
 website
+
+# Local tooling output
+.playwright-mcp

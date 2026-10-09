@@ -2,14 +2,14 @@
 
 from __future__ import annotations
 
-import sqlite3
+from core.persistence.database import Connection
 from datetime import datetime
 
 from core.persistence.serde import dump_datetime
 
 
 class LegacyImportRepository:
-    def __init__(self, connection: sqlite3.Connection) -> None:
+    def __init__(self, connection: Connection) -> None:
         self.connection = connection
 
     def imported_thread_id(self, source_key: str) -> str | None:

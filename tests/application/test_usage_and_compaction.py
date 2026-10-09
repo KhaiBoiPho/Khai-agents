@@ -9,7 +9,6 @@ the next Turn's request carrying the compacted history.
 from __future__ import annotations
 
 import asyncio
-import sqlite3
 import time
 from datetime import UTC, datetime
 from pathlib import Path
@@ -27,7 +26,6 @@ from core.application.usage_service import UsageService, model_prices
 from core.domain import TrustState
 from core.domain.turn import TurnStatus
 from core.events import AgentSession
-from core.persistence.migrations import migrate
 from core.persistence.usage_repository import UsageRepository, UsageTokens
 from core.providers.base import LLMResponse
 
@@ -174,28 +172,6 @@ def test_ledger_survives_thread_deletion(tmp_path: Path) -> None:
         application.deletions.delete(thread_id)
         summary = UsageService(application.database).summary()
         assert summary["allTime"]["inputTokens"] == 1000
-    finally:
-        _close(application)
-
-
-def test_migration_backfills_existing_usage_events(tmp_path: Path) -> None:
-    provider = StubProvider()
-    application, thread_id, _ = _application(tmp_path, provider)
-    try:
-        _run_turn(application, thread_id, "hello")
-        with application.database.transaction() as connection:
-            connection.execute("DELETE FROM usage_records")
-        connection = sqlite3.connect(application.database.path)
-        try:
-            migrate(connection, 17)
-            migrate(connection)
-            rows = connection.execute(
-                "SELECT thread_id, response_ordinal, input_tokens, output_tokens, "
-                "cached_input_tokens FROM usage_records"
-            ).fetchall()
-        finally:
-            connection.close()
-        assert [tuple(row) for row in rows] == [(thread_id, 1, 1000, 150, 10)]
     finally:
         _close(application)
 

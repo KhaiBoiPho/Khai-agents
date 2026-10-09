@@ -499,7 +499,7 @@ class ConnectionResolver:
             legacy_key=legacy_key,
             key_optional=spec.is_local or spec.is_direct or spec.is_oauth,
         )
-        account_id = None
+        account_id = profile.account_id
         if profile.auth == "oauth":
             api_key, account_id = self.credentials.oauth_credential(connection_id)
             source = "oauth" if api_key else "missing"

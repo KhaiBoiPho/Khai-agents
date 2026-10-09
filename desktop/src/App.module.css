@@ -2,13 +2,13 @@
   display: grid;
   width: 100vw;
   height: 100vh;
-  grid-template-columns: 264px minmax(0, 1fr);
+  grid-template-columns: var(--sidebar-width, 264px) 8px minmax(0, 1fr);
   overflow: hidden;
   background: var(--surface-shell);
 }
 
 .shell[data-inspector="true"] {
-  grid-template-columns: 264px minmax(460px, 1fr) var(--review-width, 440px);
+  grid-template-columns: var(--sidebar-width, 264px) 8px minmax(460px, 1fr) var(--review-width, 440px);
 }
 
 .workspace {
@@ -134,7 +134,7 @@
 
 @media (max-width: 1180px) {
   .shell[data-inspector="true"] {
-    grid-template-columns: 248px minmax(0, 1fr);
+    grid-template-columns: min(var(--sidebar-width, 264px), 32vw) 8px minmax(0, 1fr);
   }
 
   .reviewPane {
@@ -152,7 +152,7 @@
 @media (max-width: 920px) {
   .shell,
   .shell[data-inspector="true"] {
-    grid-template-columns: 228px minmax(0, 1fr);
+    grid-template-columns: min(var(--sidebar-width, 264px), 32vw) 8px minmax(0, 1fr);
   }
 
   .startState {
@@ -164,7 +164,7 @@
 @media (max-width: 720px) {
   .shell,
   .shell[data-inspector="true"] {
-    grid-template-columns: 204px minmax(0, 1fr);
+    grid-template-columns: min(var(--sidebar-width, 264px), 32vw) 8px minmax(0, 1fr);
   }
 
   .startState {
@@ -293,8 +293,8 @@
    space the chat can spare, instead of floating over it on smaller windows. */
 .shell[data-inspector="true"] {
   grid-template-columns:
-    264px minmax(340px, 1fr)
-    minmax(280px, min(var(--review-width, 440px), calc(100vw - 264px - 380px)));
+    var(--sidebar-width, 264px) 8px minmax(340px, 1fr)
+    minmax(280px, min(var(--review-width, 440px), calc(100vw - var(--sidebar-width, 264px) - 388px)));
 }
 
 .shell[data-sidebar="hidden"][data-inspector="true"] {
@@ -306,7 +306,7 @@
 @media (max-width: 1180px) {
   .shell[data-inspector="true"] {
     grid-template-columns:
-      248px minmax(320px, 1fr)
+      min(var(--sidebar-width, 264px), 32vw) 8px minmax(320px, 1fr)
       minmax(260px, min(var(--review-width, 440px), 42vw));
   }
 
@@ -331,15 +331,18 @@
 
 @media (max-width: 920px) {
   .shell[data-inspector="true"] {
-    grid-template-columns: 228px minmax(280px, 1fr) minmax(240px, 40vw);
+    grid-template-columns: min(var(--sidebar-width, 264px), 32vw) 8px minmax(280px, 1fr) minmax(240px, 40vw);
   }
 }
 
 /* Phones: no room for both; the panel floats over the chat. */
 @media (max-width: 720px) {
-  .shell[data-inspector="true"],
+  .shell[data-inspector="true"] {
+    grid-template-columns: min(var(--sidebar-width, 264px), 32vw) 8px minmax(0, 1fr);
+  }
+
   .shell[data-sidebar="hidden"][data-inspector="true"] {
-    grid-template-columns: 204px minmax(0, 1fr);
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .reviewPane {

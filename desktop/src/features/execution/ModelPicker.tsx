@@ -4,6 +4,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperti
 import type {
   ConnectionInfo,
   CatalogModel,
+  ManualModelEntry,
   ModelCatalogResult,
   Project,
   SettingsSnapshot,
@@ -51,7 +52,7 @@ export function ModelPicker({
   onManageProviders,
 }: ModelPickerProps) {
   const rootRef = useRef<HTMLDivElement | null>(null);
-  const { catalog: connectionCatalog, models: listModels } =
+  const { catalog: connectionCatalog, models: listModels, error: catalogError } =
     useConnectionCatalog(runtime, project?.id ?? null);
   const [open, setOpen] = useState(false);
   // Open toward the side with more room and never past the window edge.
@@ -148,7 +149,27 @@ export function ModelPicker({
   const normalized = query.trim().toLocaleLowerCase();
   const groups = usableConnections.map((connection) => {
     const result = catalogs[connection.id];
-    const models = (result?.models ?? [])
+    const discovered = result?.models ?? [];
+    const storedEntries =
+      connection.manualModelEntries?.length
+        ? connection.manualModelEntries
+        : connection.manualModels.map((id) => ({ id }));
+    // A saved agent default predates manual-model lists in existing configs;
+    // retain it as a one-item allow-list until the user selects more models.
+    if (
+      storedEntries.length === 0 &&
+      connection.id === effectiveConnection?.id &&
+      effectiveModel
+    ) {
+      storedEntries.push({ id: effectiveModel });
+    }
+    const models = storedEntries
+      // Manual entries are the source of truth for what the composer exposes.
+      // Catalog discovery only enriches them with fresh capabilities.
+      .map((entry) =>
+        discovered.find((model) => modelIdsMatch(model.id, entry.id)) ??
+        manualEntryAsCatalogModel(entry),
+      )
       .filter(
         (model) =>
           !normalized ||
@@ -267,6 +288,9 @@ export function ModelPicker({
                 ) : null}
               </div>
             ))}
+            {!connectionCatalog && catalogError ? (
+              <p className={styles.status}>{catalogError}</p>
+            ) : null}
           </div>
 
           <div className={styles.effort} role="radiogroup" aria-label="Effort">
@@ -385,4 +409,24 @@ function formatTokens(value: number): string {
   if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}M`;
   if (value >= 1_000) return `${Math.round(value / 1_000)}K`;
   return String(value);
+}
+
+function modelIdsMatch(left: string, right: string): boolean {
+  const normalize = (value: string) => value.trim().toLocaleLowerCase().replace(/^models\//, "");
+  return normalize(left) === normalize(right);
+}
+
+function manualEntryAsCatalogModel(entry: ManualModelEntry): CatalogModel {
+  return {
+    id: entry.id,
+    name: entry.label ?? entry.id,
+    contextWindow: entry.contextWindow ?? 0,
+    maxOutputTokens: entry.maxOutputTokens ?? 0,
+    supportedParameters: [],
+    reasoning: null,
+    ...(entry.inputModalities
+      ? { inputModalities: entry.inputModalities as CatalogModel["inputModalities"] }
+      : {}),
+    toolCalling: entry.toolCalling ?? null,
+  };
 }

@@ -217,13 +217,13 @@ def test_relay_backs_off_on_persistent_failure_and_recovers(
             relay._stop.set()
             return 0
         if outcome is Exception:
-            raise sqlite_error()
+            raise database_error()
         return 0
 
-    def sqlite_error() -> Exception:
-        import sqlite3
+    def database_error() -> Exception:
+        from core.persistence.errors import OperationalError
 
-        return sqlite3.OperationalError("disk I/O error")
+        return OperationalError("connection lost")
 
     real_wait = relay._stop.wait
 

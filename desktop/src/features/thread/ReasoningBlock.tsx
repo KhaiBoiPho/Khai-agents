@@ -11,6 +11,8 @@ import styles from "./ReasoningBlock.module.css";
 interface ReasoningBlockProps {
   item: Item;
   mode: TranscriptMode;
+  forceCollapsed?: boolean;
+  forceOpen?: boolean;
 }
 
 interface DisclosureOverride {
@@ -20,9 +22,10 @@ interface DisclosureOverride {
 
 function formatDuration(milliseconds: number): string {
   const seconds = Math.max(0, Math.round(milliseconds / 1000));
-  if (seconds < 60) return `${seconds}s`;
+  if (seconds < 60) return `${seconds} ${seconds === 1 ? "second" : "seconds"}`;
   const minutes = Math.floor(seconds / 60);
-  return `${minutes}m ${(seconds % 60).toString().padStart(2, "0")}s`;
+  const remainder = seconds % 60;
+  return `${minutes} ${minutes === 1 ? "minute" : "minutes"}${remainder ? ` ${remainder} ${remainder === 1 ? "second" : "seconds"}` : ""}`;
 }
 
 function useReasoningDuration(item: Item, active: boolean): number | null {
@@ -43,7 +46,7 @@ function useReasoningDuration(item: Item, active: boolean): number | null {
     : null;
 }
 
-export function ReasoningBlock({ item, mode }: ReasoningBlockProps) {
+export function ReasoningBlock({ item, mode, forceCollapsed = false, forceOpen = false }: ReasoningBlockProps) {
   const active = item.status === "in_progress";
   const payload = decodeReasoningPayload(item.payload);
   const effort = payload.effort ?? "auto";
@@ -54,8 +57,11 @@ export function ReasoningBlock({ item, mode }: ReasoningBlockProps) {
   const disclosureKey = `${item.id}:${item.status}:${mode}`;
   const [manualOverride, setManualOverride] =
     useState<DisclosureOverride | null>(null);
-  const open =
-    manualOverride?.key === disclosureKey
+  const open = forceCollapsed
+    ? false
+    : forceOpen
+      ? true
+      : manualOverride?.key === disclosureKey
       ? manualOverride.open
       : active || mode === "verbose";
 
@@ -64,7 +70,7 @@ export function ReasoningBlock({ item, mode }: ReasoningBlockProps) {
     ? ["Thinking", effort !== "auto" ? effort : null, durationLabel]
         .filter(Boolean)
         .join(" · ")
-    : durationLabel
+      : durationLabel
       ? `Thought for ${durationLabel}`
       : "Thinking completed";
 
@@ -90,15 +96,6 @@ export function ReasoningBlock({ item, mode }: ReasoningBlockProps) {
           <strong>
             <ShimmerText active={active}>{title}</ShimmerText>
           </strong>
-          <small>
-            {active
-              ? "Model reasoning"
-              : opaque
-                ? "Details unavailable"
-                : effort === "auto"
-                  ? "Reasoning"
-                  : `Reasoning · ${effort}`}
-          </small>
         </span>
         <ChevronRight className={styles.chevron} size={14} aria-hidden="true" />
       </summary>

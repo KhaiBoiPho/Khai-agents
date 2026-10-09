@@ -398,12 +398,11 @@
 }
 
 .cardPin {
-  position: absolute;
-  top: 6px;
-  right: 6px;
+  position: relative;
   display: grid;
   width: 28px;
   height: 28px;
+  flex: 0 0 28px;
   place-items: center;
   border-radius: var(--radius-pill);
   color: var(--text-tertiary);
@@ -423,14 +422,27 @@
   color: var(--text-primary);
 }
 
+.cardHeader {
+  display: flex;
+  min-height: 28px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
 .cardTitle {
+  flex: 1 1 auto;
+  min-width: 0;
   margin: 0;
-  padding-right: 28px;
   font-size: var(--text-base);
   font-weight: var(--weight-semibold);
   line-height: 1.3;
   overflow-wrap: anywhere;
   unicode-bidi: plaintext;
+}
+
+.cardTitleSpacer {
+  flex: 1 1 auto;
 }
 
 /* A long note would otherwise push every other note off screen; the full
@@ -442,11 +454,6 @@
   -webkit-line-clamp: 12;
   line-clamp: 12;
   unicode-bidi: plaintext;
-}
-
-/* Without a title the first line runs under the pin. */
-.cardPin + .cardContent {
-  padding-right: 26px;
 }
 
 .cardCategories {
@@ -644,11 +651,14 @@
   height: 16px;
   flex: none;
   margin-top: 0.15em;
+  padding: 0;
   place-items: center;
   border: 1.5px solid color-mix(in srgb, var(--text-primary) 45%, transparent);
   border-radius: var(--radius-sm);
   background: color-mix(in srgb, var(--surface-raised) 60%, transparent);
   color: var(--text-on-accent);
+  line-height: 1;
+  appearance: none;
   transition:
     background-color 140ms ease,
     border-color 140ms ease,

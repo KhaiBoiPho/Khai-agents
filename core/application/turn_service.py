@@ -5,7 +5,6 @@ from __future__ import annotations
 import asyncio
 import os
 import logging
-import sqlite3
 import threading
 import time
 from collections.abc import Callable, Iterator
@@ -90,7 +89,7 @@ from core.domain.thread import Thread, ThreadStatus
 from core.domain.turn import Turn, TurnExecutor, TurnStatus
 from core.events import Event, SkillLoaded, TurnStarted, UserInput
 from core.persistence.coordination_repository import RuntimeCoordinationRepository
-from core.persistence.database import Database
+from core.persistence.database import Connection, Database
 from core.persistence.event_repository import EventRepository
 from core.persistence.execution_repository import (
     ApprovalRepository,
@@ -121,7 +120,7 @@ class TurnAdmissionContext:
     ``TurnService`` about Automation, Workflow, or any future owner type.
     """
 
-    connection: sqlite3.Connection
+    connection: Connection
     thread: Thread
     goal_id: str | None
     goal_turn_settlement_ids: frozenset[str]
@@ -149,7 +148,7 @@ class TurnTransactionContext:
     roll back the complete submission.
     """
 
-    connection: sqlite3.Connection
+    connection: Connection
     turn: Turn
     user_item: Item
     thread: Thread

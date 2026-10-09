@@ -52,9 +52,8 @@ from core.application.workspace_service import WorkspaceService
 from core.application.worktree_service import WorktreeService
 from core.domain.common import utc_now
 from core.domain.turn import TurnExecutor
-from core.persistence.database import Database
+from core.persistence.database import LATEST_SCHEMA_VERSION, Database
 from core.persistence.event_repository import EventRepository
-from core.persistence.migrations import LATEST_SCHEMA_VERSION
 from core.plugins.host import LocalPluginHost
 from core.providers.credentials import CredentialStore
 from core.sessions import (

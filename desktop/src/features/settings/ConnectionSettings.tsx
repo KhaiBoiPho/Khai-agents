@@ -37,6 +37,15 @@ interface ConnectionSettingsProps {
   scope: ConfigScope;
 }
 
+const NON_GENERATION_MODEL_RE =
+  /(?:embed|embedding|clip|vision|vlm|multimodal|audio|speech|whisper|tts|rerank|safety-guard|nemoguard)/i;
+
+function isTextGenerationModel(model: CatalogModel): boolean {
+  if (NON_GENERATION_MODEL_RE.test(`${model.id} ${model.name}`)) return false;
+  // GenAI catalogues use image input to mark vision/multimodal endpoints.
+  if (model.inputModalities?.includes("image")) return false;
+  return true;
+}
 
 export function ConnectionSettings({
   controller,
@@ -168,6 +177,18 @@ export function ConnectionSettings({
     modelFetchState?.editorId === editingId
       ? modelFetchState
       : { loading: false, error: null, models: null };
+  const eligibleModels = useMemo(
+    () =>
+      (modelFetch.models ?? []).filter(isTextGenerationModel),
+    [modelFetch.models],
+  );
+  const contextGroups = useMemo(
+    () => [
+      { label: "Context under 1M", models: eligibleModels.filter((model) => model.contextWindow < 1_000_000) },
+      { label: "Context 1M or more", models: eligibleModels.filter((model) => model.contextWindow >= 1_000_000) },
+    ].filter((group) => group.models.length > 0),
+    [eligibleModels],
+  );
   const pickedModels: ReadonlySet<string> =
     pickedState?.editorId === editingId ? pickedState.picked : new Set();
   const setPickedModels = (picked: ReadonlySet<string>) => {
@@ -204,7 +225,7 @@ export function ConnectionSettings({
             ? (result.error ??
               "The provider listed no models. Add them by hand.")
             : null,
-        models: result.models,
+        models: result.models.filter(isTextGenerationModel),
       });
     } catch (cause) {
       setModelFetchState({
@@ -555,13 +576,13 @@ export function ConnectionSettings({
                         {modelFetch.error}
                       </p>
                     ) : null}
-                    {modelFetch.models && modelFetch.models.length > 0 ? (
+                    {contextGroups.length > 0 ? (
                       <>
-                        <ul
-                          className={styles.modelPicker}
-                          aria-label="Discovered models"
-                        >
-                          {modelFetch.models.map((model) => {
+                        {contextGroups.map((group) => (
+                          <section className={styles.modelGroup} key={group.label}>
+                            <h4>{group.label}</h4>
+                            <ul className={styles.modelPicker} aria-label={group.label}>
+                              {group.models.map((model) => {
                             const listed = manualModelIds.has(model.id);
                             const picked = pickedModels.has(model.id);
                             return (
@@ -591,8 +612,10 @@ export function ConnectionSettings({
                                 </label>
                               </li>
                             );
-                          })}
-                        </ul>
+                              })}
+                            </ul>
+                          </section>
+                        ))}
                         <button
                           type="button"
                           className={styles.adoptButton}

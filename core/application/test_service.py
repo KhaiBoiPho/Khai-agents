@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from core.hosting import COMMANDS_DISABLED_MESSAGE, commands_allowed
 from core.application.errors import (
     ConflictError,
     InvalidArgumentError,
@@ -65,6 +66,8 @@ class TestService:
         *,
         timeout_seconds: int = 300,
     ) -> TestRunResult:
+        if not commands_allowed():
+            raise InvalidArgumentError(COMMANDS_DISABLED_MESSAGE)
         if not 1 <= timeout_seconds <= 1800:
             raise InvalidArgumentError(
                 "test timeout must be between 1 and 1800 seconds"

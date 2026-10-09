@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import getpass
 import time
 from dataclasses import replace
 from pathlib import Path
@@ -40,6 +41,7 @@ _PROFILE_FIELDS = {
     "adapter",
     "protocol",
     "auth",
+    "accountId",
     "compat",
     "apiBase",
     "apiKeyEnv",
@@ -775,6 +777,7 @@ class LLMConfigurationService:
             "adapter",
             "protocol",
             "auth",
+            "accountId",
             "compat",
             "apiBase",
             "apiKeyEnv",
@@ -787,6 +790,9 @@ class LLMConfigurationService:
             profile_data[field] = value[field]
 
         profile_data["label"] = str(profile_data.get("label") or connection_id).strip()
+        profile_data["accountId"] = str(
+            profile_data.get("accountId") or f"local:{getpass.getuser()}"
+        ).strip()
         template = str(profile_data.get("template") or "custom").strip().lower()
         if find_by_name(template) is None:
             raise InvalidArgumentError(f"unknown provider template: {template}")

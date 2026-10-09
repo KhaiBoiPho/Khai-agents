@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-import sqlite3
+from core.persistence.errors import IntegrityError
+from core.persistence.database import Connection, Row
 from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import datetime
@@ -48,7 +49,7 @@ class RuntimeCoordinationRepository:
     provides the expected ``BEGIN IMMEDIATE`` boundary.
     """
 
-    def __init__(self, connection: sqlite3.Connection) -> None:
+    def __init__(self, connection: Connection) -> None:
         self.connection = connection
 
     def register_worker(self, worker: RuntimeWorker) -> None:
@@ -158,36 +159,26 @@ class RuntimeCoordinationRepository:
         require_prefixed_id(worker_id, "worker")
         if isinstance(limit, bool) or not 1 <= limit <= 1_000:
             raise ValueError("limit must be between 1 and 1000")
-        executor_available = self._turn_executor_available()
-        executor_projection = (
-            "turns.executor" if executor_available else "'agent' AS executor"
+        # Agent Turns may be submitted without worker affinity.  Every other
+        # typed executor must explicitly assign a live home worker before
+        # admission, which also gives those executors a durable preparation
+        # boundary.
+        worker_scope = (
+            "AND ((turns.executor = ? AND ("
+            "turns.home_worker_id IS NULL OR turns.home_worker_id = ?"
+            ")) OR (turns.executor <> ? AND turns.home_worker_id = ?)) "
         )
-        if executor_available:
-            # Agent Turns may be submitted without worker affinity.  Every
-            # other typed executor must explicitly assign a live home worker
-            # before admission, which also gives those executors a durable
-            # preparation boundary.
-            worker_scope = (
-                "AND ((turns.executor = ? AND ("
-                "turns.home_worker_id IS NULL OR turns.home_worker_id = ?"
-                ")) OR (turns.executor <> ? AND turns.home_worker_id = ?)) "
-            )
-            parameters: tuple[object, ...] = (
-                TurnExecutor.AGENT.value,
-                worker_id,
-                TurnExecutor.AGENT.value,
-                worker_id,
-                limit,
-            )
-        else:
-            worker_scope = (
-                "AND (turns.home_worker_id IS NULL OR turns.home_worker_id = ?) "
-            )
-            parameters = (worker_id, limit)
+        parameters: tuple[object, ...] = (
+            TurnExecutor.AGENT.value,
+            worker_id,
+            TurnExecutor.AGENT.value,
+            worker_id,
+            limit,
+        )
         rows = self.connection.execute(
             "SELECT "
             "turns.id AS turn_id, turns.thread_id, threads.project_id, "
-            f"threads.worktree_path, {executor_projection}, "
+            f"threads.worktree_path, turns.executor, "
             "turns.execution_class, "
             "turns.enqueued_at, turns.ordinal "
             "FROM turns JOIN threads ON threads.id = turns.thread_id "
@@ -229,11 +220,8 @@ class RuntimeCoordinationRepository:
 
         if claim.turn_id is None or not self.claim_is_current(claim):
             return None
-        projection = (
-            "executor" if self._turn_executor_available() else "'agent' AS executor"
-        )
         row = self.connection.execute(
-            f"SELECT {projection} FROM turns WHERE id = ?",
+            "SELECT executor FROM turns WHERE id = ?",
             (claim.turn_id,),
         ).fetchone()
         return TurnExecutor(row["executor"]) if row is not None else None
@@ -456,7 +444,8 @@ class RuntimeCoordinationRepository:
                 "UPDATE resource_leases SET heartbeat_at = ? "
                 "WHERE resource_key = ? AND epoch = ? "
                 "AND holder_worker_id = ? "
-                "AND holder_turn_id IS ? AND holder_turn_epoch IS ?",
+                "AND holder_turn_id IS NOT DISTINCT FROM ? "
+                "AND holder_turn_epoch IS NOT DISTINCT FROM ?",
                 (
                     encoded,
                     lease.resource_key,
@@ -467,7 +456,7 @@ class RuntimeCoordinationRepository:
                 ),
             )
             if cursor.rowcount != 1:  # pragma: no cover - write lock prevents drift
-                raise sqlite3.IntegrityError("resource claim changed during heartbeat")
+                raise IntegrityError("resource claim changed during heartbeat")
         return True
 
     def release_claim(
@@ -516,7 +505,8 @@ class RuntimeCoordinationRepository:
                 "holder_turn_epoch = NULL, released_at = ?, release_reason = ? "
                 "WHERE resource_key = ? AND epoch = ? "
                 "AND holder_worker_id = ? "
-                "AND holder_turn_id IS ? AND holder_turn_epoch IS ?",
+                "AND holder_turn_id IS NOT DISTINCT FROM ? "
+                "AND holder_turn_epoch IS NOT DISTINCT FROM ?",
                 (
                     encoded,
                     reason,
@@ -528,7 +518,7 @@ class RuntimeCoordinationRepository:
                 ),
             )
             if cursor.rowcount != 1:  # pragma: no cover - write lock prevents drift
-                raise sqlite3.IntegrityError("resource claim changed during release")
+                raise IntegrityError("resource claim changed during release")
 
         if claim.turn_id is not None:
             cursor = self.connection.execute(
@@ -537,7 +527,7 @@ class RuntimeCoordinationRepository:
                 (claim.turn_id, claim.worker_id, claim.turn_epoch),
             )
             if cursor.rowcount != 1:  # pragma: no cover - write lock prevents drift
-                raise sqlite3.IntegrityError("Turn claim changed during release")
+                raise IntegrityError("Turn claim changed during release")
         return True
 
     def _claim_resources(
@@ -617,7 +607,7 @@ class RuntimeCoordinationRepository:
                 "holder_turn_epoch, acquired_at, heartbeat_at, "
                 "released_at, release_reason"
                 ") VALUES (?, 1, ?, ?, ?, ?, ?, NULL, NULL) "
-                "ON CONFLICT(resource_key) DO UPDATE SET "
+                "ON CONFLICT(user_id, resource_key) DO UPDATE SET "
                 "epoch = resource_leases.epoch + 1, "
                 "holder_worker_id = excluded.holder_worker_id, "
                 "holder_turn_id = excluded.holder_turn_id, "
@@ -636,7 +626,7 @@ class RuntimeCoordinationRepository:
                 ),
             )
             if cursor.rowcount != 1:  # pragma: no cover - preflight owns write lock
-                raise sqlite3.IntegrityError("resource became busy during claim")
+                raise IntegrityError("resource became busy during claim")
 
         rows = self.connection.execute(
             "SELECT * FROM resource_leases "
@@ -682,12 +672,6 @@ class RuntimeCoordinationRepository:
         if not self.connection.in_transaction:
             raise RuntimeError("resource coordination requires a write transaction")
 
-    def _turn_executor_available(self) -> bool:
-        return any(
-            row["name"] == "executor"
-            for row in self.connection.execute("PRAGMA table_info(turns)")
-        )
-
     @classmethod
     def _normalize_resource_keys(
         cls,
@@ -709,7 +693,7 @@ class RuntimeCoordinationRepository:
             raise ValueError("resource_key cannot exceed 512 characters")
 
     @staticmethod
-    def _worker_from_row(row: sqlite3.Row) -> RuntimeWorker:
+    def _worker_from_row(row: Row) -> RuntimeWorker:
         return RuntimeWorker(
             id=row["id"],
             pid=row["pid"],
@@ -720,7 +704,7 @@ class RuntimeCoordinationRepository:
         )
 
     @staticmethod
-    def _lease_from_row(row: sqlite3.Row) -> ResourceLease:
+    def _lease_from_row(row: Row) -> ResourceLease:
         return ResourceLease(
             resource_key=row["resource_key"],
             epoch=row["epoch"],

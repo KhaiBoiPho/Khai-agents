@@ -1,0 +1,12 @@
+# TLS termination for Khai-Agents. Caddy obtains and renews the certificate
+# for $KHAI_DOMAIN automatically; only the gateway is behind it.
+{$KHAI_DOMAIN} {
+	encode zstd gzip
+	reverse_proxy gateway:8080 {
+		# The gateway takes the client address from the last hop Caddy adds.
+		header_up X-Forwarded-For {remote_host}
+	}
+	request_body {
+		max_size 12MB
+	}
+}

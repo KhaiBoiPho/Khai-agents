@@ -203,6 +203,11 @@
   color: var(--kd-text);
 }
 
+.openerRight {
+  right: 8px;
+  left: auto;
+}
+
 .openerDesktop {
   @media (max-width: $mantine-breakpoint-sm) {
     display: none;

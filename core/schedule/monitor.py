@@ -21,13 +21,13 @@ Design principles (derived from Hermes cron/monitor.py):
 Boundaries: a monitored URL passes the same public-host policy as the web
 tools (no loopback/private addresses, http(s) only); a monitored script passes
 the destructive-command screen; the state store lives under the DeepCode home
-(``deepcode_home()/state/monitor.sqlite3``) and is user-private.
+(``deepcode_home()/state/monitor/``) and is user-private.
 
 Usage::
 
     from core.schedule.monitor import MonitorStore, monitor_gate
 
-    store = MonitorStore()  # default: <deepcode home>/state/monitor.sqlite3
+    store = MonitorStore()  # default: <deepcode home>/state/monitor/
     outcome = monitor_gate("my-job", store=store,
                            monitor_script="git diff --stat")
     if outcome.changed:
@@ -48,7 +48,6 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
-import sqlite3
 import subprocess
 import sys
 from dataclasses import dataclass
@@ -60,7 +59,7 @@ from urllib.request import Request, urlopen
 from core.config import deepcode_home
 from core.harness.command_guard import screen_command
 from core.network.safe_http import UnsafeUrlError, validate_public_url
-from core.private_storage import ensure_private_directory, ensure_private_file
+from core.private_storage import atomic_write_private_json, ensure_private_directory
 
 # ── Constants ────────────────────────────────────────────────────────────────
 
@@ -291,61 +290,34 @@ def check_monitor(
 
 
 def default_monitor_store_path() -> Path:
-    """The user-private default location of the monitor state database."""
-    return deepcode_home() / "state" / "monitor.sqlite3"
+    """The user-private default directory of the monitor state."""
+    return deepcode_home() / "state" / "monitor"
 
 
 class MonitorStore:
-    """SQLite-backed persistence for monitor job state.
+    """Monitor job state as one user-private JSON file per job.
 
-    The table ``monitor_jobs`` stores per-job: last seen hash, previous-output
-    snapshot, and ISO-8601 timestamp. Defaults to
-    :func:`default_monitor_store_path`; the directory and file are kept
-    user-private like the rest of the DeepCode state.
+    Each file holds the job's last seen hash, previous-output snapshot and
+    ISO-8601 timestamp. Files rather than the application database: the gate
+    runs as a plain command (cron, ``deepcode schedule``, a user's sandbox),
+    which has no database credentials. Writes are atomic replaces.
     """
 
-    def __init__(self, db_path: str | Path | None = None) -> None:
-        self._db_path = Path(db_path) if db_path else default_monitor_store_path()
-        self._init_db()
+    def __init__(self, directory: str | Path | None = None) -> None:
+        self._directory = Path(directory) if directory else default_monitor_store_path()
+        ensure_private_directory(self._directory)
 
-    # ----- helpers -----------------------------------------------------------
-
-    def _connect(self) -> sqlite3.Connection:
-        conn = sqlite3.connect(str(self._db_path), timeout=10.0)
-        conn.execute("PRAGMA journal_mode=WAL")
-        conn.execute("PRAGMA busy_timeout = 5000")
-        conn.row_factory = sqlite3.Row
-        return conn
-
-    def _init_db(self) -> None:
-        ensure_private_directory(self._db_path.parent)
-        conn = self._connect()
-        try:
-            conn.execute(
-                """CREATE TABLE IF NOT EXISTS monitor_jobs (
-                    job_id       TEXT PRIMARY KEY,
-                    monitor_hash TEXT NOT NULL DEFAULT '',
-                    snapshot     TEXT NOT NULL DEFAULT '',
-                    updated_at   TEXT NOT NULL
-                )"""
-            )
-            conn.commit()
-        finally:
-            conn.close()
-        ensure_private_file(self._db_path)
-
-    # ----- public API --------------------------------------------------------
+    def _path(self, job_id: str) -> Path:
+        digest = hashlib.sha256(job_id.encode("utf-8")).hexdigest()
+        return self._directory / f"{digest}.json"
 
     def get_job(self, job_id: str) -> dict | None:
         """Retrieve the stored state for *job_id*, or ``None`` if unknown."""
-        conn = self._connect()
         try:
-            row = conn.execute(
-                "SELECT * FROM monitor_jobs WHERE job_id=?", (job_id,)
-            ).fetchone()
-            return dict(row) if row else None
-        finally:
-            conn.close()
+            value = json.loads(self._path(job_id).read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return None
+        return value if isinstance(value, dict) and value.get("job_id") == job_id else None
 
     def save_job(
         self,
@@ -354,7 +326,7 @@ class MonitorStore:
         snapshot: str,
         updated_at: str | None = None,
     ) -> None:
-        """Persist (or upsert) the state for *job_id*.
+        """Persist (or replace) the state for *job_id*.
 
         Parameters
         ----------
@@ -367,21 +339,15 @@ class MonitorStore:
         """
         if updated_at is None:
             updated_at = datetime.now(UTC).isoformat(timespec="milliseconds")
-        conn = self._connect()
-        try:
-            conn.execute("BEGIN IMMEDIATE")
-            conn.execute(
-                """INSERT INTO monitor_jobs(job_id, monitor_hash, snapshot, updated_at)
-                   VALUES (?, ?, ?, ?)
-                   ON CONFLICT(job_id) DO UPDATE SET
-                       monitor_hash=excluded.monitor_hash,
-                       snapshot=excluded.snapshot,
-                       updated_at=excluded.updated_at""",
-                (job_id, monitor_hash, snapshot[:SNAPSHOT_MAX_BYTES], updated_at),
-            )
-            conn.commit()
-        finally:
-            conn.close()
+        atomic_write_private_json(
+            self._path(job_id),
+            {
+                "job_id": job_id,
+                "monitor_hash": monitor_hash,
+                "snapshot": snapshot[:SNAPSHOT_MAX_BYTES],
+                "updated_at": updated_at,
+            },
+        )
 
 
 # ── Combined entry point ─────────────────────────────────────────────────────
@@ -447,7 +413,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--db",
         default="",
-        help="Path to the monitor state database (default: <deepcode home>/state/monitor.sqlite3)",
+        help="Directory of the monitor state (default: <deepcode home>/state/monitor)",
     )
     parser.add_argument("--json", action="store_true", help="JSON output")
 

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-import sqlite3
+from core.persistence.database import Connection, Row
 
 from core.domain.approval import (
     Approval,
@@ -27,7 +27,7 @@ from core.persistence.serde import (
 
 
 class TurnRepository:
-    def __init__(self, connection: sqlite3.Connection) -> None:
+    def __init__(self, connection: Connection) -> None:
         self.connection = connection
 
     def next_ordinal(self, thread_id: str) -> int:
@@ -38,39 +38,13 @@ class TurnRepository:
         return int(row[0])
 
     def add(self, turn: Turn) -> None:
-        if not self._has_coordination_columns():
-            self.connection.execute(
-                "INSERT INTO turns (id, thread_id, ordinal, prompt, skill_ids_json, "
-                "execution_profile_json, goal_id, status, stop_reason, "
-                "error_code, error_message, started_at, completed_at) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                (
-                    turn.id,
-                    turn.thread_id,
-                    turn.ordinal,
-                    turn.prompt,
-                    dump_json(list(turn.skill_ids)),
-                    (
-                        dump_json(turn.execution_profile.to_dict())
-                        if turn.execution_profile is not None
-                        else None
-                    ),
-                    turn.goal_id,
-                    turn.status.value,
-                    turn.stop_reason,
-                    turn.error_code,
-                    turn.error_message,
-                    dump_datetime(turn.started_at),
-                    dump_datetime(turn.completed_at),
-                ),
-            )
-            return
         columns = (
             "id, thread_id, ordinal, prompt, skill_ids_json, "
             "execution_profile_json, goal_id, status, stop_reason, "
             "error_code, error_message, started_at, completed_at, enqueued_at, "
             "execution_class, home_worker_id, execution_owner_id, "
-            "execution_epoch, cancel_requested_at"
+            "execution_epoch, cancel_requested_at, executor, "
+            "execution_permission_mode, execution_security_profile_json"
         )
         values: tuple[object, ...] = (
             turn.id,
@@ -96,28 +70,18 @@ class TurnRepository:
             turn.execution_owner_id,
             turn.execution_epoch,
             dump_datetime(turn.cancel_requested_at),
+            turn.executor.value,
+            (
+                turn.execution_permission_mode.value
+                if turn.execution_permission_mode is not None
+                else None
+            ),
+            (
+                dump_json(turn.execution_security_profile.to_dict())
+                if turn.execution_security_profile is not None
+                else None
+            ),
         )
-        if self._has_executor_column():
-            columns += ", executor"
-            values += (turn.executor.value,)
-        if self._has_execution_permission_column():
-            columns += ", execution_permission_mode"
-            values += (
-                (
-                    turn.execution_permission_mode.value
-                    if turn.execution_permission_mode is not None
-                    else None
-                ),
-            )
-        if self._has_execution_security_profile_column():
-            columns += ", execution_security_profile_json"
-            values += (
-                (
-                    dump_json(turn.execution_security_profile.to_dict())
-                    if turn.execution_security_profile is not None
-                    else None
-                ),
-            )
         placeholders = ", ".join("?" for _ in values)
         self.connection.execute(
             f"INSERT INTO turns ({columns}) VALUES ({placeholders})",
@@ -131,36 +95,14 @@ class TurnRepository:
         return self._from_row(row) if row is not None else None
 
     def update(self, turn: Turn) -> None:
-        if not self._has_coordination_columns():
-            cursor = self.connection.execute(
-                "UPDATE turns SET execution_profile_json = ?, status = ?, "
-                "stop_reason = ?, error_code = ?, error_message = ?, "
-                "started_at = ?, completed_at = ? WHERE id = ?",
-                (
-                    (
-                        dump_json(turn.execution_profile.to_dict())
-                        if turn.execution_profile is not None
-                        else None
-                    ),
-                    turn.status.value,
-                    turn.stop_reason,
-                    turn.error_code,
-                    turn.error_message,
-                    dump_datetime(turn.started_at),
-                    dump_datetime(turn.completed_at),
-                    turn.id,
-                ),
-            )
-            if cursor.rowcount != 1:
-                raise KeyError(turn.id)
-            return
         cursor = self.connection.execute(
             "UPDATE turns SET execution_profile_json = ?, status = ?, "
             "stop_reason = ?, error_code = ?, "
             "error_message = ?, started_at = ?, completed_at = ?, "
             "home_worker_id = ?, execution_owner_id = ?, execution_epoch = ?, "
             "cancel_requested_at = ? "
-            "WHERE id = ? AND execution_owner_id IS ? AND execution_epoch = ?",
+            "WHERE id = ? AND execution_owner_id IS NOT DISTINCT FROM ? "
+            "AND execution_epoch = ?",
             (
                 (
                     dump_json(turn.execution_profile.to_dict())
@@ -267,11 +209,7 @@ class TurnRepository:
         return [self._from_row(row) for row in rows]
 
     @staticmethod
-    def _from_row(row: sqlite3.Row) -> Turn:
-        coordination_available = "execution_epoch" in row.keys()
-        executor_available = "executor" in row.keys()
-        execution_permission_available = "execution_permission_mode" in row.keys()
-        execution_security_available = "execution_security_profile_json" in row.keys()
+    def _from_row(row: Row) -> Turn:
         return Turn(
             id=row["id"],
             thread_id=row["thread_id"],
@@ -285,72 +223,28 @@ class TurnRepository:
             ),
             execution_permission_mode=(
                 ExecutionPermissionMode(row["execution_permission_mode"])
-                if execution_permission_available
-                and row["execution_permission_mode"] is not None
+                if row["execution_permission_mode"] is not None
                 else None
             ),
             execution_security_profile=(
                 _load_execution_security_profile(row["execution_security_profile_json"])
-                if execution_security_available
-                and row["execution_security_profile_json"] is not None
+                if row["execution_security_profile_json"] is not None
                 else None
             ),
             goal_id=row["goal_id"],
-            executor=(
-                TurnExecutor(row["executor"])
-                if executor_available
-                else TurnExecutor.AGENT
-            ),
+            executor=TurnExecutor(row["executor"]),
             status=TurnStatus(row["status"]),
             stop_reason=row["stop_reason"],
             error_code=row["error_code"],
             error_message=row["error_message"],
-            execution_class=(
-                ExecutionClass(row["execution_class"])
-                if coordination_available
-                else ExecutionClass.INTERACTIVE
-            ),
-            home_worker_id=(row["home_worker_id"] if coordination_available else None),
-            execution_owner_id=(
-                row["execution_owner_id"] if coordination_available else None
-            ),
-            execution_epoch=(
-                int(row["execution_epoch"]) if coordination_available else 0
-            ),
-            enqueued_at=load_required_datetime(
-                row["enqueued_at"] if coordination_available else "1970-01-01T00:00:00Z"
-            ),
-            cancel_requested_at=(
-                load_datetime(row["cancel_requested_at"])
-                if coordination_available
-                else None
-            ),
+            execution_class=ExecutionClass(row["execution_class"]),
+            home_worker_id=row["home_worker_id"],
+            execution_owner_id=row["execution_owner_id"],
+            execution_epoch=int(row["execution_epoch"]),
+            enqueued_at=load_required_datetime(row["enqueued_at"]),
+            cancel_requested_at=load_datetime(row["cancel_requested_at"]),
             started_at=load_datetime(row["started_at"]),
             completed_at=load_datetime(row["completed_at"]),
-        )
-
-    def _has_coordination_columns(self) -> bool:
-        return any(
-            row["name"] == "execution_epoch"
-            for row in self.connection.execute("PRAGMA table_info(turns)")
-        )
-
-    def _has_executor_column(self) -> bool:
-        return any(
-            row["name"] == "executor"
-            for row in self.connection.execute("PRAGMA table_info(turns)")
-        )
-
-    def _has_execution_permission_column(self) -> bool:
-        return any(
-            row["name"] == "execution_permission_mode"
-            for row in self.connection.execute("PRAGMA table_info(turns)")
-        )
-
-    def _has_execution_security_profile_column(self) -> bool:
-        return any(
-            row["name"] == "execution_security_profile_json"
-            for row in self.connection.execute("PRAGMA table_info(turns)")
         )
 
 
@@ -371,7 +265,7 @@ def _load_execution_security_profile(raw: str) -> ExecutionSecurityProfile:
 
 
 class ItemRepository:
-    def __init__(self, connection: sqlite3.Connection) -> None:
+    def __init__(self, connection: Connection) -> None:
         self.connection = connection
 
     def next_ordinal(self, turn_id: str) -> int:
@@ -445,7 +339,7 @@ class ItemRepository:
         row = self.connection.execute(
             "SELECT * FROM items WHERE thread_id = ? "
             "AND kind = 'user_message' "
-            "AND json_extract(payload_json, '$.messageId') = ? "
+            "AND (payload_json::jsonb ->> 'messageId') = ? "
             "ORDER BY created_at, id LIMIT 1",
             (thread_id, message_id),
         ).fetchone()
@@ -480,7 +374,7 @@ class ItemRepository:
         return [self._from_row(row) for row in rows]
 
     @staticmethod
-    def _from_row(row: sqlite3.Row) -> Item:
+    def _from_row(row: Row) -> Item:
         return Item(
             id=row["id"],
             thread_id=row["thread_id"],
@@ -496,7 +390,7 @@ class ItemRepository:
 
 
 class ApprovalRepository:
-    def __init__(self, connection: sqlite3.Connection) -> None:
+    def __init__(self, connection: Connection) -> None:
         self.connection = connection
 
     def add(self, approval: Approval) -> None:
@@ -578,7 +472,7 @@ class ApprovalRepository:
         return [self._from_row(row) for row in rows]
 
     @staticmethod
-    def _from_row(row: sqlite3.Row) -> Approval:
+    def _from_row(row: Row) -> Approval:
         return Approval(
             id=row["id"],
             thread_id=row["thread_id"],
@@ -598,7 +492,7 @@ class ApprovalRepository:
 class ApprovalGrantRepository:
     """Persist exact-tool grants shared by every worker for one Thread."""
 
-    def __init__(self, connection: sqlite3.Connection) -> None:
+    def __init__(self, connection: Connection) -> None:
         self.connection = connection
 
     def allows(self, thread_id: str, tool_name: str) -> bool:
@@ -632,7 +526,7 @@ class ApprovalGrantRepository:
         return [self._from_row(row) for row in rows]
 
     @staticmethod
-    def _from_row(row: sqlite3.Row) -> ApprovalGrant:
+    def _from_row(row: Row) -> ApprovalGrant:
         return ApprovalGrant(
             thread_id=row["thread_id"],
             tool_name=row["tool_name"],

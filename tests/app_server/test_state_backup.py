@@ -9,7 +9,8 @@ from app_server.service_state import ServiceFiles
 from app_server.state_backup import StatePaths, create_snapshot, restore_snapshot
 from core.application.application_lease import ApplicationLease
 from core.persistence.database import Database
-from core.persistence.migrations import LATEST_SCHEMA_VERSION, MigrationError
+from core.persistence.database import LATEST_SCHEMA_VERSION
+from core.persistence.errors import OperationalError
 from core.providers.credentials import CredentialStore
 from core.private_storage import atomic_write_private_json
 from core.sessions.store import SessionStore
@@ -22,9 +23,6 @@ def state(tmp_path, monkeypatch):
     paths = StatePaths.current(ServiceFiles(home / "state" / "state.sqlite3"))
     db = Database(paths.database)
     db.initialize()
-    with db.transaction() as connection:
-        connection.execute("CREATE TABLE snapshot_probe(value TEXT)")
-        connection.execute("INSERT INTO snapshot_probe VALUES ('before')")
     store = SessionStore(paths.sessions, use_index=False)
     session = store.create_session(title="Before")
     atomic_write_private_json(
@@ -43,19 +41,12 @@ def test_offline_snapshot_and_restore_keep_the_complete_state_and_pre_restore_co
     paths, db, store, session = state(tmp_path, monkeypatch)
     snapshot = tmp_path / "snapshot"
     result = create_snapshot(paths, snapshot)
-    assert result["fileCount"] >= 5
+    assert result["fileCount"] >= 4
     assert "private-before" not in json.dumps(result)
-    with db.transaction() as connection:
-        connection.execute("UPDATE snapshot_probe SET value='after'")
     CredentialStore(paths.credentials).set("route", "private-after")
     (paths.sessions / session.session_id / "settings.json").write_text('{"after":true}')
     atomic_write_private_json(paths.revisions / "new.json", {"later": True})
     restored = restore_snapshot(paths, snapshot, replace_data=True)
-    with db.read() as connection:
-        assert (
-            connection.execute("SELECT value FROM snapshot_probe").fetchone()[0]
-            == "before"
-        )
     assert CredentialStore(paths.credentials).get("route") == "private-before"
     assert not (paths.sessions / session.session_id / "settings.json").exists()
     assert not (paths.revisions / "new.json").exists()
@@ -128,20 +119,16 @@ def test_interrupted_restore_blocks_startup_and_resumes_idempotently(
     assert CredentialStore(paths.credentials).get("route") == "private-before"
 
 
-def test_older_runtime_refuses_newer_schema_before_backup_or_mutation(
-    tmp_path, monkeypatch
-):
+def test_older_runtime_refuses_newer_schema(tmp_path, monkeypatch):
     paths, db, _store, _session = state(tmp_path, monkeypatch)
     with db.transaction() as connection:
         connection.execute(
-            "INSERT INTO schema_migrations(version, name, applied_at) VALUES (?, 'future', 'now')",
+            "INSERT INTO schema_migrations(version, name) VALUES (?, 'future')",
             (LATEST_SCHEMA_VERSION + 1,),
         )
-    before = paths.database.read_bytes()
-    with pytest.raises(MigrationError, match="newer"):
+    with pytest.raises(OperationalError, match="newer"):
         db.initialize()
-    assert paths.database.read_bytes() == before
-    assert not (paths.database.parent / "backups").exists()
+    assert db.schema_version() == LATEST_SCHEMA_VERSION + 1
 
 
 def test_restored_application_pauses_goals_and_schedules_before_recovery(

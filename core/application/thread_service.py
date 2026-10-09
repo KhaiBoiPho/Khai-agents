@@ -34,6 +34,7 @@ from core.domain.execution_security import (
     parse_access_preset_override,
 )
 from core.domain.item import Item, ItemKind, ItemStatus
+from core.domain.message_provenance import TurnInputSource
 from core.domain.project import Project, TrustState
 from core.domain.runtime_coordination import ExecutionClass
 from core.domain.thread import Thread, ThreadMode, ThreadStatus
@@ -67,7 +68,12 @@ def _visible_conversation_items(items: list[Item]) -> list[Item]:
     An assistant record carrying toolCalls can have no text. Its reconstructed
     item belongs to the timeline, but neither side counts it as spoken text.
     """
-    return [item for item in items if str(item.payload.get("text", item.summary))]
+    return [
+        item
+        for item in items
+        if str(item.payload.get("text", item.summary))
+        and item.payload.get("source") != TurnInputSource.TURN_INTERRUPT.value
+    ]
 
 
 def _projected_item_kind(message: SessionMessage) -> ItemKind:
@@ -149,7 +155,7 @@ class ThreadService:
     def reconcile(self) -> int:
         """Repair both sides without treating established sessions as legacy."""
 
-        self._adopt_sqlite_only_threads()
+        self._adopt_database_only_threads()
         repaired = 0
         for summary in self.session_store.list_sessions(limit=100_000):
             session = self.session_store.get_session(summary.session_id)
@@ -436,7 +442,7 @@ class ThreadService:
         with self.database.read() as connection:
             existing = ThreadRepository(connection).get(thread_id)
         if existing is not None:
-            if self._sqlite_is_system_of_record(existing.id):
+            if self._database_is_system_of_record(existing.id):
                 self._adopt_thread(existing)
                 session = self.session_store.get_session(thread_id)
                 if session is not None:
@@ -798,6 +804,7 @@ class ThreadService:
             and (message.content or (message.metadata or {}).get("toolCalls"))
             and not self._is_context_note(message)
             and not _is_compaction_checkpoint(message)
+            and not self._is_turn_interrupt_marker(message)
         ]
         canonical = [
             message
@@ -1155,11 +1162,11 @@ class ThreadService:
         except (TypeError, ValueError):
             return 1
 
-    def _adopt_sqlite_only_threads(self) -> None:
+    def _adopt_database_only_threads(self) -> None:
         """Resolve projection rows whose canonical Session file is missing.
 
         One-way data flow (the dsh invariant): JSONL owns identity, so a
-        Thread row is promoted back into the canonical store only when SQLite
+        Thread row is promoted back into the canonical store only when the database
         is genuinely its system of record — a P1-P6 legacy import, or an
         Automation bootstrap whose idempotent Session materialization has not
         landed yet. Any other projection-only Thread is a stale shadow of a
@@ -1176,12 +1183,12 @@ class ThreadService:
                 thread.id
             ) is not None or self.session_store.is_deletion_pending(thread.id):
                 continue
-            if self._sqlite_is_system_of_record(thread.id):
+            if self._database_is_system_of_record(thread.id):
                 self._adopt_thread(thread)
             else:
                 self._drop_stale_projection(thread)
 
-    def _sqlite_is_system_of_record(self, thread_id: str) -> bool:
+    def _database_is_system_of_record(self, thread_id: str) -> bool:
         """True when this Thread legitimately predates its canonical Session."""
 
         with self.database.read() as connection:
@@ -1414,6 +1421,15 @@ class ThreadService:
             "between_turns",
         )
 
+    @staticmethod
+    def _is_turn_interrupt_marker(message: SessionMessage) -> bool:
+        """Keep the abort marker in model context, not in the user transcript."""
+        metadata = message.metadata or {}
+        return (
+            message.role == "user"
+            and metadata.get("source") == TurnInputSource.TURN_INTERRUPT.value
+        )
+
     def _merge_projection_tail(
         self,
         canonical: Session,
@@ -1428,6 +1444,7 @@ class ThreadService:
             if message.role in {"user", "assistant"}
             and message.content
             and not self._is_context_note(message)
+            and not self._is_turn_interrupt_marker(message)
         ]
         projected_pairs = [
             (

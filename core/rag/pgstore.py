@@ -1,14 +1,18 @@
 """Document index backed by Postgres (text, full-text) and Qdrant (vectors).
 
-Same interface as :class:`core.rag.store.IndexStore`, shared by every
-workspace (rows carry a ``workspace`` key):
+One store is one user's view of one workspace. The Postgres rows live in the
+application database (core/persistence/schema/0002_rag.sql) under row-level
+security, so the store only ever sees its own user's rows; the Qdrant points
+carry the same ``user_id`` and every Qdrant filter requires it.
 
 * Postgres ``rag_documents`` / ``rag_chunks`` hold metadata and chunk text;
   a generated ``tsvector`` (heading weighted above body, ``simple`` config so
   any language tokenizes) with a GIN index serves the full-text half.
 * Qdrant holds one cosine collection per embedding size
-  (``khai_rag_<dims>``); point ids are derived from (workspace, path,
-  ordinal) so re-indexing a file overwrites its points in place.
+  (``<prefix><dims>``, prefix ``khai_rag_`` or, in the hosted deployment,
+  ``khai_rag_<user hex>_`` from ``KHAI_QDRANT_COLLECTION_PREFIX``, whose token
+  opens only those collections); point ids are derived from (user, workspace,
+  path, ordinal) so re-indexing a file overwrites its points in place.
 
 Search follows RAGFlow: full-text and kNN candidates are merged, then scored
 by :func:`core.rag.hybrid.rerank`. Postgres is the source of truth for what
@@ -17,51 +21,22 @@ exists: a vector whose chunk row is gone is simply never returned.
 
 from __future__ import annotations
 
+import os
 import threading
 import uuid
 from collections.abc import Iterable, Sequence
 
 import httpx
-import psycopg
-from psycopg.rows import dict_row
+
+from core.persistence.database import Database
 
 from core.rag.chunking import Chunk
 from core.rag.hybrid import CANDIDATES, Candidate, rerank, tokenize
 from core.rag.store import DocumentRecord, SearchHit, normalize
 
-_SCHEMA = """
-CREATE TABLE IF NOT EXISTS rag_documents (
-    workspace TEXT NOT NULL,
-    path TEXT NOT NULL,
-    size BIGINT NOT NULL,
-    mtime_ns BIGINT NOT NULL,
-    sha256 TEXT NOT NULL,
-    status TEXT NOT NULL,
-    error TEXT,
-    chunk_count INTEGER NOT NULL DEFAULT 0,
-    model TEXT,
-    indexed_at DOUBLE PRECISION,
-    PRIMARY KEY (workspace, path)
-);
-CREATE TABLE IF NOT EXISTS rag_chunks (
-    workspace TEXT NOT NULL,
-    path TEXT NOT NULL,
-    ordinal INTEGER NOT NULL,
-    locator TEXT NOT NULL,
-    heading TEXT NOT NULL,
-    text TEXT NOT NULL,
-    dims INTEGER NOT NULL,
-    point_id UUID NOT NULL,
-    tsv TSVECTOR GENERATED ALWAYS AS (
-        setweight(to_tsvector('simple', coalesce(heading, '')), 'A')
-        || to_tsvector('simple', text)
-    ) STORED,
-    PRIMARY KEY (workspace, path, ordinal),
-    FOREIGN KEY (workspace, path) REFERENCES rag_documents ON DELETE CASCADE
-);
-CREATE INDEX IF NOT EXISTS rag_chunks_tsv ON rag_chunks USING GIN (tsv);
-CREATE UNIQUE INDEX IF NOT EXISTS rag_chunks_point ON rag_chunks (point_id);
-"""
+def collection_prefix() -> str:
+    return os.environ.get("KHAI_QDRANT_COLLECTION_PREFIX", "").strip() or "khai_rag_"
+
 
 _NAMESPACE = uuid.UUID("6f1b0c2e-3d4a-4b8e-9a51-7c2d9e0f4a10")
 _DOCUMENT_COLUMNS = (
@@ -69,8 +44,8 @@ _DOCUMENT_COLUMNS = (
 )
 
 
-def point_id(workspace: str, path: str, ordinal: int) -> str:
-    return str(uuid.uuid5(_NAMESPACE, f"{workspace}\0{path}\0{ordinal}"))
+def point_id(user_id: str, workspace: str, path: str, ordinal: int) -> str:
+    return str(uuid.uuid5(_NAMESPACE, f"{user_id}\0{workspace}\0{path}\0{ordinal}"))
 
 
 def _ancestors(path: str) -> list[str]:
@@ -94,8 +69,14 @@ def _selectors(paths: Sequence[str] | None) -> list[str] | None:
 class QdrantClient:
     """The few Qdrant REST calls the index needs."""
 
-    def __init__(self, url: str, *, timeout: float = 30.0) -> None:
-        self._http = httpx.Client(base_url=url.rstrip("/"), timeout=timeout)
+    def __init__(
+        self, url: str, *, api_key: str | None = None, timeout: float = 30.0
+    ) -> None:
+        self._http = httpx.Client(
+            base_url=url.rstrip("/"),
+            timeout=timeout,
+            headers={"api-key": api_key} if api_key else None,
+        )
         self._known: set[str] = set()
 
     def close(self) -> None:
@@ -124,9 +105,14 @@ class QdrantClient:
             f"/collections/{name}",
             json={"vectors": {"size": dims, "distance": "Cosine"}},
         )
+        if response.status_code in (401, 403):
+            raise PermissionError(
+                f"No document index for {dims}-dimension embeddings is provisioned "
+                f"for this account; set KHAI_RAG_EMBEDDING_DIMS on the server to {dims}."
+            )
         if response.status_code not in (200, 409):
             response.raise_for_status()
-        for field in ("workspace", "path", "dirs"):
+        for field in ("user_id", "workspace", "path", "dirs"):
             self._http.put(
                 f"/collections/{name}/index",
                 params={"wait": "true"},
@@ -184,47 +170,49 @@ class QdrantClient:
 
 
 class PgQdrantStore:
-    """One workspace's view of the shared Postgres + Qdrant index."""
+    """One user's view of one workspace in the shared Postgres + Qdrant index."""
 
-    def __init__(self, workspace: str, *, dsn: str, qdrant_url: str) -> None:
+    def __init__(
+        self,
+        workspace: str,
+        *,
+        database: Database,
+        qdrant_url: str,
+        qdrant_api_key: str | None = None,
+    ) -> None:
         self.workspace = workspace
-        self._dsn = dsn
+        self.prefix = collection_prefix()
+        self.database = database
+        self.user_id = database.user_id
         self._lock = threading.RLock()
-        self._connection = self._connect()
-        self.qdrant = QdrantClient(qdrant_url)
+        self.qdrant = QdrantClient(qdrant_url, api_key=qdrant_api_key)
         if not self.qdrant.ready():
-            self._connection.close()
+            self.qdrant.close()
             raise ConnectionError(f"Qdrant is not ready at {qdrant_url}")
-
-    def _connect(self) -> psycopg.Connection:
-        connection = psycopg.connect(
-            self._dsn, autocommit=True, row_factory=dict_row, connect_timeout=5
-        )
-        with connection.transaction():
-            # Serialize schema creation across stores opening at once.
-            connection.execute("SELECT pg_advisory_xact_lock(724110)")
-            connection.execute(_SCHEMA)
-        return connection
-
-    def _db(self) -> psycopg.Connection:
-        if self._connection.closed or self._connection.broken:
-            self._connection = self._connect()
-        return self._connection
 
     def close(self) -> None:
         with self._lock:
-            self._connection.close()
             self.qdrant.close()
+
+    def _scope(self) -> list[dict]:
+        """The Qdrant conditions every query and delete starts from."""
+        return [
+            {"key": "user_id", "match": {"value": self.user_id}},
+            {"key": "workspace", "match": {"value": self.workspace}},
+        ]
 
     # -- documents --------------------------------------------------------
 
     def documents(self) -> dict[str, DocumentRecord]:
-        with self._lock:
-            rows = self._db().execute(
-                f"SELECT {_DOCUMENT_COLUMNS} FROM rag_documents WHERE workspace = %s",
+        with self.database.read() as connection:
+            rows = connection.execute(
+                f"SELECT {_DOCUMENT_COLUMNS} FROM rag_documents WHERE workspace = ?",
                 (self.workspace,),
             ).fetchall()
-        return {row["path"]: DocumentRecord(**row) for row in rows}
+        return {
+            row["path"]: DocumentRecord(**{key: row[key] for key in row.keys()})
+            for row in rows
+        }
 
     def replace_document(
         self,
@@ -237,7 +225,10 @@ class PgQdrantStore:
         if len(chunks) != len(vectors):
             raise ValueError("one vector is required per chunk")
         normalized = [normalize(vector) for vector in vectors]
-        ids = [point_id(self.workspace, record.path, chunk.ordinal) for chunk in chunks]
+        ids = [
+            point_id(self.user_id, self.workspace, record.path, chunk.ordinal)
+            for chunk in chunks
+        ]
         with self._lock:
             by_dims: dict[int, list[dict]] = {}
             dirs = _ancestors(record.path)
@@ -247,6 +238,7 @@ class PgQdrantStore:
                         "id": pid,
                         "vector": vector,
                         "payload": {
+                            "user_id": self.user_id,
                             "workspace": self.workspace,
                             "path": record.path,
                             "dirs": dirs,
@@ -255,20 +247,19 @@ class PgQdrantStore:
                     }
                 )
             for dims, points in by_dims.items():
-                name = f"khai_rag_{dims}"
+                name = f"{self.prefix}{dims}"
                 self.qdrant.ensure_collection(name, dims)
                 self.qdrant.upsert(name, points)
-            connection = self._db()
-            with connection.transaction():
+            with self.database.transaction() as connection:
                 connection.execute(
-                    "DELETE FROM rag_chunks WHERE workspace = %s AND path = %s",
+                    "DELETE FROM rag_chunks WHERE workspace = ? AND path = ?",
                     (self.workspace, record.path),
                 )
                 connection.execute(
                     f"""
                     INSERT INTO rag_documents(workspace, {_DOCUMENT_COLUMNS})
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                    ON CONFLICT (workspace, path) DO UPDATE SET
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ON CONFLICT (user_id, workspace, path) DO UPDATE SET
                         size = excluded.size, mtime_ns = excluded.mtime_ns,
                         sha256 = excluded.sha256, status = excluded.status,
                         error = excluded.error, chunk_count = excluded.chunk_count,
@@ -288,48 +279,57 @@ class PgQdrantStore:
                     ),
                 )
                 if chunks:
-                    with connection.cursor() as cursor:
-                        cursor.executemany(
-                            """
-                            INSERT INTO rag_chunks(workspace, path, ordinal, locator,
-                                                   heading, text, dims, point_id)
-                            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-                            """,
-                            [
-                                (
-                                    self.workspace,
-                                    record.path,
-                                    chunk.ordinal,
-                                    chunk.locator,
-                                    chunk.heading,
-                                    chunk.text.replace("\x00", ""),
-                                    len(vector),
-                                    pid,
-                                )
-                                for chunk, vector, pid in zip(
-                                    chunks, normalized, ids, strict=True
-                                )
-                            ],
-                        )
+                    connection.executemany(
+                        """
+                        INSERT INTO rag_chunks(workspace, path, ordinal, locator,
+                                               heading, text, dims, point_id)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                        """,
+                        [
+                            (
+                                self.workspace,
+                                record.path,
+                                chunk.ordinal,
+                                chunk.locator,
+                                chunk.heading,
+                                chunk.text.replace("\x00", ""),
+                                len(vector),
+                                pid,
+                            )
+                            for chunk, vector, pid in zip(
+                                chunks, normalized, ids, strict=True
+                            )
+                        ],
+                    )
             # Points beyond the new chunk count belonged to the old version.
             self._delete_points(record.path, from_ordinal=len(chunks))
 
     def _delete_points(self, path: str, *, from_ordinal: int = 0) -> None:
-        must: list[dict] = [
-            {"key": "workspace", "match": {"value": self.workspace}},
-            {"key": "path", "match": {"value": path}},
-        ]
+        must: list[dict] = [*self._scope(), {"key": "path", "match": {"value": path}}]
         if from_ordinal:
             must.append({"key": "ordinal", "range": {"gte": from_ordinal}})
-        for name in self.qdrant.collections():
-            if name.startswith("khai_rag_"):
-                self.qdrant.delete(name, must)
+        for name in self._collections():
+            self.qdrant.delete(name, must)
+
+    def _collections(self) -> list[str]:
+        """This store's collections. A hosted worker's token may not list
+        collections; it then uses the sizes its own chunks were stored at."""
+
+        try:
+            return [name for name in self.qdrant.collections() if name.startswith(self.prefix)]
+        except httpx.HTTPStatusError as exc:
+            if exc.response.status_code not in (401, 403):
+                raise
+        with self.database.read() as connection:
+            dims = {row[0] for row in connection.execute("SELECT DISTINCT dims FROM rag_chunks")}
+        dims.add(int(os.environ.get("KHAI_RAG_EMBEDDING_DIMS", "1024")))
+        return [f"{self.prefix}{size}" for size in sorted(dims)]
 
     def touch_document(self, path: str, *, size: int, mtime_ns: int) -> None:
-        with self._lock:
-            self._db().execute(
-                "UPDATE rag_documents SET size = %s, mtime_ns = %s"
-                " WHERE workspace = %s AND path = %s",
+        with self.database.transaction() as connection:
+            connection.execute(
+                "UPDATE rag_documents SET size = ?, mtime_ns = ?"
+                " WHERE workspace = ? AND path = ?",
                 (size, mtime_ns, self.workspace, path),
             )
 
@@ -338,18 +338,19 @@ class PgQdrantStore:
         if not paths:
             return 0
         with self._lock:
-            self._db().execute(
-                "DELETE FROM rag_documents WHERE workspace = %s AND path = ANY(%s)",
-                (self.workspace, paths),
-            )
+            with self.database.transaction() as connection:
+                connection.execute(
+                    "DELETE FROM rag_documents WHERE workspace = ? AND path = ANY(?)",
+                    (self.workspace, paths),
+                )
             for path in paths:
                 self._delete_points(path)
         return len(paths)
 
     def chunk_count(self) -> int:
-        with self._lock:
-            row = self._db().execute(
-                "SELECT COUNT(*) AS n FROM rag_chunks WHERE workspace = %s",
+        with self.database.read() as connection:
+            row = connection.execute(
+                "SELECT COUNT(*) AS n FROM rag_chunks WHERE workspace = ?",
                 (self.workspace,),
             ).fetchone()
         return int(row["n"])
@@ -366,14 +367,12 @@ class PgQdrantStore:
     ) -> list[SearchHit]:
         vector = normalize(query_vector)
         selectors = _selectors(paths)
-        collection = f"khai_rag_{len(vector)}"
+        collection = f"{self.prefix}{len(vector)}"
         with self._lock:
             has_vectors = self.qdrant.has_collection(collection)
             cosines: dict[str, float] = {}
             if has_vectors:
-                must: list[dict] = [
-                    {"key": "workspace", "match": {"value": self.workspace}}
-                ]
+                must: list[dict] = self._scope()
                 if selectors:
                     must.append(
                         {
@@ -391,19 +390,27 @@ class PgQdrantStore:
             terms = list(dict.fromkeys(tokenize(query or "")))
             if terms:
                 tsquery = " | ".join(f"'{term}'" for term in terms)
-                rows = self._db().execute(
-                    """
-                    SELECT point_id::text AS id
-                    FROM rag_chunks, to_tsquery('simple', %s) AS q
-                    WHERE workspace = %s AND dims = %s AND tsv @@ q
-                      AND (%s::text[] IS NULL OR EXISTS (
-                          SELECT 1 FROM unnest(%s::text[]) AS s
-                          WHERE path = s OR starts_with(path, s || '/')))
-                    ORDER BY ts_rank_cd(tsv, q) DESC
-                    LIMIT %s
-                    """,
-                    (tsquery, self.workspace, len(vector), selectors, selectors, CANDIDATES),
-                ).fetchall()
+                with self.database.read() as connection:
+                    rows = connection.execute(
+                        """
+                        SELECT point_id::text AS id
+                        FROM rag_chunks, to_tsquery('simple', ?) AS q
+                        WHERE workspace = ? AND dims = ? AND tsv @@ q
+                          AND (?::text[] IS NULL OR EXISTS (
+                              SELECT 1 FROM unnest(?::text[]) AS s
+                              WHERE path = s OR starts_with(path, s || '/')))
+                        ORDER BY ts_rank_cd(tsv, q) DESC
+                        LIMIT ?
+                        """,
+                        (
+                            tsquery,
+                            self.workspace,
+                            len(vector),
+                            selectors,
+                            selectors,
+                            CANDIDATES,
+                        ),
+                    ).fetchall()
                 keyword_ids = [row["id"] for row in rows]
 
             missing = [pid for pid in keyword_ids if pid not in cosines]
@@ -414,13 +421,14 @@ class PgQdrantStore:
             ids = list(dict.fromkeys([*cosines, *keyword_ids]))
             if not ids:
                 return []
-            rows = self._db().execute(
-                """
-                SELECT point_id::text AS id, path, ordinal, locator, heading, text
-                FROM rag_chunks WHERE workspace = %s AND point_id = ANY(%s::uuid[])
-                """,
-                (self.workspace, ids),
-            ).fetchall()
+            with self.database.read() as connection:
+                rows = connection.execute(
+                    """
+                    SELECT point_id::text AS id, path, ordinal, locator, heading, text
+                    FROM rag_chunks WHERE workspace = ? AND point_id = ANY(?::uuid[])
+                    """,
+                    (self.workspace, ids),
+                ).fetchall()
 
         candidates = [
             Candidate(

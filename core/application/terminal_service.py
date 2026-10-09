@@ -17,6 +17,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from core.harness.env_sanitize import scrubbed_parent_env
+from core.hosting import COMMANDS_DISABLED_MESSAGE, commands_allowed
 from core.application.errors import (
     ConflictError,
     InvalidArgumentError,
@@ -107,6 +109,8 @@ class TerminalService:
             raise NotSupportedApplicationError(
                 "PTY terminals require the Windows ConPTY adapter"
             )
+        if not commands_allowed():
+            raise NotSupportedApplicationError(COMMANDS_DISABLED_MESSAGE)
         self._validate_size(columns, rows)
         activity_lease = self.sessions.acquire_activity_lease(thread_id)
         if activity_lease is None:
@@ -126,7 +130,7 @@ class TerminalService:
             self._set_size(master_fd, columns, rows)
             shell = _shell_path()
             environment = {
-                **os.environ,
+                **scrubbed_parent_env(force_full=True),
                 "TERM": os.environ.get("TERM", "xterm-256color"),
                 "DEEPCODE_THREAD_ID": thread_id,
             }

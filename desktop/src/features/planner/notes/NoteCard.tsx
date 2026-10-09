@@ -75,23 +75,27 @@ export const NoteCard = memo(function NoteCard({
         aria-label={`Open ${name}`}
         onClick={() => onOpen(note)}
       />
-      <button
-        type="button"
-        className={styles.cardPin}
-        aria-label={note.pinned ? "Unpin" : "Pin"}
-        aria-pressed={note.pinned}
-        title={note.pinned ? "Unpin" : "Pin"}
-        onClick={() => onTogglePin(note.id)}
-      >
-        {note.pinned ? (
-          <PinOff size={15} aria-hidden="true" />
+      <div className={styles.cardHeader}>
+        {note.title ? (
+          <Heading className={styles.cardTitle}>{note.title}</Heading>
         ) : (
-          <Pin size={15} aria-hidden="true" />
+          <span className={styles.cardTitleSpacer} aria-hidden="true" />
         )}
-      </button>
-      {note.title ? (
-        <Heading className={styles.cardTitle}>{note.title}</Heading>
-      ) : null}
+        <button
+          type="button"
+          className={styles.cardPin}
+          aria-label={note.pinned ? "Unpin" : "Pin"}
+          aria-pressed={note.pinned}
+          title={note.pinned ? "Unpin" : "Pin"}
+          onClick={() => onTogglePin(note.id)}
+        >
+          {note.pinned ? (
+            <PinOff size={15} aria-hidden="true" />
+          ) : (
+            <Pin size={15} aria-hidden="true" />
+          )}
+        </button>
+      </div>
       <NoteMarkdown
         className={styles.cardContent}
         content={note.content}

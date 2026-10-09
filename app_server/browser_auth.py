@@ -156,3 +156,35 @@ class BrowserAuth:
 
 def _digest(token: str) -> str:
     return hashlib.sha256(token.encode()).hexdigest()
+
+
+class WorkerAuth:
+    """Authorization for a user's worker, which only its gateway may call.
+
+    Every request must carry ``Authorization: Bearer <KHAI_WORKER_TOKEN>``;
+    there are no browser sessions on a worker. Mirrors the parts of
+    :class:`BrowserAuth` the transports use.
+    """
+
+    cookie_name = "khai_worker"
+    SESSION_TTL = 365 * 24 * 60 * 60
+
+    def __init__(self, token: str) -> None:
+        if len(token) < 32:
+            raise ValueError("KHAI_WORKER_TOKEN must be at least 32 characters")
+        self._expected = f"Bearer {token}".encode()
+
+    def authenticated(self, request: web.Request) -> bool:
+        supplied = request.headers.get("Authorization", "").encode()
+        return secrets.compare_digest(supplied, self._expected)
+
+    def require(self, request: web.Request) -> str:
+        if not self.authenticated(request):
+            raise web.HTTPUnauthorized(text="Worker credential required")
+        return "worker"
+
+    def remaining(self, session: str) -> float:
+        return float(self.SESSION_TTL) if session == "worker" else 0.0
+
+    def revoke(self, session: str) -> None:
+        return None

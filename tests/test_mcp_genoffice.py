@@ -14,6 +14,7 @@ from core.mcp.genoffice import (
     GENOFFICE_SERVER_NAME,
     builtin_server_definitions,
     resolve_genoffice_binary,
+    builtin_server_instructions,
 )
 from core.mcp.models import McpServerSource
 from core.mcp.resolver import McpConfigResolver
@@ -72,6 +73,41 @@ def test_builtin_definition_is_workspace_scoped_and_compact(tmp_path: Path) -> N
     assert not definition.exposes("open")
     assert definition.exposes("create_pptx")
     assert builtin_server_definitions({"GENOFFICE_BIN": ""}) == {}
+
+
+def test_genoffice_instructions_avoid_empty_or_unparseable_docx_html() -> None:
+    instructions = builtin_server_instructions(GENOFFICE_SERVER_NAME)
+    assert instructions is not None
+    assert "non-empty `markdown`" in instructions
+    assert "retry once with Markdown" in instructions
+
+
+def test_genoffice_docx_fallback_extracts_readable_markdown() -> None:
+    from core.mcp.tools import _html_to_markdown
+
+    content = _html_to_markdown(
+        "<html><body><h1>Redis TTL</h1><p>Expiry in seconds.</p>"
+        "<ul><li>Read-only</li></ul><script>secret()</script></body></html>"
+    )
+
+    assert "# Redis TTL" in content
+    assert "Expiry in seconds." in content
+    assert "- Read-only" in content
+    assert "secret()" not in content
+
+
+def test_genoffice_pdf_read_normalizes_exclusive_page_range_arguments() -> None:
+    from types import SimpleNamespace
+
+    from core.mcp.tools import _normalize_tool_arguments
+
+    identity = SimpleNamespace(server_name="genoffice", raw_name="pdf_read")
+    assert _normalize_tool_arguments(
+        identity, {"file": "report.pdf", "page": 2, "range": "2-5"}
+    ) == {"file": "report.pdf", "range": "2-5"}
+    assert _normalize_tool_arguments(
+        identity, {"file": "report.pdf", "page": 2, "range": None}
+    ) == {"file": "report.pdf", "page": 2}
 
 
 @pytest.fixture

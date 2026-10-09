@@ -12,6 +12,11 @@
   background: var(--surface-canvas);
 }
 
+.viewer[data-kind="pptx"] {
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
 .loading {
   display: flex;
   height: 100%;
@@ -70,11 +75,28 @@
   box-shadow: 0 1px 3px rgb(0 0 0 / 18%), 0 6px 20px rgb(0 0 0 / 8%) !important;
 }
 
+.docx :global(table) {
+  break-inside: auto;
+  page-break-inside: auto;
+}
+
+.docx :global(thead) {
+  display: table-header-group;
+}
+
+.docx :global(tr) {
+  break-inside: avoid;
+  page-break-inside: avoid;
+}
+
 .pptx {
   padding: 16px;
 }
 
 .pptx :global(.pptx-preview-wrapper) {
+  max-width: 100%;
+  height: auto !important;
+  overflow: visible !important;
   margin: 0 auto;
   background: transparent !important;
 }

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-import sqlite3
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
@@ -15,7 +14,7 @@ from core.application.errors import (
 )
 from core.domain.thread_goal import ThreadGoalStatus
 from core.persistence.automation_repository import AutomationRepository
-from core.persistence.database import Database
+from core.persistence.database import Connection, Database
 from core.persistence.execution_repository import TurnRepository
 from core.persistence.thread_repository import ThreadRepository
 from core.persistence.workflow_repository import WorkflowRepository
@@ -178,7 +177,7 @@ class SessionDeletionService:
 
     def _blockers(
         self,
-        connection: sqlite3.Connection,
+        connection: Connection,
         thread_id: str,
         directory: Path,
     ) -> list[dict[str, str]]:

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-import sqlite3
+from core.persistence.database import Connection, Row
 
 from core.domain.common import JsonObject
 from core.domain.event import DomainEvent
@@ -15,7 +15,7 @@ from core.persistence.serde import (
 
 
 class EventRepository:
-    def __init__(self, connection: sqlite3.Connection) -> None:
+    def __init__(self, connection: Connection) -> None:
         self.connection = connection
 
     def append(
@@ -123,7 +123,7 @@ class EventRepository:
         return row is not None
 
     @staticmethod
-    def _from_row(row: sqlite3.Row) -> DomainEvent:
+    def _from_row(row: Row) -> DomainEvent:
         return DomainEvent(
             id=row["id"],
             thread_id=row["thread_id"],

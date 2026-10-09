@@ -56,12 +56,31 @@ GENOFFICE_KHAI_INSTRUCTIONS = """\
 Khai: for requests to make or change a document (report, memo, deck, \
 spreadsheet, PDF, conversion), load the `genoffice` Skill first, then: \
 1) plan briefly (audience, sections/slides/sheets, real figures, output path); \
+For slide decks, never invent `layout` or page `type` names. Load the GenOffice \
+slide design/spec guide and use only its listed variants, then validate the full \
+outline before calling deck-start/create. Content pages must not repeat the same \
+layout on consecutive pages; use at least three different guide-listed variants \
+across the body when the deck is long enough. Do not emit `two_column_split` or \
+`three_column_cards` unless the current guide explicitly lists them. If validation \
+fails, treat its structured issues as authoritative: change only the cited page \
+fields, use a listed supported variant, and rerun the check; do not guess layout \
+names or explain away a failed check. Image layouts must include a real image \
+query or a workspace image; do not omit `images`. \
 2) build with these tools, writing only workspace-relative paths such as \
 `reports/<name>.docx` (paths outside the workspace are refused); \
 3) check (`docs_check`, `sheet_check`, `slides_audit`) and look (`render` or \
 `slides_render`), fixing at most twice; \
 4) present: name each file's workspace path with a one-line summary; the chat \
 shows it as a card the user can open, so do not paste the document back. \
+For `create_docx`, always pass non-empty `markdown` (preferred) or supported \
+restricted-HTML fragment content; do not pass an empty string, a full HTML page \
+wrapper, or unsupported HTML. If content is in HTML, ensure it has readable \
+body elements before calling the tool. Use a workspace-relative `.md` source \
+with `convert` when the content is otherwise ambiguous. After creation, verify \
+the output with `docs_read` or `docs_check`; on a parse error, correct the input \
+format and retry once with Markdown rather than repeating identical HTML. \
+For `pdf_read`, use `page` OR `range`, never both. Use `range` alone for multiple \
+pages; omit both to read the default first pages. \
 Never hand-write Office XML or use shell zip tricks when these tools exist."""
 
 

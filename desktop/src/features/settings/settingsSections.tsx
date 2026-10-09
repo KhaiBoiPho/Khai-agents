@@ -22,6 +22,8 @@ import {
   ScrollText,
   Settings as SettingsIcon,
   Shield,
+  ShieldCheck,
+  Users,
 } from "lucide-react";
 
 import type {
@@ -49,10 +51,13 @@ import {
 import { GeneralPage } from "./pages/GeneralPage";
 import { KhaiDocsSettingsPage } from "./pages/KhaiDocsSettingsPage";
 import { ModelsSection } from "./sections/ModelsSection";
+import { SecurityPage, UsersPage } from "./pages/UsersPages";
 
 export type SettingsSectionId =
   | "general"
   | "account"
+  | "security"
+  | "users"
   | "privacy"
   | "usage"
   | "capabilities"
@@ -95,10 +100,35 @@ export interface SettingsSection {
   group: "settings" | "computer" | "customize" | "platform";
   /** Full pages carry their own heading; the dialog adds none for them. */
   ownsTitle?: boolean;
+  /** Shown only when signed in to the hosted gateway. */
+  requiresAccount?: boolean;
+  /** Shown only to administrators. */
+  adminOnly?: boolean;
 }
 
 // Grouped like a desktop settings window.
 const SECTIONS: readonly SettingsSection[] = [
+  {
+    id: "security",
+    order: 1.1,
+    labelKey: "settings.section.security",
+    label: "Sign-in & security",
+    icon: ShieldCheck,
+    component: SecurityPage,
+    group: "settings",
+    requiresAccount: true,
+  },
+  {
+    id: "users",
+    order: 1.2,
+    labelKey: "settings.section.users",
+    label: "Users",
+    icon: Users,
+    component: UsersPage,
+    group: "settings",
+    requiresAccount: true,
+    adminOnly: true,
+  },
   {
     id: "general",
     order: 0,

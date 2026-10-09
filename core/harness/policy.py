@@ -207,5 +207,6 @@ def build_permission_engine(
         enforce_read_only=(profile.access_preset is ExecutionAccessPreset.READ_ONLY),
         bypass_origin_approval=(
             profile.access_preset is ExecutionAccessPreset.FULL_ACCESS
+            or profile.permission_mode is ExecutionPermissionMode.FULL_AUTO
         ),
     )

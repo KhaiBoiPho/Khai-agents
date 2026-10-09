@@ -3,8 +3,7 @@ import {
   BookOpen,
   Check,
   ChevronDown,
-  ChevronsDownUp,
-  ChevronsUpDown,
+  ChevronUp,
   ChevronRight,
   Clock3,
   Cpu,
@@ -22,7 +21,8 @@ import {
   TerminalSquare,
   Wrench,
 } from "lucide-react";
-import { useEffect, useRef, useState, type RefObject } from "react";
+import { useEffect, useState } from "react";
+import { formatDistanceStrict } from "date-fns";
 
 import type {
   Approval,
@@ -55,6 +55,9 @@ interface TurnBlockProps {
   approvalsByItem: ReadonlyMap<string, Approval>;
   selectedItemId: string | null;
   transcriptMode: TranscriptMode;
+  thinkingCollapsed?: boolean;
+  thinkingExpanded?: boolean;
+  onToggleActivity?(): void;
   busy: boolean;
   onSelectItem(itemId: string): void;
   onOpenInspector(tab?: DesktopInspectorTab): void;
@@ -230,6 +233,8 @@ function ActivityItem({
   onOpenInspector,
   onRespondToApproval,
   transcriptMode,
+  thinkingCollapsed,
+  thinkingExpanded,
 }: {
   item: Item;
   approval: Approval | undefined;
@@ -239,9 +244,11 @@ function ActivityItem({
   onOpenInspector(tab?: DesktopInspectorTab): void;
   onRespondToApproval(approvalId: string, decision: ApprovalDecision): void;
   transcriptMode: TranscriptMode;
+  thinkingCollapsed: boolean;
+  thinkingExpanded?: boolean;
 }) {
   if (item.kind === "reasoning_summary") {
-    return <ReasoningBlock item={item} mode={transcriptMode} />;
+    return <ReasoningBlock item={item} mode={transcriptMode} forceCollapsed={thinkingCollapsed} forceOpen={thinkingExpanded} />;
   }
   if (item.kind === "approval_request" && approval) {
     const pending = approval.status === "pending";
@@ -353,29 +360,28 @@ function ActivityItem({
         ) : (
           <pre>{body}</pre>
         )}
-        <button
-          type="button"
-          onClick={() => {
-            onSelectItem(item.id);
-            onOpenInspector("details");
-          }}
-        >
-          Inspect details
-        </button>
       </div>
     </details>
   );
 }
 
-function RunStatus({ group }: { group: ConversationTurn }) {
+function RunStatus({
+  group,
+  collapsed,
+  onToggle,
+}: {
+  group: ConversationTurn;
+  collapsed: boolean;
+  onToggle?(): void;
+}) {
   const active = Boolean(
     group.turn && activeTurnStatuses.has(group.turn.status),
   );
   const now = useElapsedNow(active);
   if (!shouldShowRunStatus(group, now)) return null;
 
-  return (
-    <div className={styles.runStatus} data-status={group.turn?.status}>
+  const content = (
+    <>
       {group.turn?.status === "running" ? (
         <LiveDot />
       ) : (
@@ -384,7 +390,25 @@ function RunStatus({ group }: { group: ConversationTurn }) {
       <ShimmerText active={group.turn?.status === "running"}>
         {runLabel(group, now)}
       </ShimmerText>
-    </div>
+      {group.timeline.length > 0 ? (
+        collapsed ? <ChevronDown size={14} aria-hidden="true" /> : <ChevronUp size={14} aria-hidden="true" />
+      ) : null}
+    </>
+  );
+  return group.timeline.length > 0 && onToggle ? (
+    <button
+      type="button"
+      className={styles.runStatus}
+      data-status={group.turn?.status}
+      aria-label={collapsed ? "Expand task activity" : "Collapse task activity"}
+      title={collapsed ? "Expand task activity" : "Collapse task activity"}
+      aria-expanded={!collapsed}
+      onClick={onToggle}
+    >
+      {content}
+    </button>
+  ) : (
+    <div className={styles.runStatus} data-status={group.turn?.status}>{content}</div>
   );
 }
 
@@ -397,6 +421,8 @@ function ExplorationGroup({
   onOpenInspector,
   onRespondToApproval,
   transcriptMode,
+  thinkingCollapsed,
+  thinkingExpanded,
 }: {
   group: TimelineActivityGroup;
   approvalsByItem: ReadonlyMap<string, Approval>;
@@ -406,6 +432,8 @@ function ExplorationGroup({
   onOpenInspector(tab?: DesktopInspectorTab): void;
   onRespondToApproval(approvalId: string, decision: ApprovalDecision): void;
   transcriptMode: TranscriptMode;
+  thinkingCollapsed: boolean;
+  thinkingExpanded?: boolean;
 }) {
   const active = group.items.some(
     (item) => item.status === "in_progress" || item.id === selectedItemId,
@@ -447,34 +475,12 @@ function ExplorationGroup({
             onOpenInspector={onOpenInspector}
             onRespondToApproval={onRespondToApproval}
             transcriptMode={transcriptMode}
+            thinkingCollapsed={thinkingCollapsed}
+            thinkingExpanded={thinkingExpanded}
           />
         ))}
       </div>
     </details>
-  );
-}
-
-/** Close or open every activity block of one turn at once. */
-function CollapseAll({ rootRef }: { rootRef: RefObject<HTMLElement | null> }) {
-  const [collapsed, setCollapsed] = useState(false);
-  return (
-    <button
-      type="button"
-      className={styles.collapseAll}
-      onClick={() => {
-        const next = !collapsed;
-        rootRef.current
-          ?.querySelectorAll("details")
-          .forEach((details) => {
-            details.open = !next;
-          });
-        setCollapsed(next);
-      }}
-      title={collapsed ? "Expand all activity" : "Collapse all activity"}
-    >
-      {collapsed ? <ChevronsUpDown size={13} /> : <ChevronsDownUp size={13} />}
-      {collapsed ? "Expand all" : "Collapse all"}
-    </button>
   );
 }
 
@@ -549,6 +555,9 @@ export function TurnBlock({
   onRetryTurn,
   onCancelQueuedTurn,
   transcriptMode,
+  thinkingCollapsed = false,
+  thinkingExpanded = false,
+  onToggleActivity,
 }: TurnBlockProps) {
   const queued = group.turn?.status === "queued";
   const turnId = group.turn?.id ?? null;
@@ -563,7 +572,6 @@ export function TurnBlock({
       : [];
   const orderedItems = timelineItems(group);
   const documents = turnDocuments(orderedItems);
-  const turnRef = useRef<HTMLElement | null>(null);
   const lastExecutionItem =
     [...orderedItems]
       .reverse()
@@ -591,6 +599,24 @@ export function TurnBlock({
   const runError =
     providerError ?? (errorMessage && (failed || !isGenericRunError(errorMessage)) ? errorMessage : null);
   const runErrorView = runError ? describeRunError(runError) : null;
+  const assistantMessages = orderedItems.filter(
+    (item) => item.kind === "assistant_message",
+  );
+  const hasToolActivity = orderedItems.some(
+    (item) => item.kind === "tool_call" || item.kind === "command_execution",
+  );
+  const interruptionNotice =
+    group.turn?.status === "interrupted"
+      ? assistantMessages.length === 0 && !hasToolActivity
+        ? "Nothing was done on this turn — no answer came back and no tool ran. Please try again."
+        : "This turn was interrupted before it completed."
+      : null;
+  const finalTimestamp =
+    [...assistantMessages].at(-1)?.createdAt ??
+    group.completion?.createdAt ??
+    [...orderedItems].at(-1)?.createdAt ??
+    group.turn?.completedAt ??
+    null;
   // Shown in the error card instead of as raw timeline rows.
   const isErrorEcho = (item: Item) =>
     runErrorView !== null &&
@@ -601,8 +627,8 @@ export function TurnBlock({
     <section
       className={styles.turnBlock}
       data-status={group.turn?.status}
+      data-activity-collapsed={thinkingCollapsed || undefined}
       data-turn-id={group.turn?.id}
-      ref={turnRef}
     >
       {userMessages.map(({ text, ...rest }) => ({ ...rest, ...splitAttachedFiles(text) })).map((message) => (
         <article className={styles.userMessage} data-queued={queued} key={message.id}>
@@ -661,12 +687,18 @@ export function TurnBlock({
       ) : null}
 
       <div className={styles.runHeader}>
-        <RunStatus group={group} />
-        {lastExecutionItem ? <CollapseAll rootRef={turnRef} /> : null}
+        <RunStatus
+          group={group}
+          collapsed={thinkingCollapsed}
+          onToggle={onToggleActivity}
+        />
       </div>
 
       <div className={styles.timeline}>
         {group.timeline.map((entry) => {
+          if (thinkingCollapsed && (entry.type !== "item" || entry.item.kind !== "assistant_message")) {
+            return null;
+          }
           if (entry.type === "activity_group") {
             if (transcriptMode === "summary") return null;
             return (
@@ -680,6 +712,8 @@ export function TurnBlock({
                 onOpenInspector={onOpenInspector}
                 onRespondToApproval={onRespondToApproval}
                 transcriptMode={transcriptMode}
+                thinkingCollapsed={thinkingCollapsed}
+                thinkingExpanded={thinkingExpanded}
               />
             );
           }
@@ -710,6 +744,8 @@ export function TurnBlock({
                 onOpenInspector={onOpenInspector}
                 onRespondToApproval={onRespondToApproval}
                 transcriptMode={transcriptMode}
+                thinkingCollapsed={thinkingCollapsed}
+                thinkingExpanded={thinkingExpanded}
               />
             </div>
           );
@@ -725,7 +761,17 @@ export function TurnBlock({
           onRetry={failed && turnId ? () => onRetryTurn(turnId) : undefined}
         />
       ) : null}
-      {(failed && !runErrorView) || lastExecutionItem ? (
+      {interruptionNotice ? (
+        <p className={styles.interruptionNotice} role="status">
+          {interruptionNotice}
+        </p>
+      ) : null}
+      {finalTimestamp && group.turn?.status !== "running" && group.turn?.status !== "queued" ? (
+        <time className={styles.turnTimestamp} dateTime={finalTimestamp}>
+          {formatDistanceStrict(new Date(finalTimestamp), new Date(), { addSuffix: true })}
+        </time>
+      ) : null}
+      {!thinkingCollapsed && ((failed && !runErrorView) || lastExecutionItem) ? (
         <div className={styles.runActions}>
           {failed && turnId && !runErrorView ? (
             <button

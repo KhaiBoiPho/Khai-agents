@@ -18,7 +18,6 @@ import type { CompactionEntry, TurnPlanState } from "../../app/workspaceState";
 import type { DesktopInspectorTab } from "../../app/useDesktopUi";
 import { CompactionNotice } from "./CompactionNotice";
 import { buildConversationTurns } from "./conversationModel";
-import { PlanProgress } from "./PlanProgress";
 import styles from "./ThreadConversation.module.css";
 import { TurnBlock } from "./TurnBlock";
 import type { TranscriptMode } from "./transcriptMode";
@@ -33,6 +32,7 @@ interface ThreadConversationProps {
   selectedItemId: string | null;
   transcriptMode: TranscriptMode;
   busy: boolean;
+  planProgressExpanded?: boolean;
   onSelectItem(itemId: string): void;
   onOpenInspector(tab?: DesktopInspectorTab): void;
   onRespondToApproval(approvalId: string, decision: ApprovalDecision): void;
@@ -51,6 +51,7 @@ export function ThreadConversation({
   selectedItemId,
   transcriptMode,
   busy,
+  planProgressExpanded = false,
   onSelectItem,
   onOpenInspector,
   onRespondToApproval,
@@ -61,6 +62,7 @@ export function ThreadConversation({
   const endRef = useRef<HTMLDivElement | null>(null);
   const followingRef = useRef(true);
   const [showJumpToLatest, setShowJumpToLatest] = useState(false);
+  const [thinkingDisclosure, setThinkingDisclosure] = useState<"default" | "collapsed" | "expanded">("default");
   const groupedTurns = useMemo(
     () => buildConversationTurns(turns, items),
     [items, turns],
@@ -138,6 +140,12 @@ export function ThreadConversation({
     scrollToLatest(latestItem?.status === "in_progress" ? "smooth" : "auto");
   }, [latestItem?.status, latestUpdate, scrollToLatest]);
 
+  useEffect(() => {
+    if (planProgressExpanded && followingRef.current) {
+      scrollToLatest("smooth");
+    }
+  }, [planProgressExpanded, scrollToLatest]);
+
   const jumpToLatest = () => {
     followingRef.current = true;
     setShowJumpToLatest(false);
@@ -158,6 +166,7 @@ export function ThreadConversation({
     <div
       className={styles.conversationFrame}
       data-plan-active={Boolean(activePlan)}
+      data-plan-expanded={planProgressExpanded || undefined}
     >
       <div
         className={styles.conversationScroller}
@@ -172,6 +181,9 @@ export function ThreadConversation({
                 approvalsByItem={approvalsByItem}
                 selectedItemId={selectedItemId}
                 transcriptMode={transcriptMode}
+                thinkingCollapsed={thinkingDisclosure === "collapsed"}
+                thinkingExpanded={thinkingDisclosure === "expanded"}
+                onToggleActivity={() => setThinkingDisclosure((mode) => mode === "collapsed" ? "expanded" : "collapsed")}
                 busy={busy}
                 onSelectItem={onSelectItem}
                 onOpenInspector={onOpenInspector}
@@ -190,12 +202,6 @@ export function ThreadConversation({
           <div className={styles.conversationEnd} ref={endRef} />
         </div>
       </div>
-
-      {activePlan ? (
-        <div className={styles.planProgressDock}>
-          <PlanProgress plan={activePlan} />
-        </div>
-      ) : null}
 
       {showJumpToLatest ? (
         <button

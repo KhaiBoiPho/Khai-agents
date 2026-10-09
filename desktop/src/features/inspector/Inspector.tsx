@@ -16,7 +16,6 @@ import { useTranslation } from "react-i18next";
 
 import type {
   Artifact,
-  Item,
   Thread,
   Turn,
   WorkflowRun,
@@ -36,12 +35,9 @@ interface InspectorProps {
   thread: Thread | null;
   trusted: boolean;
   turns: Turn[];
-  items: Item[];
   workflows: WorkflowRun[];
   artifacts: Artifact[];
-  selectedItemId: string | null;
   tab: DesktopInspectorTab;
-  onSelectItem(itemId: string): void;
   onTabChange(tab: DesktopInspectorTab): void;
   onDirtyChange(dirty: boolean): void;
   onClose(): void;
@@ -74,12 +70,9 @@ export function Inspector({
   thread,
   trusted,
   turns,
-  items,
   workflows,
   artifacts,
-  selectedItemId,
   tab,
-  onSelectItem,
   onTabChange,
   onDirtyChange,
   onClose,
@@ -100,7 +93,6 @@ export function Inspector({
     sessionScoped ? (thread?.id ?? null) : null,
     workbench.entries,
   );
-  const selected = items.find((item) => item.id === selectedItemId) ?? null;
   const dirty = Boolean(
     workbench.file && workbench.draft !== workbench.file.content,
   );
@@ -257,9 +249,6 @@ export function Inspector({
           <HistoryPanel
             threadId={thread?.id ?? null}
             turns={turns}
-            items={items}
-            selected={selected}
-            onSelectItem={onSelectItem}
           />
         ) : null}
       </div>

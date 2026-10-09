@@ -1,0 +1,35 @@
+.handle {
+  position: relative;
+  z-index: 5;
+  width: 8px;
+  margin-left: -4px;
+  cursor: col-resize;
+  touch-action: none;
+}
+
+.handle::after {
+  position: absolute;
+  top: 8px;
+  bottom: 8px;
+  left: 3px;
+  width: 2px;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  content: "";
+  transition: background-color 120ms ease;
+}
+
+.handle:hover::after,
+.handle:focus-visible::after,
+.handle[data-dragging]::after {
+  background: var(--signal);
+}
+
+.handle:focus-visible {
+  outline: 0;
+}
+
+:global(body:has([aria-label="Resize sidebar"][data-dragging])) {
+  cursor: col-resize;
+  user-select: none;
+}

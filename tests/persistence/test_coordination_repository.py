@@ -22,7 +22,6 @@ from core.persistence import (
     ThreadRepository,
     TurnRepository,
 )
-from core.persistence.migrations import current_version, migrate
 
 
 def _worker(
@@ -61,92 +60,6 @@ def _seed_turn(database: Database, tmp_path: Path, *, suffix: str = "claim") -> 
         ThreadRepository(connection).add(thread)
         TurnRepository(connection).add(turn)
     return turn
-
-
-def test_v10_migration_is_reversible_and_keeps_legacy_turns_usable(
-    tmp_path: Path,
-) -> None:
-    database = Database(tmp_path / "state.sqlite3")
-    database.initialize(target_version=9)
-    legacy = _seed_turn(database, tmp_path, suffix="legacy")
-
-    with database.read() as connection:
-        migrate(connection, 10)
-        assert current_version(connection) == 10
-        tables = {
-            row["name"]
-            for row in connection.execute(
-                "SELECT name FROM sqlite_master WHERE type = 'table'"
-            )
-        }
-        assert {"runtime_workers", "resource_leases"} <= tables
-        columns = {
-            row["name"] for row in connection.execute("PRAGMA table_info(turns)")
-        }
-        assert {
-            "enqueued_at",
-            "execution_class",
-            "home_worker_id",
-            "execution_owner_id",
-            "execution_epoch",
-            "cancel_requested_at",
-        } <= columns
-        legacy_row = connection.execute(
-            "SELECT enqueued_at, execution_class, execution_owner_id, "
-            "execution_epoch FROM turns WHERE id = ?",
-            (legacy.id,),
-        ).fetchone()
-        assert tuple(legacy_row) == (
-            "1970-01-01T00:00:00Z",
-            "interactive",
-            None,
-            0,
-        )
-
-    current = Turn(
-        thread_id=legacy.thread_id,
-        ordinal=2,
-        prompt="Inserted through the unchanged v9 repository",
-    )
-    with database.transaction() as connection:
-        TurnRepository(connection).add(current)
-        worker = _worker("downgrade")
-        coordination = RuntimeCoordinationRepository(connection)
-        coordination.register_worker(worker)
-        assert (
-            coordination.claim_turn_resources(
-                worker.id,
-                current.id,
-                (f"thread:{current.thread_id}", "capacity:turn:1"),
-                acquired_at=worker.started_at,
-            )
-            is not None
-        )
-    with database.read() as connection:
-        enqueued_at = connection.execute(
-            "SELECT enqueued_at FROM turns WHERE id = ?",
-            (current.id,),
-        ).fetchone()[0]
-        assert enqueued_at != "1970-01-01T00:00:00Z"
-        migrate(connection, 9)
-        assert current_version(connection) == 9
-        assert (
-            connection.execute(
-                "SELECT name FROM sqlite_master "
-                "WHERE type = 'table' AND name = 'runtime_workers'"
-            ).fetchone()
-            is None
-        )
-        columns = {
-            row["name"] for row in connection.execute("PRAGMA table_info(turns)")
-        }
-        assert "execution_epoch" not in columns
-        restored_legacy = TurnRepository(connection).get(legacy.id)
-        restored_current = TurnRepository(connection).get(current.id)
-        assert restored_legacy is not None
-        assert restored_current is not None
-        assert replace(restored_legacy, enqueued_at=legacy.enqueued_at) == legacy
-        assert replace(restored_current, enqueued_at=current.enqueued_at) == current
 
 
 def test_worker_register_heartbeat_liveness_and_stop_are_monotonic(

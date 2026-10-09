@@ -8,6 +8,41 @@
   }
 }
 
+/* The KhaiDocs workspace tree belongs on the trailing edge of its own app
+   area. Keep the main Khai-Agents sidebar completely outside this shell. */
+.rightSidebar {
+  :global(.mantine-AppShell-navbar) {
+    inset-inline-start: auto;
+    inset-inline-end: 0;
+    direction: ltr;
+    border-right: 0;
+    border-left: 1px solid var(--kd-divider);
+  }
+
+  :global(.mantine-AppShell-main) {
+    padding-inline-start: var(--app-shell-padding);
+    padding-inline-end: calc(
+      var(--app-shell-navbar-offset, 0rem) +
+      var(--app-shell-aside-offset, 0rem) +
+      var(--app-shell-padding)
+    );
+  }
+
+  :global(.mantine-AppShell-aside) {
+    inset-inline-end: var(--app-shell-navbar-offset, 0rem);
+  }
+
+  /* The aside sits to the left of the right-hand workspace navbar, so
+     Mantine's collapse vectors both go wrong: the LTR one parks a closed
+     aside over the navbar (blanking it), the RTL one parks it over the page.
+     Slide it past the navbar instead, out of the clipped KhaiDocs root. */
+  &[data-kd-aside-collapsed] :global(.mantine-AppShell-aside) {
+    transform: translateX(
+      calc(var(--app-shell-aside-width) + var(--app-shell-navbar-offset, 0rem))
+    );
+  }
+}
+
 .aside {
   @media (max-width: $mantine-breakpoint-sm) {
     margin-top: 45px;
@@ -18,7 +53,7 @@
   width: 3px;
   cursor: col-resize;
   position: absolute;
-  right: 0;
+  left: 0;
   top: 0;
   bottom: 0;
 

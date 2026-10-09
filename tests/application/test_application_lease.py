@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import asyncio
 import multiprocessing
-import sqlite3
 import time
 from collections import defaultdict
 from pathlib import Path
@@ -17,7 +16,7 @@ from core.domain.project import TrustState
 from core.domain.turn import TurnStatus
 from core.events import Event, TurnStarted
 from core.persistence.database import Database
-from core.persistence.migrations import LATEST_SCHEMA_VERSION, current_version
+from core.persistence.database import LATEST_SCHEMA_VERSION
 
 
 class HangingSession:
@@ -105,24 +104,6 @@ def _stress_application_lease(
         finally:
             lease.close()
         barrier.wait(timeout=10)
-
-
-def _hold_legacy_schema(
-    database_path: str,
-    ready,
-    release,
-    target_version: int,
-) -> None:
-    database = Database(database_path)
-    database.initialize(target_version=target_version)
-    lease = ApplicationLease.acquire(database.path)
-    try:
-        assert lease.recovery_owner
-        lease.downgrade()
-        ready.put(database.schema_version())
-        release.wait(timeout=10)
-    finally:
-        lease.close()
 
 
 def _wait_for_status(
@@ -267,56 +248,6 @@ def test_three_process_startup_stress_never_overlaps_recovery(
             if process.is_alive():
                 process.kill()
                 process.join(timeout=2)
-
-
-def test_live_old_schema_requires_exclusive_upgrade_then_preserves_backup(
-    tmp_path: Path,
-) -> None:
-    database_path = tmp_path / "state.sqlite3"
-    old_version = 1
-    context = multiprocessing.get_context("spawn")
-    ready = context.Queue()
-    release = context.Event()
-    old_process = context.Process(
-        target=_hold_legacy_schema,
-        args=(str(database_path), ready, release, old_version),
-    )
-    old_process.start()
-    try:
-        assert ready.get(timeout=10) == old_version
-        with pytest.raises(UpgradeRequiresExclusiveAccessError) as raised:
-            DeepCodeApplication.open(database_path)
-        assert raised.value.code == "UPGRADE_REQUIRES_EXCLUSIVE_ACCESS"
-        assert raised.value.retryable is True
-        assert raised.value.details == {
-            "installedSchemaVersion": old_version,
-            "requiredSchemaVersion": LATEST_SCHEMA_VERSION,
-        }
-        with sqlite3.connect(database_path) as connection:
-            assert current_version(connection) == old_version
-        assert not (tmp_path / "backups").exists()
-    finally:
-        release.set()
-        old_process.join(timeout=10)
-        if old_process.is_alive():
-            old_process.kill()
-            old_process.join(timeout=2)
-    assert old_process.exitcode == 0
-
-    upgraded = DeepCodeApplication.open(database_path)
-    try:
-        assert upgraded.database.schema_version() == LATEST_SCHEMA_VERSION
-    finally:
-        upgraded.close()
-    backups = list(
-        (tmp_path / "backups").glob(
-            f"state.pre-v{old_version}-to-v{LATEST_SCHEMA_VERSION}-*.sqlite3"
-        )
-    )
-    assert len(backups) == 1
-    with sqlite3.connect(backups[0]) as connection:
-        assert current_version(connection) == old_version
-        assert connection.execute("PRAGMA quick_check").fetchone() == ("ok",)
 
 
 def test_current_schema_joiner_never_runs_database_initialization(

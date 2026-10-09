@@ -18,7 +18,7 @@ from pathlib import Path
 from core.rag.chunking import chunk_sections
 from core.rag.embeddings import Embedder, EmbeddingError
 from core.rag.extract import ExtractionError, extract_document, is_supported
-from core.rag.store import DocumentRecord, IndexStore, SearchHit
+from core.rag.store import DocumentRecord, DocumentStore, SearchHit
 
 MAX_DOCUMENTS = 500
 MAX_DOCUMENT_BYTES = 50 * 1024 * 1024
@@ -104,7 +104,7 @@ class DocumentIndex:
     def __init__(
         self,
         root: str | Path,
-        store: IndexStore,
+        store: DocumentStore,
         *,
         max_documents: int = MAX_DOCUMENTS,
     ) -> None:

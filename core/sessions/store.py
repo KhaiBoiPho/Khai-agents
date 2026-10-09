@@ -1,19 +1,14 @@
-"""Filesystem-backed session store (JSONL source of truth + SQLite index).
+"""Filesystem-backed session store (JSONL source of truth).
 
 The store directory layout is::
 
     <root>/
-      index.db          # derived SQLite index (disposable; rebuilt from JSONL)
       <session_id>/
         session.jsonl   # first line = metadata, subsequent lines = messages
         tasks.jsonl     # one line per attached SessionTask
         settings.json   # optional, per-session preferences
 
-The JSONL files stay the single source of truth (human-readable, survive a
-corrupt index). ``index.db`` is a derived cache maintained incrementally on
-each mutation so list/lookup queries don't rescan every session; it is always
-optional — see :mod:`core.sessions.index`. Any index failure silently falls
-back to the JSONL scan.
+Listings and task lookups scan the JSONL files.
 
 Concurrency model: :class:`threading.RLock` covers in-process
 serialisation; we additionally re-read metadata before every write so
@@ -45,7 +40,6 @@ from core.sessions.deletion import (
     SessionDeletionJournal,
     SessionDeletionTicket,
 )
-from core.sessions.index import SessionIndex
 from core.sessions.models import (
     Session,
     SessionMessage,
@@ -71,12 +65,10 @@ class SessionStore:
         self._lock = threading.RLock()
         self._cache: dict[str, Session] = {}
         self._cache_signatures: dict[str, tuple[int, int, int, int]] = {}
-        # Derived SQLite index; disposable and self-healing. Disable with
-        # use_index=False to force the pure-JSONL scan (used in tests to
-        # exercise the fallback path).
-        self._index: SessionIndex | None = (
-            SessionIndex(self.root / "index.db") if use_index else None
-        )
+        # The derived SQLite index is gone with SQLite; listings scan JSONL
+        # until transcripts move into PostgreSQL. ``use_index`` is accepted
+        # and ignored for existing callers.
+        self._index = None
         self._disk_signatures: dict[str, tuple[int, int, int, int]] | None = None
         self._deletions = SessionDeletionJournal(self.root)
 
@@ -347,7 +339,9 @@ class SessionStore:
                 return []
             summaries: list[SessionSummary] = []
             for entry in self.root.iterdir():
-                if not entry.is_dir():
+                # Dot entries are internal: locks, sessions still being
+                # created or deleted.
+                if not entry.is_dir() or entry.name.startswith("."):
                     continue
                 jsonl = entry / "session.jsonl"
                 if not jsonl.exists():
@@ -665,7 +659,6 @@ class SessionStore:
         """Force a full rebuild of the SQLite index from JSONL on disk.
 
         Returns the number of sessions indexed (0 if no index is active).
-        Useful after bulk external changes or a manual ``index.db`` delete.
         """
         with self._lock:
             if self._index is None or not self._index.available:

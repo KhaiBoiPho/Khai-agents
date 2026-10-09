@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { App } from "./App";
 import { BrowserRuntime } from "./rpc/browserRuntime";
 import { FolderPicker } from "./components/FolderPicker";
+import { useAccount } from "./features/account/AccountContext";
 import styles from "./webShell.module.css";
 
 declare const __WEB_BUILD_ID__: string;
@@ -20,6 +21,20 @@ export function BrowserShell() {
           }),
       }),
   );
+  const account = useAccount();
+  useEffect(() => {
+    if (!account) return;
+    // With accounts, an ended session goes back to the sign-in screen.
+    let unsubscribe: (() => void) | undefined;
+    void runtime
+      .onStatus((status) => {
+        if (status.errorCode === "AUTH_REQUIRED") location.reload();
+      })
+      .then((stop) => {
+        unsubscribe = stop;
+      });
+    return () => unsubscribe?.();
+  }, [account, runtime]);
   useEffect(() => {
     const dispose = () => runtime.dispose();
     // Opening a fresh access link in this tab only changes its fragment.

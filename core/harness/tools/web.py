@@ -15,11 +15,13 @@ from core.network.safe_http import (
     SafeHttpClient,
     SafeHttpError,
     SafeHttpResponse,
+    SafeHttpPolicy,
     UnexpectedContentTypeError,
     UnsafeUrlError,
 )
 
 MAX_FETCH_CHARACTERS = 100_000
+MAX_FETCH_RESPONSE_BYTES = 8 * 1024 * 1024
 
 
 class _HttpClient(Protocol):
@@ -147,7 +149,12 @@ class WebFetchTool(Tool):
     """Read one explicit public URL through the shared safe HTTP transport."""
 
     def __init__(self, client: _HttpClient | None = None) -> None:
-        self._client = client or SafeHttpClient()
+        # HTML documentation pages commonly exceed SafeHttpClient's generic
+        # 1 MiB default. Keep the same SSRF/redirect protections, with a
+        # bounded fetch-specific ceiling; model-visible text is capped below.
+        self._client = client or SafeHttpClient(
+            SafeHttpPolicy(max_response_bytes=MAX_FETCH_RESPONSE_BYTES)
+        )
 
     @property
     def name(self) -> str:

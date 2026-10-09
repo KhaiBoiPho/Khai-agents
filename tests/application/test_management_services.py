@@ -9,7 +9,7 @@ import pytest
 from core.application import DeepCodeApplication
 from core.application.errors import InvalidArgumentError, ProjectNotTrustedError
 from core.domain import TrustState
-from core.persistence.migrations import LATEST_SCHEMA_VERSION
+from core.persistence.database import LATEST_SCHEMA_VERSION
 from core.plugins.registry import LocalPluginRegistry
 from core.plugins.resolver import resolve_plugin
 from core.skills.management import LocalSkillManager

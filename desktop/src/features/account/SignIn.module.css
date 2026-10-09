@@ -1,0 +1,313 @@
+/* After Bedimcode's "Responsive login form with GSAP" (see SignIn.tsx). */
+.login {
+  --first-color: hsl(263, 64%, 48%);
+  --first-color-alt: hsl(263, 64%, 44%);
+  --border-color: hsl(0, 0%, 45%);
+  --title-color: hsl(0, 0%, 95%);
+  --text-color: hsl(0, 0%, 55%);
+  --body-color: hsl(0, 0%, 4%);
+  --container-color: hsl(0, 0%, 8%);
+  --body-font: "Syne", var(--font-display), sans-serif;
+  --big-font-size: 1.5rem;
+  --normal-font-size: 0.938rem;
+  --small-font-size: 0.813rem;
+
+  min-height: 100dvh;
+  display: grid;
+  align-items: center;
+  padding: 1.5rem 1rem;
+  background: var(--body-color) url("../../assets/login/golden-arc.jpg") center / cover
+    no-repeat;
+  color: var(--text-color);
+  font-family: var(--body-font);
+  font-size: var(--normal-font-size);
+  font-weight: 600;
+  overflow: hidden;
+}
+
+.login *,
+.login *::before,
+.login *::after {
+  box-sizing: border-box;
+}
+
+.image {
+  display: none;
+}
+
+.img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.content {
+  box-shadow: 0 12px 48px hsla(220, 60%, 10%, 0.45);
+  padding: 3.5rem 1.5rem;
+  border-radius: 1.5rem;
+  /* Lets the landscape behind show through a little. */
+  background-color: hsla(0, 0%, 8%, 0.88);
+  backdrop-filter: blur(14px);
+}
+
+.title {
+  margin: 0 0 3rem;
+  font-size: var(--big-font-size);
+  color: var(--title-color);
+  text-align: center;
+}
+
+.brand {
+  white-space: nowrap;
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+}
+
+.group {
+  display: grid;
+  row-gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.box {
+  position: relative;
+  height: 64px;
+  background-color: transparent;
+  border: 2px solid var(--border-color);
+  border-radius: 4rem;
+  display: flex;
+  align-items: center;
+  transition: border-color 0.3s;
+}
+
+.box:focus-within {
+  border-color: var(--first-color);
+}
+
+.icon {
+  position: absolute;
+  left: 1.25rem;
+  display: flex;
+}
+
+.label {
+  position: absolute;
+  left: 3.25rem;
+  pointer-events: none;
+  transition: opacity 0.4s;
+}
+
+.input {
+  width: 100%;
+  height: 100%;
+  margin-left: 3.25rem;
+  padding: 0 1.25rem 0 0;
+  border: none;
+  outline: none;
+  font: inherit;
+  font-weight: 600;
+  z-index: 2;
+  background: transparent;
+  color: var(--title-color);
+}
+
+.input:focus + .label,
+.input:not(:placeholder-shown) + .label {
+  opacity: 0;
+}
+
+.input:autofill {
+  transition: background-color 6000s, color 6000s;
+}
+
+.forgot,
+.sign button {
+  border: none;
+  background: none;
+  padding: 0;
+  font: inherit;
+  cursor: pointer;
+  color: var(--title-color);
+}
+
+.forgot {
+  display: block;
+  width: max-content;
+  margin: 0 0 2rem auto;
+  font-size: var(--small-font-size);
+}
+
+.hint {
+  margin: 0 0 2rem;
+  font-size: var(--small-font-size);
+  line-height: 1.5;
+}
+
+.button {
+  width: 100%;
+  height: 64px;
+  border: none;
+  background-color: var(--first-color);
+  color: var(--title-color);
+  border-radius: 4rem;
+  font: inherit;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  column-gap: 0.5rem;
+  margin-bottom: 1rem;
+  cursor: pointer;
+  transition: background-color 0.4s;
+}
+
+.button:hover {
+  background-color: var(--first-color-alt);
+}
+
+.button:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}
+
+.button:focus-visible,
+.forgot:focus-visible,
+.sign button:focus-visible {
+  outline: 2px solid var(--title-color);
+  outline-offset: 3px;
+}
+
+.divider {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin: 0.5rem 0 1rem;
+  font-size: var(--small-font-size);
+}
+
+.divider::before,
+.divider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: hsla(0, 0%, 100%, 0.14);
+}
+
+.providers {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+  margin-bottom: 1.25rem;
+}
+
+.provider {
+  height: 52px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6rem;
+  border: 2px solid var(--border-color);
+  border-radius: 4rem;
+  background: transparent;
+  color: var(--title-color);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color 0.3s, background-color 0.3s;
+}
+
+.provider:hover {
+  border-color: var(--title-color);
+  background-color: hsla(0, 0%, 100%, 0.04);
+}
+
+.provider:focus-visible {
+  outline: 2px solid var(--title-color);
+  outline-offset: 3px;
+}
+
+.sign {
+  margin: 0;
+  text-align: center;
+  font-size: var(--small-font-size);
+}
+
+.error,
+.notice {
+  margin: 0 0 1.25rem;
+  padding: 0.85rem 1.25rem;
+  border-radius: 1.5rem;
+  font-size: var(--small-font-size);
+  line-height: 1.5;
+}
+
+.error {
+  background: hsla(0, 70%, 50%, 0.14);
+  color: hsl(0, 85%, 72%);
+}
+
+.notice {
+  background: hsla(263, 64%, 48%, 0.16);
+  color: hsl(263, 90%, 82%);
+}
+
+/* For medium devices: the artwork is a 16:9 banner above the form. */
+@media (width >= 540px) {
+  .login {
+    grid-template-columns: 440px;
+    justify-content: center;
+  }
+  .content {
+    display: flex;
+    flex-direction: column;
+    padding: 1.25rem 1.75rem 2.5rem;
+  }
+  .image {
+    display: block;
+    order: -1;
+    aspect-ratio: 16 / 9;
+    margin-bottom: 2rem;
+    overflow: hidden;
+    border-radius: 1rem;
+  }
+  .title {
+    margin-bottom: 2rem;
+  }
+}
+
+/* For large devices: form beside the full 16:9 artwork. */
+@media (width >= 1150px) {
+  .login {
+    --big-font-size: 2.25rem;
+    --normal-font-size: 1rem;
+    --small-font-size: 0.875rem;
+
+    grid-template-columns: minmax(0, 1180px);
+    justify-content: center;
+    padding-inline: 2rem;
+  }
+  .content {
+    display: grid;
+    grid-template-columns: 360px minmax(0, 1fr);
+    column-gap: 4.5rem;
+    align-items: center;
+    padding: 1.5rem 1.5rem 1.5rem 4.5rem;
+    border-radius: 3rem;
+    overflow: hidden;
+  }
+  .image {
+    order: 0;
+    margin: 0;
+    border-radius: 2rem;
+  }
+  .title {
+    margin-bottom: 2.5rem;
+  }
+  .content {
+    padding-block: 2.5rem;
+  }
+}

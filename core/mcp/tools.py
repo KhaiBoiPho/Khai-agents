@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from html.parser import HTMLParser
 import json
 import time
 from typing import Any
@@ -9,8 +10,6 @@ from typing import Any
 from loguru import logger
 
 from core.agent_runtime.tools.base import Tool, ToolResult, sanitize_description
-
-_MCP_DESCRIPTION_MAX_CHARS = 8_000
 from core.mcp.connection import McpConnection
 from core.mcp.models import (
     McpToolAnnotations,
@@ -18,6 +17,75 @@ from core.mcp.models import (
 )
 from core.mcp.schema import normalize_schema_for_openai
 from core.observability import log_mcp_call
+
+_MCP_DESCRIPTION_MAX_CHARS = 8_000
+
+
+class _HtmlMarkdownFallback(HTMLParser):
+    """Extract readable Markdown when GenOffice rejects HTML with no content."""
+
+    _SKIP = frozenset({"script", "style", "noscript", "svg", "template"})
+    _BLOCK = frozenset({"p", "div", "section", "article", "br", "tr", "li"})
+
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self.parts: list[str] = []
+        self.skip_depth = 0
+        self.list_depth = 0
+        self.heading_depth = 0
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        tag = tag.lower()
+        if tag in self._SKIP:
+            self.skip_depth += 1
+        elif not self.skip_depth:
+            if tag == "ul" or tag == "ol":
+                self.list_depth += 1
+                self.parts.append("\n")
+            elif tag == "li":
+                self.parts.append("\n- ")
+            elif tag in {"h1", "h2", "h3", "h4", "h5", "h6"}:
+                self.heading_depth = int(tag[1])
+                self.parts.append("\n" + "#" * self.heading_depth + " ")
+            elif tag in self._BLOCK:
+                self.parts.append("\n")
+
+    def handle_endtag(self, tag: str) -> None:
+        tag = tag.lower()
+        if tag in self._SKIP and self.skip_depth:
+            self.skip_depth -= 1
+        elif not self.skip_depth:
+            if tag in {"ul", "ol"}:
+                self.list_depth = max(0, self.list_depth - 1)
+                self.parts.append("\n")
+            elif tag in self._BLOCK or tag in {"h1", "h2", "h3", "h4", "h5", "h6"}:
+                self.parts.append("\n")
+                if tag.startswith("h"):
+                    self.heading_depth = 0
+
+    def handle_data(self, data: str) -> None:
+        if not self.skip_depth:
+            self.parts.append(data)
+
+    def markdown(self) -> str:
+        lines = [" ".join(line.split()) for line in "".join(self.parts).splitlines()]
+        compact: list[str] = []
+        for line in lines:
+            if line:
+                compact.append(line)
+            elif compact and compact[-1] != "":
+                compact.append("")
+        return "\n".join(compact).strip()
+
+
+def _html_to_markdown(value: str) -> str:
+    parser = _HtmlMarkdownFallback()
+    try:
+        parser.feed(value)
+        parser.close()
+    except (AssertionError, ValueError):
+        return ""
+    return parser.markdown()
 
 
 class McpToolAdapter(Tool):
@@ -48,6 +116,11 @@ class McpToolAdapter(Tool):
             name=visible_name,
             max_chars=_MCP_DESCRIPTION_MAX_CHARS,
         )
+        if server.name == "genoffice" and self.identity.raw_name == "pdf_read":
+            self._description += (
+                " Use at most one of `page` or `range` (never both); when you need "
+                "several pages, use `range` alone."
+            )
         raw_schema = getattr(tool_definition, "inputSchema", None)
         self._parameters = normalize_schema_for_openai(raw_schema)
         self.annotations = McpToolAnnotations.from_sdk(
@@ -85,14 +158,31 @@ class McpToolAdapter(Tool):
 
     async def execute(self, **kwargs: Any) -> ToolResult:
         started = time.monotonic()
+        arguments = _normalize_tool_arguments(self.identity, kwargs)
         try:
-            result = await self.connection.call_tool(self.identity.raw_name, kwargs)
+            result = await self.connection.call_tool(self.identity.raw_name, arguments)
+            text = _result_text(result)
+            html = arguments.get("html")
+            if (
+                self.identity.server_name == "genoffice"
+                and self.identity.raw_name == "create_docx"
+                and isinstance(html, str)
+                and "no content could be parsed from the html" in text.lower()
+                and not arguments.get("markdown")
+            ):
+                markdown = _html_to_markdown(html)
+                if markdown:
+                    retry_kwargs = {key: value for key, value in arguments.items() if key != "html"}
+                    retry_kwargs["markdown"] = markdown
+                    result = await self.connection.call_tool(
+                        self.identity.raw_name, retry_kwargs
+                    )
         except BaseException as exc:
             if isinstance(exc, (KeyboardInterrupt, SystemExit)):
                 raise
             _log_call(
                 self.identity,
-                kwargs,
+                arguments,
                 started,
                 status="error",
                 error=f"{type(exc).__name__}: {exc}",
@@ -102,7 +192,7 @@ class McpToolAdapter(Tool):
         is_error = bool(getattr(result, "isError", False))
         _log_call(
             self.identity,
-            kwargs,
+            arguments,
             started,
             status="error" if is_error else "ok",
             result=None if is_error else text,
@@ -121,6 +211,22 @@ class McpToolAdapter(Tool):
                 "approvalMode": self.approval_mode.value,
             },
         )
+
+
+def _normalize_tool_arguments(
+    identity: McpToolIdentity, arguments: dict[str, Any]
+) -> dict[str, Any]:
+    """Remove absent PDF flags and resolve GenOffice's exclusive page/range pair."""
+
+    normalized = dict(arguments)
+    if identity.server_name == "genoffice" and identity.raw_name == "pdf_read":
+        for key in ("page", "range"):
+            if normalized.get(key) is None or normalized.get(key) == "":
+                normalized.pop(key, None)
+        # A page range is the more informative request when a model emits both.
+        if normalized.get("page") is not None and normalized.get("range") is not None:
+            normalized.pop("page", None)
+    return normalized
 
 
 def _result_text(result: Any) -> str:

@@ -48,7 +48,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--database",
         type=Path,
         default=None,
-        help="override the default ~/.deepcode/state/deepcode.sqlite3",
+        help="override the local state anchor (default ~/.deepcode/state/khai)",
     )
     parser.add_argument(
         "--verify-runtime",

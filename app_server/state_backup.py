@@ -1,8 +1,11 @@
-"""Offline, verifiable snapshots of the database and canonical runtime state.
+"""Offline, verifiable snapshots of the file-based runtime state.
 
-Locks reuse existing application, Session and credential mutation boundaries.
-A restore journal blocks application startup until an interrupted restore is
-resumed. Project working trees and installed executables are not restored.
+Covers Sessions, configuration, credentials and provider revisions. The
+application database is PostgreSQL and is backed up on its own
+(``docker/stack/backup.sh``, ``pg_dump``). Locks reuse existing application,
+Session and credential mutation boundaries. A restore journal blocks
+application startup until an interrupted restore is resumed. Project working
+trees and installed executables are not restored.
 """
 
 from __future__ import annotations
@@ -11,9 +14,8 @@ import hashlib
 import json
 import os
 import shutil
-import sqlite3
 import tempfile
-from contextlib import ExitStack, closing, contextmanager
+from contextlib import ExitStack, contextmanager
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -93,7 +95,6 @@ class StatePaths:
 
     def targets(self) -> dict[str, Path]:
         return {
-            "database.sqlite3": self.database,
             "sessions": self.sessions,
             "config.json": self.config,
             "credentials.json": self.credentials,
@@ -105,11 +106,7 @@ class StatePaths:
 def _excluded(relative: Path) -> bool:
     parts = relative.parts
     if parts[:1] == ("sessions",) and len(parts) > 1:
-        return (
-            parts[1] in SESSION_INTERNAL
-            or parts[1] == "index.db"
-            or parts[1].startswith("index.db-")
-        )
+        return parts[1] in SESSION_INTERNAL
     return parts == ("revisions", "write.lock")
 
 
@@ -181,7 +178,6 @@ def _offline(paths: StatePaths, *, extra_sessions=()):
         lock(files.directory / "management.lock")
         lock(files.lock)
         lock(paths.database.with_name(paths.database.name + ".application.lock"))
-        lock(paths.database.with_name(paths.database.name + ".migration.lock"))
         lock(paths.config.with_suffix(paths.config.suffix + ".lock"))
         lock(paths.credentials.with_suffix(paths.credentials.suffix + ".lock"))
         mcp_credentials = paths.targets()["mcp-credentials.json"]
@@ -201,9 +197,7 @@ def _offline(paths: StatePaths, *, extra_sessions=()):
         yield
 
 
-def _snapshot(
-    paths: StatePaths, destination: Path, *, require_idle: bool = True
-) -> dict:
+def _snapshot(paths: StatePaths, destination: Path) -> dict:
     if destination.exists():
         raise ValueError("Snapshot destination already exists")
     for name, source in paths.targets().items():
@@ -219,28 +213,8 @@ def _snapshot(
             if not source.exists():
                 continue
             present.append(name)
-            if name == "database.sqlite3":
-                target = staging / name
-                os.close(
-                    open_private_file(target, os.O_WRONLY | os.O_CREAT | os.O_EXCL)
-                )
-                with (
-                    closing(
-                        sqlite3.connect(source.as_uri() + "?mode=ro", uri=True)
-                    ) as reader,
-                    closing(sqlite3.connect(target)) as writer,
-                ):
-                    if require_idle:
-                        _require_idle_database(reader)
-                    reader.backup(writer)
-                    writer.execute("PRAGMA journal_mode=DELETE")
-                    if writer.execute("PRAGMA quick_check").fetchone()[0] != "ok":
-                        raise ValueError("Snapshot database integrity check failed")
-                with target.open("rb+") as stream:
-                    os.fsync(stream.fileno())
-            else:
-                for relative, original in _files(source, prefix=Path(name)):
-                    _copy_file(original, staging / relative)
+            for relative, original in _files(source, prefix=Path(name)):
+                _copy_file(original, staging / relative)
         inventory = {str(relative): _digest(path) for relative, path in _files(staging)}
         manifest = {
             "schemaVersion": 1,
@@ -272,20 +246,6 @@ def create_snapshot(paths: StatePaths, destination: Path) -> dict:
                 "Resume the pending restore before making another snapshot"
             )
         return _snapshot(paths, destination.expanduser().absolute())
-
-
-def _require_idle_database(connection):
-    if (
-        connection.execute(
-            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='turns'"
-        ).fetchone()
-        and connection.execute(
-            "SELECT 1 FROM turns WHERE status IN ('queued', 'running', 'waiting_approval') LIMIT 1"
-        ).fetchone()
-    ):
-        raise ValueError(
-            "Runtime snapshots require all Turns to be settled. Drain or explicitly cancel pending work first."
-        )
 
 
 def _manifest(snapshot: Path, paths: StatePaths) -> dict:
@@ -330,14 +290,6 @@ def _manifest(snapshot: Path, paths: StatePaths) -> dict:
             raise ValueError("Snapshot contains an invalid destination")
         if path.parts[0] not in {"sessions", "revisions"} and len(path.parts) != 1:
             raise ValueError("Snapshot file destination is invalid")
-    if "database.sqlite3" in expected:
-        with closing(
-            sqlite3.connect(
-                (snapshot / "database.sqlite3").as_uri() + "?mode=ro&immutable=1",
-                uri=True,
-            )
-        ) as connection:
-            _require_idle_database(connection)
     return value
 
 
@@ -394,7 +346,7 @@ def restore_snapshot(paths: StatePaths, snapshot: Path, *, replace_data: bool) -
                 / "backups"
                 / ("before-restore-" + datetime.now(UTC).strftime("%Y%m%dT%H%M%S%f"))
             )
-            _snapshot(paths, before, require_idle=False)
+            _snapshot(paths, before)
             journal = {
                 "schemaVersion": 1,
                 "snapshot": str(snapshot),
@@ -416,11 +368,6 @@ def restore_snapshot(paths: StatePaths, snapshot: Path, *, replace_data: bool) -
             parts = Path(relative).parts
             target = paths.targets()[parts[0]].joinpath(*parts[1:])
             _install_file(snapshot / relative, target)
-        # Disposable indexes/WAL must not replay changes from the replaced DB.
-        for path in (paths.database, paths.sessions / "index.db"):
-            for suffix in ("-wal", "-shm", "-journal"):
-                Path(str(path) + suffix).unlink(missing_ok=True)
-        (paths.sessions / "index.db").unlink(missing_ok=True)
         for root in (paths.sessions, paths.revisions):
             _sync_tree(root)
         # Pending external login flows must never become valid again merely

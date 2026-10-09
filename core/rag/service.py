@@ -1,7 +1,7 @@
 """Process-wide document-search service: background indexing + search.
 
-One :class:`RagService` per process owns one index store and at most one
-indexing job per workspace root. Everything that touches an index (the
+One :class:`RagService` per user owns that user's index stores and at most
+one indexing job per workspace root. Everything that touches an index (the
 ``rag/*`` RPCs, the upload hook and the agent's ``search_documents`` tool)
 goes through it, so concurrent triggers coalesce into the running job
 instead of embedding the same files twice.
@@ -36,8 +36,8 @@ from core.rag.index import (
     DocumentIndex,
     IndexReport,
 )
-from core.rag import stack
-from core.rag.store import IndexStore, SearchHit, workspace_key
+from core.persistence.database import Database
+from core.rag.store import DocumentStore, SearchHit, workspace_key
 from loguru import logger
 
 EmbedderFactory = Callable[[], Embedder]
@@ -74,19 +74,26 @@ class SearchOutcome:
     error: str | None = None
 
 
-def default_rag_home() -> Path:
-    from core.config import deepcode_home
+def qdrant_url() -> str:
+    return os.environ.get("KHAI_QDRANT_URL", "").strip() or "http://127.0.0.1:6353"
 
-    return deepcode_home() / "rag"
+
+def qdrant_api_key() -> str | None:
+    return os.environ.get("KHAI_QDRANT_API_KEY", "").strip() or None
+
+
+StoreFactory = Callable[[str], DocumentStore]
 
 
 class RagService:
-    def __init__(self, home: Path | None = None, *, use_postgres: bool | None = None) -> None:
-        self._home = home
-        # An explicit home (tests, tools) keeps the self-contained SQLite index.
-        self._use_postgres = (
-            use_postgres if use_postgres is not None else home is None and stack.wants_postgres()
-        )
+    def __init__(
+        self,
+        *,
+        database: Database | None = None,
+        store_factory: StoreFactory | None = None,
+    ) -> None:
+        self._database = database
+        self._store_factory = store_factory
         self._lock = threading.RLock()
         self._indexes: dict[str, DocumentIndex] = {}
         self._jobs: dict[str, _Job] = {}
@@ -107,19 +114,19 @@ class RagService:
                 self._indexes[key] = index
             return index
 
-    def _open_store(self, key: str) -> IndexStore:
-        if self._use_postgres:
-            stack.wait_until_started()
-            try:
-                from core.rag.pgstore import PgQdrantStore  # needs psycopg
+    def _open_store(self, key: str) -> DocumentStore:
+        if self._store_factory is not None:
+            return self._store_factory(key)
+        from core.rag.pgstore import PgQdrantStore
 
-                return PgQdrantStore(  # type: ignore[return-value]
-                    workspace_key(key), dsn=stack.dsn(), qdrant_url=stack.qdrant_url()
-                )
-            except Exception as exc:  # noqa: BLE001 - fall back to the local index
-                logger.warning("RAG: Postgres/Qdrant unavailable ({}); using SQLite", exc)
-        home = self._home or default_rag_home()
-        return IndexStore(home / workspace_key(key) / "index.sqlite3")
+        if self._database is None:
+            self._database = Database()
+        return PgQdrantStore(
+            workspace_key(key),
+            database=self._database,
+            qdrant_url=qdrant_url(),
+            qdrant_api_key=qdrant_api_key(),
+        )
 
     def close(self) -> None:
         with self._lock:

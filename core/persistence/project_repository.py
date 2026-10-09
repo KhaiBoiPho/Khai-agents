@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-import sqlite3
+from core.persistence.database import Connection, Row
 
 from core.domain.project import Project, TrustState
-from core.persistence.errors import PersistenceConflictError
+from core.persistence.errors import IntegrityError, PersistenceConflictError
 from core.persistence.serde import (
     dump_datetime,
     dump_json,
@@ -15,7 +15,7 @@ from core.persistence.serde import (
 
 
 class ProjectRepository:
-    def __init__(self, connection: sqlite3.Connection) -> None:
+    def __init__(self, connection: Connection) -> None:
         self.connection = connection
 
     def add(self, project: Project) -> None:
@@ -35,7 +35,7 @@ class ProjectRepository:
                     dump_datetime(project.last_opened_at),
                 ),
             )
-        except sqlite3.IntegrityError as exc:
+        except IntegrityError as exc:
             raise PersistenceConflictError("project insert conflicted") from exc
 
     def update(self, project: Project) -> None:
@@ -80,7 +80,7 @@ class ProjectRepository:
         return cursor.rowcount == 1
 
     @staticmethod
-    def _from_row(row: sqlite3.Row) -> Project:
+    def _from_row(row: Row) -> Project:
         return Project(
             id=row["id"],
             canonical_path=row["canonical_path"],

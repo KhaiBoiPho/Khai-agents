@@ -56,8 +56,8 @@ export default function GlobalAppShell({
     (mouseMoveEvent) => {
       if (isResizing) {
         const newWidth =
-          mouseMoveEvent.clientX -
-          sidebarRef.current.getBoundingClientRect().left;
+          sidebarRef.current.getBoundingClientRect().right -
+          mouseMoveEvent.clientX;
         if (newWidth < 220) {
           setSidebarWidth(220);
           return;
@@ -104,10 +104,12 @@ export default function GlobalAppShell({
     <>
       <SkipToMain />
       <AppShell
+      className={showSpaceSidebar ? classes.rightSidebar : undefined}
       // KhaiDocs: headerless single-user layout (see above).
       header={headerless ? undefined : { height: 45 }}
       data-kd-headerless={headerless || undefined}
       data-kd-sidebar-collapsed={(headerless && !desktopOpened) || undefined}
+      data-kd-aside-collapsed={(isPageRoute && !isAsideOpen) || undefined}
       navbar={{
         width: showSpaceSidebar ? sidebarWidth : 300,
         breakpoint: "sm",
@@ -126,7 +128,7 @@ export default function GlobalAppShell({
       padding="md"
     >
       {headerless ? (
-        <SidebarOpener />
+        <SidebarOpener side="right" />
       ) : (
       <AppShell.Header px="md" className={classes.header}>
         <AppHeader />
@@ -134,6 +136,7 @@ export default function GlobalAppShell({
       )}
       <AppShell.Navbar
         className={classes.navbar}
+        dir={showSpaceSidebar ? "rtl" : undefined}
         withBorder={false}
         ref={sidebarRef}
         aria-label={

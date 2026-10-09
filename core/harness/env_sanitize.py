@@ -98,6 +98,8 @@ def scrubbed_parent_env(
     ambient environment unchanged and merges ``extra_env`` on top.
     """
 
+    from core.hosting import INFRASTRUCTURE_ENV
+
     if force_full or full_env_requested():
         env: dict[str, str] = dict(os.environ)
     else:
@@ -106,6 +108,10 @@ def scrubbed_parent_env(
             for key, value in os.environ.items()
             if not SENSITIVE_ENV_PATTERN.search(key)
         }
+    # A hosted worker's own wiring (database role, gateway token) never
+    # reaches the processes it starts, whatever the scrub setting.
+    for key in INFRASTRUCTURE_ENV:
+        env.pop(key, None)
     if extra_env:
         env.update(extra_env)
     return env

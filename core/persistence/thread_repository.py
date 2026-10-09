@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-import sqlite3
+from core.persistence.database import Connection, Row
 
 from core.domain.execution_security import ExecutionAccessPreset
 from core.domain.thread import Thread, ThreadMode, ThreadStatus
@@ -14,14 +14,15 @@ from core.persistence.serde import (
 
 
 class ThreadRepository:
-    def __init__(self, connection: sqlite3.Connection) -> None:
+    def __init__(self, connection: Connection) -> None:
         self.connection = connection
 
     def add(self, thread: Thread) -> None:
         columns = (
             "id, project_id, parent_thread_id, title, mode, status, model, "
             "connection_id, workspace_path, worktree_path, reasoning_effort, "
-            "created_at, updated_at, archived_at"
+            "created_at, updated_at, archived_at, context_window, "
+            "access_preset_override"
         )
         values: tuple[object, ...] = (
             thread.id,
@@ -38,17 +39,11 @@ class ThreadRepository:
             dump_datetime(thread.created_at),
             dump_datetime(thread.updated_at),
             dump_datetime(thread.archived_at),
+            thread.context_window,
+            thread.access_preset_override.value
+            if thread.access_preset_override is not None
+            else None,
         )
-        if self._has_context_window_column():
-            columns += ", context_window"
-            values += (thread.context_window,)
-        if self._has_access_preset_column():
-            columns += ", access_preset_override"
-            values += (
-                thread.access_preset_override.value
-                if thread.access_preset_override is not None
-                else None,
-            )
         placeholders = ", ".join("?" for _ in values)
         self.connection.execute(
             f"INSERT INTO threads ({columns}) VALUES ({placeholders})",
@@ -56,12 +51,6 @@ class ThreadRepository:
         )
 
     def update(self, thread: Thread) -> None:
-        access_assignment = (
-            ", access_preset_override = ?" if self._has_access_preset_column() else ""
-        )
-        context_assignment = (
-            ", context_window = ?" if self._has_context_window_column() else ""
-        )
         values: tuple[object, ...] = (
             thread.project_id,
             thread.parent_thread_id,
@@ -75,22 +64,18 @@ class ThreadRepository:
             thread.reasoning_effort,
             dump_datetime(thread.updated_at),
             dump_datetime(thread.archived_at),
+            thread.context_window,
+            thread.access_preset_override.value
+            if thread.access_preset_override is not None
+            else None,
+            thread.id,
         )
-        if context_assignment:
-            values += (thread.context_window,)
-        if access_assignment:
-            values += (
-                thread.access_preset_override.value
-                if thread.access_preset_override is not None
-                else None,
-            )
-        values += (thread.id,)
         cursor = self.connection.execute(
             "UPDATE threads SET project_id = ?, parent_thread_id = ?, title = ?, "
             "mode = ?, status = ?, model = ?, connection_id = ?, "
             "workspace_path = ?, worktree_path = ?, reasoning_effort = ?, "
-            f"updated_at = ?, archived_at = ?{context_assignment}"
-            f"{access_assignment} WHERE id = ?",
+            "updated_at = ?, archived_at = ?, context_window = ?, "
+            "access_preset_override = ? WHERE id = ?",
             values,
         )
         if cursor.rowcount != 1:
@@ -140,7 +125,7 @@ class ThreadRepository:
         return cursor.rowcount == 1
 
     @staticmethod
-    def _from_row(row: sqlite3.Row) -> Thread:
+    def _from_row(row: Row) -> Thread:
         access_preset_available = "access_preset_override" in row.keys()
         context_window_available = "context_window" in row.keys()
         return Thread(
@@ -166,16 +151,4 @@ class ThreadRepository:
             created_at=load_required_datetime(row["created_at"]),
             updated_at=load_required_datetime(row["updated_at"]),
             archived_at=load_datetime(row["archived_at"]),
-        )
-
-    def _has_access_preset_column(self) -> bool:
-        return any(
-            row["name"] == "access_preset_override"
-            for row in self.connection.execute("PRAGMA table_info(threads)")
-        )
-
-    def _has_context_window_column(self) -> bool:
-        return any(
-            row["name"] == "context_window"
-            for row in self.connection.execute("PRAGMA table_info(threads)")
         )

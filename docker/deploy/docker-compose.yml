@@ -1,0 +1,145 @@
+# Khai-Agents hosted deployment.
+#
+#   cd docker/deploy && ./setup.sh     # once: secrets, data directory, image
+#   docker compose up -d
+#
+# Networks keep each piece to what it needs:
+#   edge     caddy <-> gateway                    (the only published ports)
+#   core     gateway <-> postgres, redis, qdrant, docmost   (internal)
+#   workers  gateway <-> each user's worker, workers -> postgres, qdrant,
+#            and the internet (LLM providers, git). Workers never reach
+#            Redis, Docmost, Docker or another user's files.
+#
+# The gateway holds the Docker socket to start workers; it runs no user code.
+
+name: khai
+
+services:
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "${KHAI_HTTP_PORT:-80}:80"
+      - "${KHAI_HTTPS_PORT:-443}:443"
+    environment:
+      KHAI_DOMAIN: ${KHAI_DOMAIN:?set KHAI_DOMAIN in .env}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    networks: [edge]
+    depends_on: [gateway]
+
+  gateway:
+    image: ${KHAI_IMAGE:-khai-agents:latest}
+    restart: unless-stopped
+    entrypoint: ["/app/docker/gateway-entrypoint.sh"]
+    environment:
+      # Set KHAI_PUBLIC_ORIGIN when the public port is not 443.
+      KHAI_PUBLIC_ORIGIN: ${KHAI_PUBLIC_ORIGIN:-https://${KHAI_DOMAIN}}
+      KHAI_TRUST_PROXY: "1"
+      KHAI_BIND_HOST: 0.0.0.0
+      PORT: "8080"
+      KHAI_DATABASE_URL: postgresql://khai:${KHAI_PG_APP_PASSWORD}@postgres:5432/khai
+      KHAI_REDIS_URL: redis://:${KHAI_REDIS_PASSWORD}@redis:6379/0
+      KHAI_QDRANT_URL: http://qdrant:6333
+      KHAI_QDRANT_API_KEY: ${KHAI_QDRANT_API_KEY}
+      KHAI_DOCMOST_URL: http://docmost:3000
+      KHAI_DOCMOST_ACCOUNT_SECRET: ${KHAI_DOCMOST_ACCOUNT_SECRET:?run ./setup.sh}
+      KHAI_WORKER_BACKEND: docker
+      KHAI_WORKER_IMAGE: ${KHAI_IMAGE:-khai-agents:latest}
+      KHAI_WORKER_NETWORK: khai_workers
+      KHAI_DATA_ROOT: ${KHAI_DATA_DIR:?set KHAI_DATA_DIR in .env}
+      KHAI_HOST_DATA_ROOT: ${KHAI_DATA_DIR}
+      KHAI_WORKER_MEMORY_GB: ${KHAI_WORKER_MEMORY_GB:-1}
+      KHAI_WORKER_CPUS: ${KHAI_WORKER_CPUS:-1}
+      KHAI_MAX_WORKERS: ${KHAI_MAX_WORKERS:-12}
+      KHAI_WORKER_IDLE_SECONDS: ${KHAI_WORKER_IDLE_SECONDS:-1800}
+      KHAI_WORKER_RUNTIME: ${KHAI_WORKER_RUNTIME:-}
+    volumes:
+      # Same path inside and outside, so worker bind mounts line up.
+      - ${KHAI_DATA_DIR}:${KHAI_DATA_DIR}
+      - /var/run/docker.sock:/var/run/docker.sock
+    networks: [edge, core, workers]
+    depends_on:
+      postgres: {condition: service_healthy}
+      redis: {condition: service_healthy}
+
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${KHAI_PG_SUPERUSER_PASSWORD:?run ./setup.sh}
+      POSTGRES_DB: postgres
+      KHAI_PG_APP_PASSWORD: ${KHAI_PG_APP_PASSWORD:?run ./setup.sh}
+      KHAI_PG_DOCMOST_PASSWORD: ${KHAI_PG_DOCMOST_PASSWORD:?run ./setup.sh}
+    command: ["postgres", "-c", "password_encryption=scram-sha-256"]
+    volumes:
+      - pg-data:/var/lib/postgresql/data
+      - ../stack/initdb:/docker-entrypoint-initdb.d:ro
+    networks: [core, workers]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  redis:
+    image: redis:8-alpine
+    restart: unless-stopped
+    command:
+      - sh
+      - -c
+      - exec redis-server --appendonly yes --requirepass "$$KHAI_REDIS_PASSWORD"
+    environment:
+      KHAI_REDIS_PASSWORD: ${KHAI_REDIS_PASSWORD:?run ./setup.sh}
+    volumes:
+      - redis-data:/data
+    networks: [core]
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a \"$$KHAI_REDIS_PASSWORD\" --no-auth-warning ping | grep -q PONG"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  qdrant:
+    image: qdrant/qdrant:v1.15.4
+    restart: unless-stopped
+    environment:
+      QDRANT__SERVICE__API_KEY: ${KHAI_QDRANT_API_KEY:?run ./setup.sh}
+      # Workers get short-lived tokens limited to their own collections.
+      QDRANT__SERVICE__JWT_RBAC: "true"
+    volumes:
+      - qdrant-data:/qdrant/storage
+    networks: [core, workers]
+
+  docmost:
+    image: docmost/docmost:0.96.0
+    restart: unless-stopped
+    environment:
+      APP_URL: ${KHAI_PUBLIC_ORIGIN:-https://${KHAI_DOMAIN}}
+      APP_SECRET: ${KHAI_DOCMOST_APP_SECRET:?run ./setup.sh}
+      DATABASE_URL: postgresql://docmost:${KHAI_PG_DOCMOST_PASSWORD}@postgres:5432/docmost
+      REDIS_URL: redis://:${KHAI_REDIS_PASSWORD}@redis:6379/1
+    volumes:
+      - docmost-data:/app/data/storage
+    networks: [core]
+    depends_on:
+      postgres: {condition: service_healthy}
+      redis: {condition: service_healthy}
+
+volumes:
+  caddy-data:
+  caddy-config:
+  pg-data:
+  redis-data:
+  qdrant-data:
+  docmost-data:
+
+networks:
+  edge:
+  core:
+    internal: true
+  workers:
+    name: khai_workers

@@ -40,6 +40,7 @@ import { useProjectDisclosure } from "./useProjectDisclosure";
 import { useTranslation } from "react-i18next";
 
 import { ConfirmDialog } from "../../components/ConfirmDialog";
+import { useAccount } from "../account/AccountContext";
 import styles from "./DesktopSidebar.module.css";
 
 export type SidebarPage =
@@ -521,8 +522,15 @@ function AccountMenu({
   onSignOut?: () => void;
 }) {
   const { t } = useTranslation();
+  const account = useAccount();
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement | null>(null);
+  const name = account?.displayName || account?.username || ACCOUNT_NAME;
+  const subtitle = account
+    ? account.role === "admin"
+      ? t("sidebar.administrator", "Administrator")
+      : `@${account.username}`
+    : t("sidebar.local", "Local");
 
   useEffect(() => {
     if (!open) return;
@@ -560,7 +568,9 @@ function AccountMenu({
     <div className={styles.account} ref={rootRef}>
       {open ? (
         <div className={styles.accountMenu} role="menu">
-          <p className={styles.accountMenuTitle}>Khai-Agents · Local</p>
+          <p className={styles.accountMenuTitle}>
+            {account ? `Khai-Agents · @${account.username}` : "Khai-Agents · Local"}
+          </p>
           <button
             type="button"
             role="menuitem"
@@ -620,11 +630,11 @@ function AccountMenu({
         onClick={() => setOpen((current) => !current)}
       >
         <span className={styles.avatar} aria-hidden="true">
-          {ACCOUNT_NAME.charAt(0)}
+          {name.charAt(0).toUpperCase()}
         </span>
         <span className={styles.accountName}>
-          <strong>{ACCOUNT_NAME}</strong>
-          <small>Local</small>
+          <strong>{name}</strong>
+          <small>{subtitle}</small>
         </span>
         <ChevronsUpDown size={14} />
       </button>

@@ -98,15 +98,28 @@ export function buildConversationTurns(
   turns: Turn[],
   items: Item[],
 ): ConversationTurn[] {
+  const isTurnInterruptMarker = (item: Item) =>
+    item.kind === "user_message" && item.payload.source === "turn_interrupt";
+  const visibleItems = items.filter((item) => !isTurnInterruptMarker(item));
+  const markerOnlyTurnIds = new Set(
+    items
+      .filter(isTurnInterruptMarker)
+      .filter(
+        (marker) => !visibleItems.some((item) => item.turnId === marker.turnId),
+      )
+      .map((marker) => marker.turnId),
+  );
   const groups = new Map(
-    turns.map((turn) => [turn.id, createGroup(turn)]),
+    turns
+      .filter((turn) => !markerOnlyTurnIds.has(turn.id))
+      .map((turn) => [turn.id, createGroup(turn)]),
   );
   let orphanOrdinal = turns.reduce(
     (largest, turn) => Math.max(largest, turn.ordinal),
     0,
   );
 
-  for (const item of [...items].sort((left, right) => {
+  for (const item of [...visibleItems].sort((left, right) => {
     const leftTurn = groups.get(left.turnId)?.sortOrdinal ?? Number.MAX_SAFE_INTEGER;
     const rightTurn =
       groups.get(right.turnId)?.sortOrdinal ?? Number.MAX_SAFE_INTEGER;

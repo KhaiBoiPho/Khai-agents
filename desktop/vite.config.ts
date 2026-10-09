@@ -1,12 +1,13 @@
 import { defineConfig, configDefaults } from "vitest/config";
 import react from "@vitejs/plugin-react";
-import type { Plugin } from "vite";
+import { loadEnv, type Plugin } from "vite";
 import { createHash } from "node:crypto";
 import { readFileSync, readdirSync } from "node:fs";
 import { join, resolve } from "node:path";
 import postcss, { type AcceptedPlugin } from "postcss";
 import mantinePreset from "postcss-preset-mantine";
 import simpleVars from "postcss-simple-vars";
+import { khaiDocsDevSignOn } from "./khaidocs-dev-sso";
 
 const host = process.env.TAURI_DEV_HOST;
 
@@ -87,9 +88,17 @@ export default defineConfig(({ mode }) => {
   const version = readFileSync("../core/version.py", "utf8").match(
     /__version__\s*=\s*["']([^"']+)/,
   )?.[1];
+  // KhaiDocs single sign-on with the checkout's .env (see khaidocs-dev-sso.ts).
+  const khaiDocsEnv = { ...loadEnv(mode, "..", "KHAIDOCS_"), ...process.env };
+  const khaiDocsSso = khaiDocsDevSignOn(
+    khaiDocsServer,
+    khaiDocsEnv.KHAIDOCS_EMAIL?.trim() ?? "",
+    khaiDocsEnv.KHAIDOCS_PASSWORD ?? "",
+  );
   return {
     plugins: [
       react(),
+      khaiDocsSso.plugin,
       ...(web
         ? [
             {
@@ -144,9 +153,19 @@ export default defineConfig(({ mode }) => {
         ignored: ["**/src-tauri/**"],
       },
       proxy: {
-        "/api": { target: khaiDocsServer, changeOrigin: true },
-        "/socket.io": { target: khaiDocsServer, changeOrigin: true, ws: true },
-        "/collab": { target: khaiDocsServer, changeOrigin: true, ws: true },
+        "/api": { target: khaiDocsServer, changeOrigin: true, configure: khaiDocsSso.configure },
+        "/socket.io": {
+          target: khaiDocsServer,
+          changeOrigin: true,
+          ws: true,
+          configure: khaiDocsSso.configure,
+        },
+        "/collab": {
+          target: khaiDocsServer,
+          changeOrigin: true,
+          ws: true,
+          configure: khaiDocsSso.configure,
+        },
       },
     },
     test: {

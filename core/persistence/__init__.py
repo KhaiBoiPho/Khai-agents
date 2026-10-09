@@ -1,4 +1,4 @@
-"""SQLite persistence for the product domain."""
+"""PostgreSQL persistence for the product domain."""
 
 from core.persistence.database import Database, default_database_path
 from core.persistence.automation_repository import (
