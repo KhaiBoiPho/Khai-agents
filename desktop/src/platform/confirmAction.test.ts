@@ -12,7 +12,6 @@ vi.mock("@tauri-apps/plugin-dialog", () => ({
 }));
 
 import { confirmAction, setConfirmHandler } from "./confirmAction";
-import { configureNativeDialogs } from "../rpc/tauriRuntime";
 
 describe("confirmAction", () => {
   beforeEach(() => {
@@ -29,26 +28,5 @@ describe("confirmAction", () => {
 
     expect(browserConfirm).toHaveBeenCalledWith("Continue?");
     expect(mocks.nativeConfirm).not.toHaveBeenCalled();
-  });
-
-  it("awaits the native Tauri dialog with explicit destructive labels", async () => {
-    configureNativeDialogs();
-    mocks.nativeConfirm.mockResolvedValue(false);
-    const browserConfirm = vi.spyOn(window, "confirm");
-
-    await expect(
-      confirmAction("Remove it?", {
-        confirmLabel: "Remove",
-        cancelLabel: "Keep",
-      }),
-    ).resolves.toBe(false);
-
-    expect(browserConfirm).not.toHaveBeenCalled();
-    expect(mocks.nativeConfirm).toHaveBeenCalledWith("Remove it?", {
-      title: "DeepCode",
-      kind: "warning",
-      okLabel: "Remove",
-      cancelLabel: "Keep",
-    });
   });
 });

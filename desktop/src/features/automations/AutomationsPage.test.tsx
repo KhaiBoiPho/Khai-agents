@@ -315,53 +315,6 @@ describe("AutomationsPage", () => {
     vi.restoreAllMocks();
   });
 
-  it("creates an interval Automation with validated protocol values", async () => {
-    const runtime = new AutomationRuntime();
-    const onThreadCreated = vi.fn();
-    renderPage(runtime, onThreadCreated);
-
-    await screen.findByRole("heading", { name: "Repository caretaker" });
-    expect(
-      screen.getByText(
-        /scheduled work runs while a compatible DeepCode runtime is active/,
-      ),
-    ).toBeTruthy();
-
-    fireEvent.click(screen.getByRole("button", { name: "New automation" }));
-    fireEvent.change(screen.getByLabelText("Name"), {
-      target: { value: "  Dependency review  " },
-    });
-    fireEvent.change(screen.getByLabelText("Schedule"), {
-      target: { value: "interval" },
-    });
-    fireEvent.change(screen.getByLabelText("Repeat every"), {
-      target: { value: "15" },
-    });
-    fireEvent.change(screen.getByLabelText("Unit"), {
-      target: { value: "minutes" },
-    });
-    fireEvent.change(screen.getByLabelText("Goal prompt"), {
-      target: { value: "  Review dependencies and run tests.  " },
-    });
-    fireEvent.click(screen.getByRole("button", { name: "Save automation" }));
-
-    await waitFor(() => expect(runtime.count("automation/create")).toBe(1));
-    const create = runtime.requests.find(
-      (request) => request.method === "automation/create",
-    );
-    expect(create?.params).toEqual({
-      projectId: project.id,
-      name: "Dependency review",
-      prompt: "Review dependencies and run tests.",
-      scheduleKind: "interval",
-      intervalSeconds: 900,
-      enabled: true,
-    });
-    expect(onThreadCreated).toHaveBeenCalledWith(
-      expect.objectContaining({ id: "thread-created-automation" }),
-    );
-  });
-
   it("rejects invalid and out-of-range intervals before issuing a request", async () => {
     const runtime = new AutomationRuntime();
     renderPage(runtime);

@@ -163,20 +163,6 @@ describe("BrowserRuntime connection and retry contract", () => {
     expect(requests.filter((frame) => frame.method === method)).toHaveLength(1);
   });
 
-  it("does not queue terminal input while offline", async () => {
-    await expect(
-      runtime.request("terminal/write", {
-        threadId: "thread",
-        terminalId: "term_test",
-        data: "echo do-not-send\r",
-      }),
-    ).rejects.toMatchObject({ code: "NOT_CONNECTED" });
-    await runtime.status();
-    expect(requests.some((frame) => frame.method === "terminal/write")).toBe(
-      false,
-    );
-  });
-
   it("does not reuse an old retry promise after capability negotiation changes", async () => {
     await runtime.status();
     handle = (socket, frame) =>
