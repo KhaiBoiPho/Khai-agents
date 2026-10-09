@@ -23,6 +23,12 @@ ENV PYTHONUNBUFFERED=1 \
 RUN apt-get update \
     && apt-get install -y --no-install-recommends git ripgrep curl ca-certificates openssh-client \
     && rm -rf /var/lib/apt/lists/*
+# The unprivileged user hosted workers run as (WORKER_UID in
+# app_server/gateway/workers.py). It needs a passwd entry: getpass, git and
+# ssh look the current user up by uid.
+RUN groupadd --gid 10001 khai \
+    && useradd --uid 10001 --gid 10001 --home-dir /data/home --no-create-home \
+       --shell /usr/sbin/nologin khai
 WORKDIR /app
 COPY scripts/ci/requirements.lock ./scripts/ci/requirements.lock
 COPY desktop/sidecar-requirements.lock ./desktop/sidecar-requirements.lock

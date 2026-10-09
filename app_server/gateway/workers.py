@@ -412,6 +412,7 @@ class DockerBackend:
     def _name(self, user_id: str) -> str:
         return f"khai-worker-{UUID(user_id).hex}"
 
+    # The image's "khai" user (Dockerfile); keep the two in step.
     WORKER_UID = 10001
 
     def _prepare_directory(self, directory: Path) -> None:
