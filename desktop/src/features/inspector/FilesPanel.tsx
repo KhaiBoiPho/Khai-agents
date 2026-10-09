@@ -33,7 +33,7 @@ import { confirmAction } from "../../platform/confirmAction";
 import { MarkdownContent } from "../thread/MarkdownContent";
 import type { CodeWorkbenchController } from "../workbench/useCodeWorkbench";
 import { documentKind } from "./documentKinds";
-import { subscribeFilePreview } from "./filePreviewRequests";
+import { subscribeFilePreview, type LineRange } from "./filePreviewRequests";
 import { FileIcon } from "./FileIcon";
 import { FileTree } from "./FileTree";
 import { InspectorEmpty } from "./InspectorEmpty";
@@ -44,6 +44,23 @@ import { displayFileName } from "../../app/fileNames";
 import styles from "./FilesPanel.module.css";
 
 const LocalMonacoEditor = lazy(() => import("../workbench/LocalMonacoEditor"));
+
+/** The parts of a mounted Monaco editor a citation reveal uses. */
+interface MonacoEditorInstance {
+  getModel(): { getValue(): string; getLineCount(): number } | null;
+  revealLinesInCenter(start: number, end: number): void;
+  createDecorationsCollection(
+    decorations: Array<{
+      range: {
+        startLineNumber: number;
+        startColumn: number;
+        endLineNumber: number;
+        endColumn: number;
+      };
+      options: { isWholeLine: boolean; className: string };
+    }>,
+  ): { clear(): void };
+}
 const DocumentViewer = lazy(() => import("./DocumentViewer"));
 
 const TREE_KEY = "khai-agents.files-tree";
@@ -119,6 +136,11 @@ export function FilesPanel({
   // A PDF/Office/CSV document shown in place of the text file; documents
   // never go through the text editor.
   const [activeDoc, setActiveDoc] = useState<string | null>(null);
+  // Lines a citation asked to show, revealed once that file is in the editor.
+  const [reveal, setReveal] = useState<{ path: string; lines: LineRange } | null>(null);
+  const [editor, setEditor] = useState<MonacoEditorInstance | null>(null);
+  const highlightRef = useRef<{ clear(): void } | null>(null);
+  const revealedRef = useRef<typeof reveal>(null);
   const bodyRef = useRef<HTMLDivElement | null>(null);
   const darkMode = useThemeIsDark();
   const file = workbench.file;
@@ -211,11 +233,31 @@ export function FilesPanel({
   });
   useEffect(
     () =>
-      subscribeFilePreview((path) => {
+      subscribeFilePreview((path, lines) => {
+        setReveal(lines ? { path, lines } : null);
         void openFileRef.current(path);
       }),
     [],
   );
+
+  useEffect(() => {
+    if (!reveal || reveal === revealedRef.current) return;
+    if (!editor || file?.path !== reveal.path) return;
+    const model = editor.getModel();
+    if (!model || model.getValue() !== workbench.draft) return;
+    const last = model.getLineCount();
+    const start = Math.min(reveal.lines.start, last);
+    const end = Math.min(Math.max(reveal.lines.end, start), last);
+    editor.revealLinesInCenter(start, end);
+    highlightRef.current?.clear();
+    highlightRef.current = editor.createDecorationsCollection([
+      {
+        range: { startLineNumber: start, startColumn: 1, endLineNumber: end, endColumn: 1 },
+        options: { isWholeLine: true, className: styles.citedLine },
+      },
+    ]);
+    revealedRef.current = reveal;
+  }, [editor, file?.path, reveal, workbench.draft]);
 
   const loadDoc = useCallback(
     () =>
@@ -492,6 +534,7 @@ export function FilesPanel({
                       language={languageFor(file.path)}
                       value={workbench.draft}
                       onChange={(value) => workbench.setDraft(value ?? "")}
+                      onMount={(mounted) => setEditor(mounted)}
                       theme={darkMode ? "vs-dark" : "vs-light"}
                       options={{
                         minimap: { enabled: false },

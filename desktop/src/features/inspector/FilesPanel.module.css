@@ -542,3 +542,9 @@
     animation: none;
   }
 }
+
+/* Lines a citation in the chat pointed at. */
+.citedLine {
+  background: rgb(234 120 34 / 16%);
+  box-shadow: inset 3px 0 0 #ea7822;
+}

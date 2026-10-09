@@ -10,6 +10,8 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
 import { useThemeIsDark } from "../../app/useThemeIsDark";
+import { CitationLink } from "./CitationLink";
+import { linkCitations, parseCitationHref, useCitationHandler } from "./citations";
 import styles from "./MarkdownContent.module.css";
 
 interface MarkdownContentProps {
@@ -90,6 +92,7 @@ export function MarkdownContent({
   children,
   compact = false,
 }: MarkdownContentProps) {
+  const openCitation = useCitationHandler();
   return (
     <div className={styles.markdown} data-compact={compact}>
       <ReactMarkdown
@@ -98,6 +101,14 @@ export function MarkdownContent({
         components={{
           a: ({ node, ...props }) => {
             void node;
+            const citation = openCitation ? parseCitationHref(props.href) : null;
+            if (citation && openCitation) {
+              return (
+                <CitationLink {...citation} onOpen={openCitation}>
+                  {props.children}
+                </CitationLink>
+              );
+            }
             return <ExternalLink {...props} />;
           },
           pre: ({ children: preChildren }) => <>{preChildren}</>,
@@ -117,7 +128,7 @@ export function MarkdownContent({
           },
         }}
       >
-        {children}
+        {openCitation ? linkCitations(children) : children}
       </ReactMarkdown>
     </div>
   );

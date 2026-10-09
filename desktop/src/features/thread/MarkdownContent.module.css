@@ -222,3 +222,26 @@
 .markdown[data-compact="true"] h6 {
   margin-top: 14px;
 }
+
+/* A source citation (【file:12-30】): opens the file at those lines. */
+.citation {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  margin: 0 1px;
+  padding: 0 5px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-xs, 4px);
+  background: var(--surface-raised, transparent);
+  color: var(--signal, var(--text-secondary));
+  font-family: var(--font-mono, monospace);
+  font-size: 0.82em;
+  line-height: 1.6;
+  vertical-align: baseline;
+  cursor: pointer;
+}
+
+.citation:hover {
+  border-color: var(--signal, var(--border-strong));
+  background: var(--signal-faint, var(--surface-hover));
+}

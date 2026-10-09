@@ -17,6 +17,11 @@ import type {
 import type { CompactionEntry, TurnPlanState } from "../../app/workspaceState";
 import type { DesktopInspectorTab } from "../../app/useDesktopUi";
 import { CompactionNotice } from "./CompactionNotice";
+import { CitationContext } from "./citations";
+import {
+  requestFilePreview,
+  type LineRange,
+} from "../inspector/filePreviewRequests";
 import { buildConversationTurns } from "./conversationModel";
 import styles from "./ThreadConversation.module.css";
 import { TurnBlock } from "./TurnBlock";
@@ -152,6 +157,15 @@ export function ThreadConversation({
     scrollToLatest("smooth");
   };
 
+  // A citation in a reply (【file:12-30】) opens that file at those lines.
+  const openCitation = useCallback(
+    (path: string, lines: LineRange) => {
+      requestFilePreview(path, lines);
+      onOpenInspector("files");
+    },
+    [onOpenInspector],
+  );
+
   if (groupedTurns.length === 0) {
     return (
       <div className={styles.conversationFrame}>
@@ -174,28 +188,30 @@ export function ThreadConversation({
         ref={scrollViewportRef}
       >
         <div className={styles.conversation}>
-          {groupedTurns.map((group) => (
-            <Fragment key={group.id}>
-              <TurnBlock
-                group={group}
-                approvalsByItem={approvalsByItem}
-                selectedItemId={selectedItemId}
-                transcriptMode={transcriptMode}
-                thinkingCollapsed={thinkingDisclosure === "collapsed"}
-                thinkingExpanded={thinkingDisclosure === "expanded"}
-                onToggleActivity={() => setThinkingDisclosure((mode) => mode === "collapsed" ? "expanded" : "collapsed")}
-                busy={busy}
-                onSelectItem={onSelectItem}
-                onOpenInspector={onOpenInspector}
-                onRespondToApproval={onRespondToApproval}
-                onRetryTurn={onRetryTurn}
-                onCancelQueuedTurn={onCancelQueuedTurn}
-              />
-              {compactionsAfter.placed.get(group.id)?.map((entry) => (
-                <CompactionNotice key={entry.id} entry={entry} />
-              ))}
-            </Fragment>
-          ))}
+          <CitationContext.Provider value={openCitation}>
+            {groupedTurns.map((group) => (
+              <Fragment key={group.id}>
+                <TurnBlock
+                  group={group}
+                  approvalsByItem={approvalsByItem}
+                  selectedItemId={selectedItemId}
+                  transcriptMode={transcriptMode}
+                  thinkingCollapsed={thinkingDisclosure === "collapsed"}
+                  thinkingExpanded={thinkingDisclosure === "expanded"}
+                  onToggleActivity={() => setThinkingDisclosure((mode) => mode === "collapsed" ? "expanded" : "collapsed")}
+                  busy={busy}
+                  onSelectItem={onSelectItem}
+                  onOpenInspector={onOpenInspector}
+                  onRespondToApproval={onRespondToApproval}
+                  onRetryTurn={onRetryTurn}
+                  onCancelQueuedTurn={onCancelQueuedTurn}
+                />
+                {compactionsAfter.placed.get(group.id)?.map((entry) => (
+                  <CompactionNotice key={entry.id} entry={entry} />
+                ))}
+              </Fragment>
+            ))}
+          </CitationContext.Provider>
           {compactionsAfter.trailing.map((entry) => (
             <CompactionNotice key={entry.id} entry={entry} />
           ))}
