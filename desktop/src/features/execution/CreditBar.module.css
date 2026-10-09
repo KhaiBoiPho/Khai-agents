@@ -1,0 +1,48 @@
+.bar {
+  display: flex;
+  min-width: 120px;
+  flex: 1;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-secondary);
+  font-size: var(--text-2xs, 11px);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  cursor: default;
+}
+
+/* A thin, long track; the orange fill is what the key has left. */
+.track {
+  position: relative;
+  height: 6px;
+  min-width: 60px;
+  flex: 1;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgb(234 120 34 / 16%);
+}
+
+.fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  border-radius: inherit;
+  background: #ea7822;
+  transition: width 400ms ease;
+}
+
+.bar[data-low] .track {
+  background: rgb(220 38 38 / 16%);
+}
+
+.bar[data-low] .fill {
+  background: #dc2626;
+}
+
+.amount strong {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.chat {
+  color: var(--text-tertiary);
+}

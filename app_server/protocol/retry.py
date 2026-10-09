@@ -44,6 +44,8 @@ READ_METHODS = frozenset(
         "git/diff",
         "test/discover",
         "rag/status",
+        "thread/usage",
+        "provider/balance",
     }
 )
 

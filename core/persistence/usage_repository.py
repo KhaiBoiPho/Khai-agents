@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from datetime import datetime
 
 from core.domain.common import new_id, utc_now
+from core.providers.base import NANO_USD, USAGE_COST_KEY
 from core.persistence.serde import dump_datetime, load_json, load_required_datetime
 
 
@@ -55,6 +56,8 @@ class UsageRecord:
     model_id: str | None
     tokens: UsageTokens
     recorded_at: datetime
+    #: What the provider reported charging, when it reports that (OpenRouter).
+    cost_usd: float | None = None
 
 
 class UsageRepository:
@@ -83,6 +86,12 @@ class UsageRepository:
         tokens = UsageTokens.from_usage(usage)
         if tokens.empty:
             return False
+        cost = usage.get(USAGE_COST_KEY)
+        cost_usd = (
+            cost / NANO_USD
+            if isinstance(cost, int) and not isinstance(cost, bool) and cost >= 0
+            else None
+        )
         if turn_id is not None and model_id is None:
             connection_id, provider_name, model_id = self._turn_identity(
                 turn_id, thread_id
@@ -90,8 +99,9 @@ class UsageRepository:
         cursor = self.connection.execute(
             "INSERT INTO usage_records (id, thread_id, turn_id, "
             "response_ordinal, source, connection_id, provider_name, model_id, "
-            "input_tokens, output_tokens, cached_input_tokens, recorded_at) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT DO NOTHING",
+            "input_tokens, output_tokens, cached_input_tokens, recorded_at, "
+            "cost_usd) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) "
+            "ON CONFLICT DO NOTHING",
             (
                 new_id("usage"),
                 thread_id,
@@ -105,6 +115,7 @@ class UsageRepository:
                 tokens.output_tokens,
                 tokens.cached_input_tokens,
                 dump_datetime(recorded_at or utc_now()),
+                cost_usd,
             ),
         )
         return cursor.rowcount > 0
@@ -153,6 +164,13 @@ class UsageRepository:
             ).fetchall()
         return [self._from_row(row) for row in rows]
 
+    def list_for_thread(self, thread_id: str) -> list[UsageRecord]:
+        rows = self.connection.execute(
+            "SELECT * FROM usage_records WHERE thread_id = ? ORDER BY recorded_at",
+            (thread_id,),
+        ).fetchall()
+        return [self._from_row(row) for row in rows]
+
     def totals_by_model(self) -> list[tuple[str | None, str | None, int, int, int, int]]:
         """``(model, provider, requests, input, output, cached)`` over all time."""
 
@@ -182,4 +200,5 @@ class UsageRepository:
                 int(row["cached_input_tokens"]),
             ),
             recorded_at=load_required_datetime(row["recorded_at"]),
+            cost_usd=float(row["cost_usd"]) if row["cost_usd"] is not None else None,
         )

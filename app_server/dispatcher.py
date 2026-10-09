@@ -287,6 +287,8 @@ class Dispatcher:
             rpc_methods.THREAD_CONTEXT_CLEAR: self._thread_context_clear,
             rpc_methods.THREAD_CONTEXT_COMPACT: self._thread_context_compact,
             rpc_methods.USAGE_SUMMARY: self._usage_summary,
+            rpc_methods.THREAD_USAGE: self._thread_usage,
+            rpc_methods.PROVIDER_BALANCE: self._provider_balance,
             rpc_methods.TURN_LIST: self._turn_list,
             rpc_methods.MODEL_REASONING: self._model_reasoning,
             rpc_methods.THREAD_RENAME: self._thread_rename,
@@ -1082,6 +1084,19 @@ class Dispatcher:
         offset = self._signed_integer(params, "utcOffsetMinutes", limit=14 * 60)
         return UsageService(self.application.database).summary(
             days=days, utc_offset_minutes=offset
+        )
+
+    def _thread_usage(self, params: Params) -> dict[str, Any]:
+        params.only("threadId")
+        thread_id = str(params.string("threadId"))
+        self.application.threads.read(thread_id)
+        return UsageService(self.application.database).thread(thread_id)
+
+    def _provider_balance(self, params: Params) -> dict[str, Any]:
+        params.only("connectionId", "projectId")
+        return self.application.llm.balance(
+            str(params.string("connectionId")),
+            project_id=params.string("projectId", required=False),
         )
 
     @staticmethod

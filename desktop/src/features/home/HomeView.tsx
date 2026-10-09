@@ -27,6 +27,7 @@ import {
 } from "../execution/promptModes";
 import composerStyles from "../execution/Composer.module.css";
 import { ModelPicker, type ModelSelection } from "../execution/ModelPicker";
+import { CreditBar } from "../execution/CreditBar";
 import { isRecoveredHistoryProject } from "../../app/projectPresentation";
 import { isChatsProject } from "../../app/chats";
 import mascotUrl from "../../assets/khai-mascot.png";
@@ -203,6 +204,10 @@ export function HomeView({
           >
             <FolderPlus size={14} />
           </button>
+          <CreditBar
+            runtime={runtime}
+            connectionId={model?.connectionId ?? defaults.connection ?? null}
+          />
         </div>
         <div className={styles.box}>
           {files.length ? (

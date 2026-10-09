@@ -5,6 +5,8 @@ from __future__ import annotations
 import asyncio
 import getpass
 import time
+
+import httpx
 from dataclasses import replace
 from pathlib import Path
 from typing import Any
@@ -305,6 +307,60 @@ class LLMConfigurationService:
         except Exception as exc:  # noqa: BLE001 - surfaced, never raised to UI
             return {"models": [], "error": _safe_configuration_error(exc)}
         return {"models": [model.to_dict() for model in models], "error": None}
+
+    def balance(self, connection_id: str, *, project_id: str | None = None) -> dict[str, Any]:
+        """Credit left on a connection's account, where the provider reports it.
+
+        OpenRouter does: ``/credits`` is the account's purchases and spend,
+        ``/key`` the key's own spending limit. The smaller remainder is what
+        this key can still spend. Other providers report nothing.
+        """
+
+        try:
+            connection = self._resolver(project_id=project_id).resolve_connection(
+                connection_id
+            )
+        except ValueError as exc:
+            raise InvalidArgumentError(str(exc)) from exc
+        if connection.spec.name != "openrouter" or not connection.api_key:
+            return {"supported": False}
+        base = (connection.api_base or "https://openrouter.ai/api/v1").rstrip("/")
+        headers = {"Authorization": f"Bearer {connection.api_key}"}
+        result: dict[str, Any] = {
+            "supported": True,
+            "totalCredits": None,
+            "totalUsage": None,
+            "keyLimitRemaining": None,
+            "remainingUsd": None,
+            "error": None,
+        }
+        try:
+            with httpx.Client(timeout=10, follow_redirects=True) as client:
+                credits = client.get(f"{base}/credits", headers=headers)
+                if credits.status_code == 200:
+                    data = credits.json().get("data") or {}
+                    result["totalCredits"] = _number(data.get("total_credits"))
+                    result["totalUsage"] = _number(data.get("total_usage"))
+                key = client.get(f"{base}/key", headers=headers)
+                key.raise_for_status()
+                result["keyLimitRemaining"] = _number(
+                    (key.json().get("data") or {}).get("limit_remaining")
+                )
+        except (httpx.HTTPError, ValueError) as exc:
+            result["error"] = _safe_configuration_error(exc)
+            return result
+        remainders = [
+            value
+            for value in (
+                result["totalCredits"] - result["totalUsage"]
+                if result["totalCredits"] is not None and result["totalUsage"] is not None
+                else None,
+                result["keyLimitRemaining"],
+            )
+            if value is not None
+        ]
+        result["remainingUsd"] = max(0.0, min(remainders)) if remainders else None
+        return result
 
     def model_reasoning(
         self,
@@ -865,6 +921,12 @@ def _run_probe_isolated(coroutine: Any, *, timeout: float) -> Any:
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
         return executor.submit(probe).result()
+
+
+def _number(value: Any) -> float | None:
+    if isinstance(value, (int, float)) and not isinstance(value, bool):
+        return float(value)
+    return None
 
 
 def _safe_configuration_error(exc: Exception) -> str:

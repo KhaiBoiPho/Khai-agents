@@ -204,6 +204,8 @@ export interface MethodParams {
   "rag/status": RagStatusParams;
   "rag/index": RagIndexParams;
   "documents/list": DocumentListParams;
+  "thread/usage": ThreadUsageParams;
+  "provider/balance": ProviderBalanceParams;
 }
 export interface InitializeParams {
   protocolVersion: "1.0";
@@ -718,6 +720,13 @@ export interface DocumentListParams {
    */
   threadId?: string;
 }
+export interface ThreadUsageParams {
+  threadId: string;
+}
+export interface ProviderBalanceParams {
+  connectionId: string;
+  projectId?: string;
+}
 export interface MethodResults {
   initialize: InitializeResult;
   shutdown: {
@@ -975,6 +984,8 @@ export interface MethodResults {
   "rag/status": RagStatusResult;
   "rag/index": RagStatusResult;
   "documents/list": DocumentListResult;
+  "thread/usage": ThreadUsageResult;
+  "provider/balance": ProviderBalanceResult;
 }
 export interface InitializeResult {
   protocolVersion: "1.0";
@@ -1999,6 +2010,49 @@ export interface DocumentEntry {
    * False when the chat the file came from no longer exists.
    */
   linked: boolean;
+}
+/**
+ * One conversation's usage; a response's cost is what the provider reported (OpenRouter) or else the catalog list price.
+ */
+export interface ThreadUsageResult {
+  threadId: string;
+  inputTokens: number;
+  outputTokens: number;
+  cachedInputTokens: number;
+  requests: number;
+  /**
+   * Estimated list-price cost of the requests whose model has a catalog price.
+   */
+  costUsd: number;
+  unpricedRequests: number;
+  connections: ThreadConnectionUsage[];
+}
+export interface ThreadConnectionUsage {
+  connectionId: string | null;
+  providerName: string | null;
+  inputTokens: number;
+  outputTokens: number;
+  cachedInputTokens: number;
+  requests: number;
+  /**
+   * Estimated list-price cost of the requests whose model has a catalog price.
+   */
+  costUsd: number;
+  unpricedRequests: number;
+}
+export interface ProviderBalanceResult {
+  /**
+   * Whether the provider reports a balance (OpenRouter).
+   */
+  supported: boolean;
+  totalCredits?: number | null;
+  totalUsage?: number | null;
+  keyLimitRemaining?: number | null;
+  /**
+   * What this key can still spend: the account remainder, capped by the key's own limit.
+   */
+  remainingUsd?: number | null;
+  error?: string | null;
 }
 export interface Notifications {
   "thread.updated": Event;

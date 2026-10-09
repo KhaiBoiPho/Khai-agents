@@ -101,6 +101,13 @@ class ProviderCapabilityError(ValueError):
     """The user explicitly declared this request capability unsupported."""
 
 
+#: Usage key for what a provider charged for one response, in nano-USD
+#: (1e-9 USD). Usage maps carry integer counters end to end, so a cost rides
+#: along as an integer instead of a float.
+USAGE_COST_KEY = "cost_nano_usd"
+NANO_USD = 1_000_000_000
+
+
 @dataclass
 class LLMResponse:
     """Response from an LLM provider."""

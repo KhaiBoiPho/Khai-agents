@@ -6300,6 +6300,12 @@
         },
         "documents/list": {
           "$ref": "#/$defs/DocumentListParams"
+        },
+        "thread/usage": {
+          "$ref": "#/$defs/ThreadUsageParams"
+        },
+        "provider/balance": {
+          "$ref": "#/$defs/ProviderBalanceParams"
         }
       },
       "required": [
@@ -6415,7 +6421,9 @@
         "dictation/transcribe",
         "rag/status",
         "rag/index",
-        "documents/list"
+        "documents/list",
+        "thread/usage",
+        "provider/balance"
       ]
     },
     "MethodResults": {
@@ -7463,6 +7471,12 @@
         },
         "documents/list": {
           "$ref": "#/$defs/DocumentListResult"
+        },
+        "thread/usage": {
+          "$ref": "#/$defs/ThreadUsageResult"
+        },
+        "provider/balance": {
+          "$ref": "#/$defs/ProviderBalanceResult"
         }
       },
       "required": [
@@ -7578,7 +7592,9 @@
         "dictation/transcribe",
         "rag/status",
         "rag/index",
-        "documents/list"
+        "documents/list",
+        "thread/usage",
+        "provider/balance"
       ]
     },
     "Notifications": {
@@ -8903,6 +8919,181 @@
       },
       "required": [
         "documents"
+      ]
+    },
+    "ThreadUsageParams": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "threadId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "threadId"
+      ]
+    },
+    "ThreadConnectionUsage": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "connectionId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "providerName": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "inputTokens": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "outputTokens": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "cachedInputTokens": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "requests": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "costUsd": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Estimated list-price cost of the requests whose model has a catalog price."
+        },
+        "unpricedRequests": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "connectionId",
+        "providerName",
+        "inputTokens",
+        "outputTokens",
+        "cachedInputTokens",
+        "requests",
+        "costUsd",
+        "unpricedRequests"
+      ]
+    },
+    "ThreadUsageResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "threadId": {
+          "type": "string"
+        },
+        "inputTokens": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "outputTokens": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "cachedInputTokens": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "requests": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "costUsd": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Estimated list-price cost of the requests whose model has a catalog price."
+        },
+        "unpricedRequests": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "connections": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ThreadConnectionUsage"
+          }
+        }
+      },
+      "required": [
+        "threadId",
+        "inputTokens",
+        "outputTokens",
+        "cachedInputTokens",
+        "requests",
+        "costUsd",
+        "unpricedRequests",
+        "connections"
+      ],
+      "description": "One conversation's usage; a response's cost is what the provider reported (OpenRouter) or else the catalog list price."
+    },
+    "ProviderBalanceParams": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "connectionId": {
+          "type": "string"
+        },
+        "projectId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "connectionId"
+      ]
+    },
+    "ProviderBalanceResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "supported": {
+          "type": "boolean",
+          "description": "Whether the provider reports a balance (OpenRouter)."
+        },
+        "totalCredits": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "totalUsage": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "keyLimitRemaining": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "remainingUsd": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "What this key can still spend: the account remainder, capped by the key's own limit."
+        },
+        "error": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "supported"
       ]
     }
   }

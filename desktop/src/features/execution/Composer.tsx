@@ -82,6 +82,7 @@ import {
 } from "./promptModes";
 import { ModelPicker } from "./ModelPicker";
 import { ContextRing } from "./ContextRing";
+import { CreditBar } from "./CreditBar";
 import { FileCard } from "../../components/FileCard";
 import type { ContextUsage } from "../../app/workspaceState";
 import type { TurnPlanState } from "../../app/workspaceState";
@@ -647,6 +648,11 @@ export function Composer({
             <FolderPlus size={14} />
           </button>
         ) : null}
+        <CreditBar
+          runtime={runtime}
+          threadId={thread?.id ?? null}
+          refreshKey={`${contextUsage?.at ?? ""}|${active}`}
+        />
       </div>
       <div className={styles.composer}>
         {planProgress?.steps.length ? (

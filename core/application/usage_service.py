@@ -160,3 +160,34 @@ class UsageService:
             "allTime": all_time.view(),
             "models": models,
         }
+
+    def thread(self, thread_id: str) -> dict[str, Any]:
+        """One conversation's token use and cost, per connection.
+
+        A response's cost is what the provider reported charging (OpenRouter)
+        when it did, otherwise the catalog list price; ``unpricedRequests``
+        counts responses with neither.
+        """
+
+        with self.database.read() as connection:
+            records = UsageRepository(connection).list_for_thread(thread_id)
+        total = _Totals()
+        connections: dict[tuple[str | None, str | None], _Totals] = {}
+        for record in records:
+            prices = model_prices(record.model_id)
+            key = (record.connection_id, record.provider_name)
+            for bucket in (total, connections.setdefault(key, _Totals())):
+                if record.cost_usd is not None:
+                    bucket.add(record.tokens, None)
+                    bucket.unpriced_requests -= 1
+                    bucket.cost_usd += record.cost_usd
+                else:
+                    bucket.add(record.tokens, prices)
+        return {
+            "threadId": thread_id,
+            **total.view(),
+            "connections": [
+                {"connectionId": connection_id, "providerName": provider, **totals.view()}
+                for (connection_id, provider), totals in connections.items()
+            ],
+        }

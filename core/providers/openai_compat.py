@@ -32,6 +32,8 @@ else:
     from openai import AsyncOpenAI
 
 from core.providers.base import (
+    NANO_USD,
+    USAGE_COST_KEY,
     LLMProvider,
     ProviderCapabilityError,
     ProviderConfigurationError,
@@ -492,6 +494,9 @@ class OpenAICompatProvider(LLMProvider):
             kwargs["reasoning_effort"] = compat.reasoning_effort_wire
 
         if spec and spec.name == "openrouter":
+            # Ask for usage accounting: the response's usage then carries
+            # ``cost``, what OpenRouter charged in USD.
+            kwargs.setdefault("extra_body", {})["usage"] = {"include": True}
             # OpenRouter's unified reasoning object is the stable gateway
             # contract.  Do not send the legacy top-level field as well.
             kwargs.pop("reasoning_effort", None)
@@ -819,6 +824,16 @@ class OpenAICompatProvider(LLMProvider):
             if cached:
                 result["cached_tokens"] = cached
                 break
+
+        # --- cost: what the provider charged (OpenRouter), in nano-USD so it
+        # travels with the integer token counters (see USAGE_COST_KEY) ---
+        cost = (
+            usage_map.get("cost")
+            if usage_map is not None
+            else getattr(usage_obj, "cost", None)
+        )
+        if isinstance(cost, (int, float)) and not isinstance(cost, bool) and cost >= 0:
+            result[USAGE_COST_KEY] = round(cost * NANO_USD)
 
         return result
 
