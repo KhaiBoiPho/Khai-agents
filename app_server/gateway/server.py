@@ -67,6 +67,7 @@ logger = logging.getLogger(__name__)
 MAX_JSON = 16 * 1024
 MAX_UPLOAD = 10 * 1024 * 1024 + 1024
 USER = web.AppKey("user", object)
+SESSION = web.AppKey("session", object)
 _HOP = {
     "connection", "keep-alive", "proxy-authenticate", "proxy-authorization",
     "te", "trailer", "transfer-encoding", "upgrade", "host", "content-length",
@@ -124,6 +125,8 @@ class Gateway:
         self.workers = workers
         # Live browser sockets per user, closed when that user's sessions end.
         self._sockets: dict[str, set[web.WebSocketResponse]] = {}
+        # Which session opened each socket, so ending one device closes its sockets.
+        self._socket_sessions: dict[web.WebSocketResponse, str] = {}
 
     # -- application ----------------------------------------------------------
 
@@ -146,9 +149,16 @@ class Gateway:
                 web.post("/auth/logout", self.logout),
                 web.post("/auth/logout-all", self.logout_all),
                 web.post("/auth/password", self.change_password),
+                web.get("/auth/sessions", self.list_sessions),
+                web.post("/auth/sessions/{session_id}/revoke", self.revoke_session),
                 web.get("/api/session", self.session),
                 web.get("/api/admin/users", self.list_users),
                 web.post("/api/admin/users/{user_id}/{action}", self.administer),
+                web.get("/api/admin/users/{user_id}/sessions", self.list_user_sessions),
+                web.post(
+                    "/api/admin/users/{user_id}/sessions/{session_id}/revoke",
+                    self.revoke_user_session,
+                ),
                 web.get("/api/rpc", self.rpc),
                 web.post("/api/uploads", self.upload),
                 web.post("/api/workspace/upload", self.upload),
@@ -212,6 +222,7 @@ class Gateway:
                 # Disabled or deleted since sign-in.
                 await self.sessions.revoke_all(record.user_id)
         request[USER] = user
+        request[SESSION] = record.id if user is not None and record is not None else ""
         return await handler(request)
 
     async def _headers(self, _request, response) -> None:
@@ -239,6 +250,12 @@ class Gateway:
                 # The proxy appends the address it saw; earlier hops are client-supplied.
                 return forwarded.split(",")[-1].strip()
         return request.remote or "unknown"
+
+    def _device(self, request: web.Request) -> dict[str, str]:
+        return {
+            "address": self._client(request),
+            "agent": request.headers.get("User-Agent", ""),
+        }
 
     @staticmethod
     def _require_user(request: web.Request) -> User:
@@ -376,7 +393,7 @@ class Gateway:
         except AuthError as exc:
             return self._error(exc, status=401)
         await self.login_limits.reset("login-user", username)
-        token = await self.sessions.create(user.id)
+        token = await self.sessions.create(user.id, **self._device(request))
         response = web.json_response({"authenticated": True, "user": user.to_dict()})
         self._set_cookie(response, token)
         return response
@@ -412,7 +429,7 @@ class Gateway:
             return self._error(exc)
         # Every other session ends; this browser gets a fresh one.
         await self.sessions.revoke_all(user.id)
-        token = await self.sessions.create(user.id)
+        token = await self.sessions.create(user.id, **self._device(request))
         response = web.json_response({"changed": True})
         self._set_cookie(response, token)
         return response
@@ -476,6 +493,58 @@ class Gateway:
         logger.info("admin %s: %s %s", actor.username, action, updated.username)
         return web.json_response({"user": updated.to_dict()})
 
+    # -- devices ----------------------------------------------------------------
+
+    async def _end_session(self, user_id: str, session_id: str) -> bool:
+        if not await self.sessions.revoke_id(user_id, session_id):
+            return False
+        for socket in list(self._sockets.get(user_id, ())):
+            if self._socket_sessions.get(socket) == session_id:
+                await socket.close(code=4401, message=b"Signed out")
+        return True
+
+    async def list_sessions(self, request: web.Request) -> web.Response:
+        user = self._require_user(request)
+        return web.json_response(
+            {
+                "sessions": await self.sessions.list_sessions(user.id),
+                "current": request[SESSION],
+            }
+        )
+
+    async def revoke_session(self, request: web.Request) -> web.Response:
+        user = self._require_user(request)
+        session_id = request.match_info["session_id"]
+        if not await self._end_session(user.id, session_id):
+            raise web.HTTPNotFound(text="No such session")
+        response = web.json_response({"revoked": True})
+        if session_id == request[SESSION]:
+            self._clear_cookie(response)
+        return response
+
+    def _require_admin(self, request: web.Request) -> User:
+        actor = self._require_user(request)
+        if not actor.is_admin:
+            raise web.HTTPForbidden(
+                text=json.dumps({"code": "FORBIDDEN", "message": "Administrators only."}),
+                content_type="application/json",
+            )
+        return actor
+
+    async def list_user_sessions(self, request: web.Request) -> web.Response:
+        self._require_admin(request)
+        user_id = request.match_info["user_id"]
+        return web.json_response({"sessions": await self.sessions.list_sessions(user_id)})
+
+    async def revoke_user_session(self, request: web.Request) -> web.Response:
+        actor = self._require_admin(request)
+        user_id = request.match_info["user_id"]
+        session_id = request.match_info["session_id"]
+        if not await self._end_session(user_id, session_id):
+            raise web.HTTPNotFound(text="No such session")
+        logger.info("admin %s: ended session %s of %s", actor.username, session_id, user_id)
+        return web.json_response({"revoked": True})
+
     # -- relays to the user's worker ------------------------------------------
 
     async def _worker(self, user: User) -> Worker:
@@ -505,6 +574,7 @@ class Gateway:
         await client.prepare(request)
         sockets = self._sockets.setdefault(user.id, set())
         sockets.add(client)
+        self._socket_sessions[client] = request[SESSION]
         self.workers.opened(worker)
 
         async def pump(source, sink) -> None:
@@ -527,6 +597,7 @@ class Gateway:
             for task in tasks:
                 task.cancel()
             sockets.discard(client)
+            self._socket_sessions.pop(client, None)
             self.workers.closed(worker)
             await upstream.close()
             await session.close()

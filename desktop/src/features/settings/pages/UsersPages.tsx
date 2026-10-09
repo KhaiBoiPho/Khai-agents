@@ -10,13 +10,18 @@ import { useAccount } from "../../account/AccountContext";
 import {
   AccountError,
   changePassword,
+  listAccountDevices,
   listAccounts,
+  listDevices,
   reviewAccount,
   setAccountExecution,
   setAccountRole,
+  signOutAccountDevice,
+  signOutDevice,
   signOutEverywhere,
   type Account,
   type AdminAction,
+  type Device,
 } from "../../account/accountApi";
 import type { SettingsSectionProps } from "../settingsSections";
 import { Badge, Button, Group, Page, Row, Table, TextInput, Toggle } from "../ui/SettingsUI";
@@ -24,6 +29,78 @@ import styles from "./Pages.module.css";
 
 const message = (error: unknown) =>
   error instanceof AccountError ? error.message : String(error);
+
+/** "Chrome on Windows" from a User-Agent header. */
+function describeAgent(agent: string): string {
+  const browser = /Edg\//.test(agent)
+    ? "Edge"
+    : /OPR\//.test(agent)
+      ? "Opera"
+      : /Chrome\//.test(agent)
+        ? "Chrome"
+        : /Firefox\//.test(agent)
+          ? "Firefox"
+          : /Safari\//.test(agent)
+            ? "Safari"
+            : "Browser";
+  const system = /iPhone|iPad/.test(agent)
+    ? "iOS"
+    : /Android/.test(agent)
+      ? "Android"
+      : /Windows/.test(agent)
+        ? "Windows"
+        : /Mac OS X/.test(agent)
+          ? "macOS"
+          : /Linux/.test(agent)
+            ? "Linux"
+            : "";
+  return system ? `${browser} on ${system}` : browser;
+}
+
+const when = (seconds: number) => new Date(seconds * 1000).toLocaleString();
+
+function DeviceTable({
+  devices,
+  current,
+  busy,
+  onSignOut,
+}: {
+  devices: Device[] | null;
+  current?: string;
+  busy: boolean;
+  onSignOut(device: Device): void;
+}) {
+  const { t } = useTranslation();
+  return (
+    <Table
+      columns={[
+        { label: t("devices.device", "Device"), width: "2fr" },
+        { label: t("devices.lastSeen", "Last active"), width: "1.3fr" },
+        { label: t("devices.signedIn", "Signed in"), width: "1.3fr" },
+        { label: "", align: "end", width: "1fr" },
+      ]}
+      empty={devices ? t("devices.empty", "No signed-in devices.") : t("users.loading", "Loading…")}
+      rows={(devices ?? []).map((device) => [
+        <span key="device" title={device.userAgent}>
+          <strong>{describeAgent(device.userAgent)}</strong>
+          {device.id === current ? (
+            <>
+              {" "}
+              <Badge>{t("devices.thisDevice", "This device")}</Badge>
+            </>
+          ) : null}
+          <br />
+          <small>{device.address || t("devices.unknownAddress", "Unknown address")}</small>
+        </span>,
+        <span key="seen">{when(device.lastSeenAt)}</span>,
+        <span key="created">{when(device.createdAt)}</span>,
+        <Button key="out" variant="danger" disabled={busy} onClick={() => onSignOut(device)}>
+          {t("devices.signOut", "Sign out")}
+        </Button>,
+      ])}
+    />
+  );
+}
 
 export function SecurityPage(_props: SettingsSectionProps) {
   const { t } = useTranslation();
@@ -52,6 +129,41 @@ export function SecurityPage(_props: SettingsSectionProps) {
       });
     } catch (error) {
       setStatus({ ok: false, text: message(error) });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const [devices, setDevices] = useState<Device[] | null>(null);
+  const [currentDevice, setCurrentDevice] = useState<string>("");
+  const [deviceError, setDeviceError] = useState<string | null>(null);
+
+  const loadDevices = useCallback(async () => {
+    try {
+      const result = await listDevices();
+      setDevices(result.sessions);
+      setCurrentDevice(result.current);
+      setDeviceError(null);
+    } catch (error) {
+      setDeviceError(message(error));
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadDevices();
+  }, [loadDevices]);
+
+  const signOutOne = async (device: Device) => {
+    setBusy(true);
+    try {
+      await signOutDevice(device.id);
+      if (device.id === currentDevice) {
+        location.reload();
+        return;
+      }
+      await loadDevices();
+    } catch (error) {
+      setDeviceError(message(error));
     } finally {
       setBusy(false);
     }
@@ -130,7 +242,29 @@ export function SecurityPage(_props: SettingsSectionProps) {
           </p>
         ) : null}
       </Group>
-      <Group title={t("account.sessions", "Sessions")}>
+      <Group
+        title={t("account.sessions", "Sessions")}
+        description={t(
+          "devices.description",
+          "Browsers signed in to this account. Sign out any you do not recognize.",
+        )}
+        aside={
+          <Button variant="ghost" onClick={() => void loadDevices()}>
+            {t("users.refresh", "Refresh")}
+          </Button>
+        }
+      >
+        {deviceError ? (
+          <p className={styles.statusError} role="alert">
+            {deviceError}
+          </p>
+        ) : null}
+        <DeviceTable
+          devices={devices}
+          current={currentDevice}
+          busy={busy}
+          onSignOut={(device) => void signOutOne(device)}
+        />
         <Row
           label={t("account.signOutEverywhere", "Sign out of all devices")}
           description={t(
@@ -160,6 +294,31 @@ export function UsersPage(_props: SettingsSectionProps) {
   const [accounts, setAccounts] = useState<Account[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [working, setWorking] = useState<string | null>(null);
+  const [viewing, setViewing] = useState<Account | null>(null);
+  const [devices, setDevices] = useState<Device[] | null>(null);
+
+  const showDevices = async (account: Account) => {
+    setViewing(account);
+    setDevices(null);
+    try {
+      setDevices(await listAccountDevices(account.id));
+    } catch (caught) {
+      setError(message(caught));
+    }
+  };
+
+  const signOutTheirs = async (device: Device) => {
+    if (!viewing) return;
+    setWorking(viewing.id);
+    try {
+      await signOutAccountDevice(viewing.id, device.id);
+      setDevices(await listAccountDevices(viewing.id));
+    } catch (caught) {
+      setError(message(caught));
+    } finally {
+      setWorking(null);
+    }
+  };
 
   const load = useCallback(async () => {
     try {
@@ -257,6 +416,7 @@ export function UsersPage(_props: SettingsSectionProps) {
             { label: t("users.status", "Status") },
             { label: t("users.admin", "Admin"), width: "0.7fr" },
             { label: t("users.commands", "Run commands"), width: "0.9fr" },
+            { label: t("users.devices", "Devices"), width: "0.8fr" },
             { label: "", align: "end", width: "1.4fr" },
           ]}
           empty={accounts ? t("users.empty", "No accounts yet.") : t("users.loading", "Loading…")}
@@ -285,10 +445,33 @@ export function UsersPage(_props: SettingsSectionProps) {
                 void act(account, () => setAccountExecution(account.id, checked))
               }
             />,
+            <Button key="devices" variant="ghost" onClick={() => void showDevices(account)}>
+              {t("users.viewDevices", "View")}
+            </Button>,
             <span key="actions">{actions(account)}</span>,
           ])}
         />
       </Group>
+      {viewing ? (
+        <Group
+          title={t("users.devicesOf", "Devices of {{name}}", { name: viewing.displayName })}
+          description={t(
+            "users.devicesHint",
+            "Signing a device out ends its session at once; the person can sign in again unless you disable the account.",
+          )}
+          aside={
+            <Button variant="ghost" onClick={() => setViewing(null)}>
+              {t("users.close", "Close")}
+            </Button>
+          }
+        >
+          <DeviceTable
+            devices={devices}
+            busy={working === viewing.id}
+            onSignOut={(device) => void signOutTheirs(device)}
+          />
+        </Group>
+      ) : null}
     </Page>
   );
 }

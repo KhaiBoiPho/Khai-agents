@@ -268,3 +268,72 @@ def test_login_is_rate_limited(tmp_path: Path) -> None:
         assert statuses[10:] == [429, 429]
 
     _run(scenario, tmp_path)
+
+
+def test_devices_are_listed_and_can_be_signed_out_one_by_one(tmp_path: Path) -> None:
+    async def scenario(client, gateway, backend):
+        admin = await _register(client, "khai")
+        friend = await _register(client, "friend")
+        await _login(client, "khai")
+        await client.post(
+            f"/api/admin/users/{friend['id']}/approve", json={}, headers=_headers()
+        )
+
+        # The friend signs in from a phone, keeping that session's cookie.
+        phone = TestClient(client.server)
+        await phone.start_server()
+        try:
+            await phone.post(
+                "/auth/login",
+                json={"username": "friend", "password": PASSWORD},
+                headers={**_headers(), "User-Agent": "Phone Browser"},
+            )
+            ws = await phone.ws_connect("/api/rpc", headers=_headers())
+
+            listing = await (await phone.get("/auth/sessions")).json()
+            [device] = listing["sessions"]
+            assert device["userAgent"] == "Phone Browser"
+            assert device["id"] == listing["current"]
+            assert device["address"]
+
+            # The admin sees the friend's device and signs it out.
+            seen = await (
+                await client.get(f"/api/admin/users/{friend['id']}/sessions")
+            ).json()
+            assert [item["id"] for item in seen["sessions"]] == [device["id"]]
+            ended = await client.post(
+                f"/api/admin/users/{friend['id']}/sessions/{device['id']}/revoke",
+                json={},
+                headers=_headers(),
+            )
+            assert ended.status == 200
+            closed = await ws.receive()
+            assert closed.type in {WSMsgType.CLOSE, WSMsgType.CLOSED}
+            assert (await phone.get("/api/session")).status in {200, 401}
+            assert (await (await phone.get("/api/session")).json()).get("user") is None
+
+            # Members cannot see anyone else's devices.
+            await phone.post(
+                "/auth/login",
+                json={"username": "friend", "password": PASSWORD},
+                headers=_headers(),
+            )
+            forbidden = await phone.get(f"/api/admin/users/{admin['id']}/sessions")
+            assert forbidden.status == 403
+
+            # A user can end their own other device.
+            own = await (await client.get("/auth/sessions")).json()
+            current = own["current"]
+            await _login(client, "khai")
+            newer = await (await client.get("/auth/sessions")).json()
+            assert len(newer["sessions"]) == 2
+            response = await client.post(
+                f"/auth/sessions/{current}/revoke", json={}, headers=_headers()
+            )
+            assert response.status == 200
+            remaining = await (await client.get("/auth/sessions")).json()
+            assert [item["id"] for item in remaining["sessions"]] == [newer["current"]]
+        finally:
+            await phone.close()
+
+    _run(scenario, tmp_path)

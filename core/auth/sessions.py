@@ -6,6 +6,9 @@ Redis cannot be replayed as a cookie. Sessions slide: each use extends them
 up to ``idle_ttl``, never beyond ``absolute_ttl`` from sign-in. Every user's
 digests are also indexed (``<prefix>user-sessions:<user_id>``) so signing out
 everywhere, disabling an account or changing a password revokes them all.
+Each session also records the address and browser that signed in and when
+it was last used, so its owner (or an administrator) can see every device
+and end any one of them. A session's public id is a prefix of its digest.
 
 Rate limits are fixed windows (``INCR`` + ``EXPIRE``) per client address and
 per username, which bounds password guessing without locking a real user out
@@ -29,6 +32,12 @@ class SessionRecord:
     user_id: str
     created_at: float
     expires_at: float
+    id: str = ""
+
+
+# How often a session's "last seen" time is rewritten.
+SEEN_INTERVAL = 60
+PUBLIC_ID_LENGTH = 16
 
 
 def _digest(token: str) -> str:
@@ -55,14 +64,20 @@ class SessionStore:
     def _index(self, user_id: str) -> str:
         return f"{self._prefix}user-sessions:{user_id}"
 
-    async def create(self, user_id: str) -> str:
+    async def create(self, user_id: str, *, address: str = "", agent: str = "") -> str:
         token = secrets.token_urlsafe(32)
         digest = _digest(token)
         now = time.time()
         async with self._redis.pipeline(transaction=True) as pipe:
             pipe.hset(
                 self._key(digest),
-                mapping={"user": user_id, "created": f"{now:.3f}"},
+                mapping={
+                    "user": user_id,
+                    "created": f"{now:.3f}",
+                    "seen": f"{now:.3f}",
+                    "address": address[:64],
+                    "agent": agent[:300],
+                },
             )
             pipe.expire(self._key(digest), self.idle_ttl)
             pipe.sadd(self._index(user_id), digest)
@@ -75,7 +90,8 @@ class SessionStore:
 
         if not token or len(token) > 128:
             return None
-        key = self._key(_digest(token))
+        digest = _digest(token)
+        key = self._key(digest)
         values = await self._redis.hgetall(key)
         if not values:
             return None
@@ -88,7 +104,62 @@ class SessionStore:
             return None
         remaining = int(min(self.idle_ttl, hard_stop - now))
         await self._redis.expire(key, max(1, remaining))
-        return SessionRecord(user_id=user_id, created_at=created, expires_at=now + remaining)
+        seen = float(_text(values.get(b"seen") or values.get("seen")) or 0)
+        if now - seen >= SEEN_INTERVAL:
+            await self._redis.hset(key, "seen", f"{now:.3f}")
+        return SessionRecord(
+            user_id=user_id,
+            created_at=created,
+            expires_at=now + remaining,
+            id=digest[:PUBLIC_ID_LENGTH],
+        )
+
+    async def list_sessions(self, user_id: str) -> list[dict]:
+        """Every live session of ``user_id``, most recently used first."""
+
+        index = self._index(user_id)
+        digests = [_text(value) for value in await self._redis.smembers(index)]
+        sessions: list[dict] = []
+        expired: list[str] = []
+        for digest in digests:
+            values = await self._redis.hgetall(self._key(digest))
+            if not values:
+                expired.append(digest)
+                continue
+
+            def field(name: str, values=values) -> str:
+                return _text(values.get(name.encode()) or values.get(name))
+
+            created = float(field("created") or 0)
+            sessions.append(
+                {
+                    "id": digest[:PUBLIC_ID_LENGTH],
+                    "createdAt": created,
+                    "lastSeenAt": float(field("seen") or created),
+                    "address": field("address"),
+                    "userAgent": field("agent"),
+                }
+            )
+        if expired:
+            await self._redis.srem(index, *expired)
+        sessions.sort(key=lambda item: item["lastSeenAt"], reverse=True)
+        return sessions
+
+    async def revoke_id(self, user_id: str, session_id: str) -> bool:
+        """End the session of ``user_id`` whose public id is ``session_id``."""
+
+        if len(session_id) != PUBLIC_ID_LENGTH:
+            return False
+        index = self._index(user_id)
+        for value in await self._redis.smembers(index):
+            digest = _text(value)
+            if digest[:PUBLIC_ID_LENGTH] == session_id:
+                async with self._redis.pipeline(transaction=True) as pipe:
+                    pipe.delete(self._key(digest))
+                    pipe.srem(index, digest)
+                    await pipe.execute()
+                return True
+        return False
 
     async def revoke(self, token: str | None) -> None:
         if not token:

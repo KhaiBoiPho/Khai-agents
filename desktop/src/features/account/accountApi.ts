@@ -90,6 +90,31 @@ export const signOutEverywhere = () => post("/auth/logout-all");
 export const changePassword = (currentPassword: string, newPassword: string) =>
   post("/auth/password", { currentPassword, newPassword });
 
+/** A signed-in browser: where it signed in from and when it was last used. */
+export interface Device {
+  id: string;
+  createdAt: number;
+  lastSeenAt: number;
+  address: string;
+  userAgent: string;
+}
+
+export const listDevices = () =>
+  call<{ sessions: Device[]; current: string }>("/auth/sessions");
+
+export const signOutDevice = (sessionId: string) =>
+  post(`/auth/sessions/${encodeURIComponent(sessionId)}/revoke`);
+
+export const listAccountDevices = (userId: string) =>
+  call<{ sessions: Device[] }>(
+    `/api/admin/users/${encodeURIComponent(userId)}/sessions`,
+  ).then((result) => result.sessions);
+
+export const signOutAccountDevice = (userId: string, sessionId: string) =>
+  post(
+    `/api/admin/users/${encodeURIComponent(userId)}/sessions/${encodeURIComponent(sessionId)}/revoke`,
+  );
+
 export const listAccounts = (status?: AccountStatus) =>
   call<{ users: Account[] }>(
     `/api/admin/users${status ? `?status=${status}` : ""}`,
