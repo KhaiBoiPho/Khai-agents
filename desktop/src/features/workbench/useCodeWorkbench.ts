@@ -10,6 +10,14 @@ import type {
   Thread,
 } from "../../generated/app-server";
 import type { BridgeError, ClientRuntime } from "../../rpc/contracts";
+import {
+  READ_LIMIT_BYTES,
+  cachedFile,
+  cachedListing,
+  enterSession,
+  rememberFile,
+  rememberListing,
+} from "./sessionFileCache";
 
 function errorMessage(error: unknown): string {
   if (typeof error === "object" && error !== null && "message" in error) {
@@ -84,8 +92,14 @@ export function useCodeWorkbench(
       setState(initialState);
       return;
     }
+    enterSession(threadId);
+    // The session's cached tree shows at once; the fresh one replaces it.
+    const cached = cachedListing(threadId);
     setState((current) => ({
       ...current,
+      ...(cached && !current.entries.length
+        ? { entries: cached.entries, entriesTruncated: cached.truncated }
+        : {}),
       loading: true,
       error: null,
       gitError: null,
@@ -103,6 +117,12 @@ export function useCodeWorkbench(
       activeThreadId.current !== threadId
     ) {
       return;
+    }
+    if (files.status === "fulfilled") {
+      rememberListing(threadId, {
+        entries: files.value.entries,
+        truncated: files.value.truncated,
+      });
     }
     setState((current) => ({
       ...current,
@@ -147,9 +167,10 @@ export function useCodeWorkbench(
           // Replace the folder's direct children; keep deeper loaded levels.
           const known = new Set(current.entries.map((entry) => entry.path));
           const added = result.entries.filter((entry) => !known.has(entry.path));
-          return added.length
-            ? { ...current, entries: [...current.entries, ...added] }
-            : current;
+          if (!added.length) return current;
+          const entries = [...current.entries, ...added];
+          rememberListing(threadId, { entries, truncated: current.entriesTruncated });
+          return { ...current, entries };
         });
       } catch {
         loadedDirectories.current.delete(path);
@@ -162,27 +183,45 @@ export function useCodeWorkbench(
     async (path: string) => {
       if (!threadId) return;
       const generation = ++fileGeneration.current;
-      setState((current) => ({ ...current, loading: true, error: null }));
+      const cached = cachedFile(threadId, path);
+      // A cached copy opens at once; the read below only refreshes it.
+      setState((current) =>
+        cached
+          ? { ...current, file: cached, draft: cached.content, loading: false, error: null }
+          : { ...current, loading: true, error: null },
+      );
       try {
         const result = await runtime.request("file/read", {
           threadId,
           path,
-          maxBytes: 128 * 1024,
+          maxBytes: READ_LIMIT_BYTES,
         });
+        rememberFile(threadId, result.file);
         if (
           generation !== fileGeneration.current ||
           activeThreadId.current !== threadId
         ) {
           return;
         }
-        setState((current) => ({
-          ...current,
-          file: result.file,
-          draft: result.file.content,
-          loading: false,
-        }));
+        setState((current) => {
+          if (!cached) {
+            return { ...current, file: result.file, draft: result.file.content, loading: false };
+          }
+          if (current.file?.path !== path || current.file.sha256 === result.file.sha256) {
+            return current;
+          }
+          // Changed since it was cached (say, by the agent): show the new
+          // content, unless the user already started editing the old one.
+          const untouched = current.draft === current.file.content;
+          return {
+            ...current,
+            file: result.file,
+            draft: untouched ? result.file.content : current.draft,
+          };
+        });
       } catch (error) {
         if (
+          cached ||
           generation !== fileGeneration.current ||
           activeThreadId.current !== threadId
         ) {
@@ -211,6 +250,7 @@ export function useCodeWorkbench(
         content: savedDraft,
         expectedSha256: state.file.sha256,
       });
+      rememberFile(threadId, result.file);
       if (
         generation !== fileGeneration.current ||
         activeThreadId.current !== threadId

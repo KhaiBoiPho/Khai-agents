@@ -43,6 +43,7 @@ import type { ClientRuntime } from "./rpc/contracts";
 import type { SkillInfo } from "./generated/app-server";
 import { initI18n } from "./app/i18n";
 import styles from "./App.module.css";
+import { enterSession, prefetchSession } from "./features/workbench/sessionFileCache";
 
 // Idempotent: tests render <App> directly without main.tsx.
 initI18n();
@@ -310,6 +311,23 @@ export function App({
   const inspectorVisible = Boolean(
     showingThreads && !showHome && page === null && selectedThread && ui.inspectorOpen,
   );
+
+  // Entering a session reads ahead its files and the code editor, so opening
+  // them is instant; a new chat or another session drops that cache.
+  const openSessionId =
+    showingThreads && !showHome && page === null ? (selectedThread?.id ?? null) : null;
+  useEffect(() => {
+    if (!openSessionId) {
+      enterSession(null);
+      return;
+    }
+    let current = true;
+    void import("./features/workbench/LocalMonacoEditor");
+    void prefetchSession(runtime, openSessionId, () => current);
+    return () => {
+      current = false;
+    };
+  }, [openSessionId, runtime]);
 
   return (
     <main
