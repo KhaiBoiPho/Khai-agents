@@ -8,7 +8,7 @@ import pytest
 
 from core.application.config_store import ConfigStore
 from core.application.llm_configuration_service import LLMConfigurationService
-from core.config import ConfigError, load_config
+from core.config import OUTPUT_TOKEN_BUDGET, ConfigError, load_config
 from core.domain.execution_profile import ExecutionSelection
 from core.providers.base import LLMResponse
 from core.providers.catalog_service import CatalogModel, ModelCatalogService
@@ -237,7 +237,7 @@ def test_execution_profile_freezes_generation_and_connection_revision(
     assert profile.connection_id == "router-b"
     assert profile.model_id == "moonshotai/kimi-k2.6"
     assert profile.context_window == 256_000
-    assert profile.max_tokens == 8192
+    assert profile.max_tokens == OUTPUT_TOKEN_BUDGET
     assert profile.temperature == 0.1
     assert "key" not in repr(profile.to_dict()).lower()
 
@@ -257,7 +257,7 @@ def test_execution_profile_freezes_generation_and_connection_revision(
                 context_window=512_000,
             )
         )
-    with pytest.raises(ConfigError, match="must exceed the 8192 token generation"):
+    with pytest.raises(ConfigError, match="must exceed the 32768 token generation"):
         resolver.execution_profile(
             ExecutionSelection(
                 "router-b",

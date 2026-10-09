@@ -88,6 +88,13 @@ class _Base(BaseModel):
 # ---------------------------------------------------------------------------
 
 
+#: Output tokens every model request may use, capped by what the model
+#: itself allows. Fixed rather than a setting: reasoning models spend output
+#: on hidden thinking, so a small cap cut answers off mid-way, and requests
+#: are billed for what the model writes, not for the cap.
+OUTPUT_TOKEN_BUDGET = 32_768
+
+
 class AgentDefaults(_Base):
     """Default LLM generation settings shared by all phases."""
 
@@ -100,7 +107,8 @@ class AgentDefaults(_Base):
         default_factory=lambda: os.environ.get("KHAI_DEFAULT_MODEL")
         or "models/gemini-3.6-flash"
     )
-    max_tokens: int = 8192
+    # Not a setting: every request asks for OUTPUT_TOKEN_BUDGET (see below).
+    max_tokens: int = 32_768
     temperature: float = 0.1
     reasoning_effort: str | None = None
     # Agent preset id applied to NEW Sessions that do not pick one
@@ -656,7 +664,7 @@ class DeepCodeConfig(BaseSettings):
             connection=_pick("connection"),
             provider=_pick("provider"),
             model=_pick("model"),
-            max_tokens=_pick("max_tokens"),
+            max_tokens=OUTPUT_TOKEN_BUDGET,
             temperature=_pick("temperature"),
             reasoning_effort=_pick("reasoning_effort"),
             base_max_tokens=defaults.base_max_tokens,

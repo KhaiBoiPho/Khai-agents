@@ -28,7 +28,6 @@ interface AgentDraft {
   planningModel: string;
   implementationConnection: string;
   implementationModel: string;
-  maxTokens: string;
 }
 
 interface AgentModelCardProps {
@@ -49,12 +48,6 @@ function text(value: unknown, fallback = ""): string {
   return typeof value === "string" ? value : fallback;
 }
 
-function numberText(value: unknown, fallback: number): string {
-  return typeof value === "number" && Number.isFinite(value)
-    ? String(value)
-    : String(fallback);
-}
-
 function agentDraft(settings: SettingsSnapshot | null): AgentDraft {
   const agents = record(settings?.agents);
   const defaults = record(agents.defaults);
@@ -71,7 +64,6 @@ function agentDraft(settings: SettingsSnapshot | null): AgentDraft {
     planningModel: text(planning.model),
     implementationConnection: text(implementation.connection),
     implementationModel: text(implementation.model),
-    maxTokens: numberText(defaults.maxTokens, 8192),
   };
 }
 
@@ -88,11 +80,6 @@ export function AgentModelCard({
     useState<ProviderTestResult | null>(null);
 
   const agents = { ...agentDraft(settings), ...agentOverrides };
-  const maxTokens = Number(agents.maxTokens);
-  const maxTokensValid =
-    /^\d+$/.test(agents.maxTokens.trim()) &&
-    Number.isSafeInteger(maxTokens) &&
-    maxTokens > 0;
 
   const models = settings?.models ?? [];
   const connectionOptions = connections.catalog?.connections ?? [];
@@ -114,7 +101,6 @@ export function AgentModelCard({
   };
 
   const saveAgents = async (): Promise<boolean> => {
-    if (!maxTokensValid) return false;
     await onUpdate(
       {
         agents: {
@@ -123,7 +109,6 @@ export function AgentModelCard({
             provider: "auto",
             model: agents.defaultModel,
             reasoningEffort: agents.defaultReasoningEffort || null,
-            maxTokens,
           },
           planning: {
             connection: agents.planningConnection || null,
@@ -216,15 +201,6 @@ export function AgentModelCard({
             updateAgents({ defaultReasoningEffort })
           }
         />
-        <label>
-          Max output tokens
-          <input
-            inputMode="numeric"
-            value={agents.maxTokens}
-            onChange={(event) => updateAgents({ maxTokens: event.target.value })}
-            aria-invalid={!maxTokensValid}
-          />
-        </label>
       </div>
       <details className={styles.advancedSettings}>
         <summary>Advanced phase routing</summary>
@@ -314,7 +290,7 @@ export function AgentModelCard({
         <button
           className={styles.secondaryButton}
           type="button"
-          disabled={busy || !agents.defaultModel || !maxTokensValid}
+          disabled={busy || !agents.defaultModel}
           onClick={() => void saveAgents()}
         >
           Save defaults
@@ -326,8 +302,7 @@ export function AgentModelCard({
             busy ||
             verifyingModel ||
             !verificationConnection ||
-            !agents.defaultModel ||
-            !maxTokensValid
+            !agents.defaultModel
           }
           onClick={() => void verifyDefaultModel()}
         >
