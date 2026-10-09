@@ -10,7 +10,7 @@ psycopg[binary]>=3.2
 psycopg-pool>=3.2
 redis>=5.0
 argon2-cffi>=23.1
-json-repair>=0.30.0
+json-repair>=0.63.5
 loguru>=0.7.0
 
 # DeepCode-native LLM + MCP runtime (replaces legacy mcp-agent)
