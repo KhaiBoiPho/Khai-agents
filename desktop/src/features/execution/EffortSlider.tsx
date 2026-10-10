@@ -33,6 +33,38 @@ const LAST = STOPS.length - 1;
 const RECOMMENDED = MIDDLE;
 const MIDDLE_KEY = "khai.effort.middle";
 
+/**
+ * The speckle across the track: fixed pseudo-random dots, sparse and dim on
+ * the Faster side, denser and brighter toward Smarter. Seeded, so every
+ * render draws the same field.
+ */
+const DOTS = (() => {
+  let seed = 7;
+  const random = () => {
+    seed = (seed * 16807) % 2147483647;
+    return seed / 2147483647;
+  };
+  const dots: Array<{ x: number; y: number; size: number; alpha: number }> = [];
+  // A jittered grid spreads the dots evenly; each cell keeps its dot with a
+  // chance that grows toward Smarter, so density rises smoothly.
+  const columns = 64;
+  const rows = 4;
+  for (let column = 0; column < columns; column += 1) {
+    for (let row = 0; row < rows; row += 1) {
+      const x = ((column + 0.15 + random() * 0.7) / columns) * 100;
+      const share = x / 100;
+      if (random() > 0.12 + 0.78 * share ** 1.3) continue;
+      dots.push({
+        x,
+        y: ((row + 0.2 + random() * 0.6) / rows) * 100,
+        size: random() < 0.3 ? 2 : 1.5,
+        alpha: Math.min(1, (0.22 + 0.68 * share) * (0.6 + random() * 0.5)),
+      });
+    }
+  }
+  return dots;
+})();
+
 /** Older Sessions may carry other efforts; show them at the nearest stop. */
 export function toEffortLevel(effort: string | null | undefined): EffortLevel {
   return effort === "medium" || effort === "high" || effort === "xhigh" || effort === "max"
@@ -165,8 +197,22 @@ export function EffortSlider({ value, disabled, onChange }: EffortSliderProps) {
         onPointerDown={press}
         onKeyDown={key}
       >
-        <span className={styles.dots} />
-        <span className={styles.lit} style={{ width: `${percent}%` }} />
+        <span className={styles.field}>
+          {DOTS.map((dot, i) => (
+            <span
+              key={i}
+              className={styles.dot}
+              data-lit={dot.x <= percent || undefined}
+              style={{
+                left: `${dot.x}%`,
+                top: `${dot.y}%`,
+                width: dot.size,
+                height: dot.size,
+                opacity: dot.alpha,
+              }}
+            />
+          ))}
+        </span>
         <span
           className={styles.thumb}
           style={
