@@ -161,6 +161,60 @@ export function buildConversationTurns(
     }));
 }
 
+function sameItems(left: readonly Item[], right: readonly Item[]): boolean {
+  return (
+    left.length === right.length &&
+    left.every((item, index) => item === right[index])
+  );
+}
+
+function sameEntry(left: TimelineEntry, right: TimelineEntry): boolean {
+  if (left.type === "item" && right.type === "item") {
+    return left.id === right.id && left.item === right.item;
+  }
+  if (left.type === "activity_group" && right.type === "activity_group") {
+    return left.id === right.id && sameItems(left.items, right.items);
+  }
+  return false;
+}
+
+/**
+ * Hands back the previous object for every Turn group (and timeline entry)
+ * whose Items are unchanged, so memoized renderers skip them. Items keep
+ * their identity in workspace state until they change, which is what makes
+ * an identity comparison sufficient here.
+ */
+export function reuseUnchangedTurns(
+  previous: readonly ConversationTurn[],
+  next: ConversationTurn[],
+): ConversationTurn[] {
+  if (previous.length === 0) return next;
+  const previousById = new Map(previous.map((group) => [group.id, group]));
+  return next.map((group) => {
+    const before = previousById.get(group.id);
+    if (!before) return group;
+    const previousEntries = new Map(
+      before.timeline.map((entry) => [entry.id, entry]),
+    );
+    let timelineSame = before.timeline.length === group.timeline.length;
+    const timeline = group.timeline.map((entry, index) => {
+      const old = previousEntries.get(entry.id);
+      const kept = old && sameEntry(old, entry) ? old : entry;
+      if (kept !== before.timeline[index]) timelineSame = false;
+      return kept;
+    });
+    if (
+      timelineSame &&
+      before.turn === group.turn &&
+      before.completion === group.completion &&
+      sameItems(before.userMessages, group.userMessages)
+    ) {
+      return before;
+    }
+    return { ...group, timeline };
+  });
+}
+
 export function turnDurationSeconds(
   turn: Turn | null,
   now = Date.now(),

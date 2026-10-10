@@ -23,6 +23,7 @@ so it gets no delegation tools and cannot recurse.
 from __future__ import annotations
 
 import asyncio
+import dataclasses
 import re
 import uuid
 from dataclasses import dataclass, field
@@ -75,6 +76,10 @@ class DuplicateAgentError(AgentLimitError):
 # accepted-then-ignored.
 NATIVE_BACKEND = "native"
 
+# Reasoning levels a caller may pick for one sub-agent: the app's own effort
+# levels. Anything heavier stays a parent-level choice.
+SUBAGENT_EFFORTS = ("low", "medium")
+
 
 @dataclass
 class SubAgent:
@@ -88,6 +93,12 @@ class SubAgent:
     persona: str | None = None
     tool_names: tuple[str, ...] | None = None
     output_schema: dict | None = field(default=None, repr=False)
+    # Optional per-child model / reasoning effort (native backend only),
+    # validated at spawn. ``execution_profile`` is the resolved snapshot the
+    # child runs with; ``None`` inherits the parent's.
+    model: str | None = None
+    effort: str | None = None
+    execution_profile: Any | None = field(default=None, repr=False)
     status: str = _RUNNING
     result: str = ""
     seed_history: list = field(default_factory=list, repr=False)
@@ -286,6 +297,8 @@ class AgentControl:
         persona: str | None = None,
         tools: list[str] | tuple[str, ...] | None = None,
         output_schema: dict | None = None,
+        model: str | None = None,
+        effort: str | None = None,
     ) -> str:
         """Start a sub-agent in the background and return its id (non-blocking).
 
@@ -321,6 +334,8 @@ class AgentControl:
                     ("persona", persona),
                     ("tools", tools),
                     ("output_schema", output_schema),
+                    ("model", model),
+                    ("effort", effort),
                 )
                 if value is not None
             ]
@@ -354,6 +369,9 @@ class AgentControl:
                 output_schema = validate_output_schema(output_schema)
             except SchemaError as exc:
                 raise AgentLimitError(str(exc)) from exc
+        model = (model or "").strip() or None
+        effort = (effort or "").strip().lower() or None
+        child_profile = self._resolve_child_profile(model, effort)
         # Dedup against any prior subtask with this key that is still running OR
         # already succeeded — re-spawning finished work is the exact waste a real
         # model produced (it re-spawned modules it had already built). A FAILED
@@ -386,12 +404,96 @@ class AgentControl:
             persona=(persona or "").strip() or None,
             tool_names=tool_names,
             output_schema=output_schema,
+            model=model,
+            effort=effort,
+            execution_profile=child_profile,
             seed_history=self._fork_history(fork_turns),
             dedup_key=key,
         )
         self._agents[agent_id] = sub
         sub.handle = asyncio.ensure_future(self._run(sub))
         return agent_id
+
+    def _resolve_child_profile(
+        self, model: str | None, effort: str | None
+    ) -> Any | None:
+        """Validate a per-child model/effort and return the child's profile.
+
+        ``None`` means "inherit the parent unchanged". A model is resolved
+        through the runtime's ``resolve_execution_profile`` — the same path
+        that resolves the parent's model — on the parent's connection, so an
+        unknown or disabled connection, or a model the configured connection
+        cannot serve, fails here with a readable error instead of mid-run.
+        """
+        if effort is not None and effort not in SUBAGENT_EFFORTS:
+            raise AgentLimitError(
+                f"effort must be one of {', '.join(SUBAGENT_EFFORTS)} (got {effort!r})"
+            )
+        parent = self._execution_profile
+        if model is None or (parent is not None and model == parent.model_id):
+            if effort is None:
+                return None
+            if parent is None:
+                # Legacy runtimes without a profile: the effort is applied
+                # when the child session is built (see _run_subagent).
+                return None
+            return dataclasses.replace(parent, reasoning_effort=effort)
+
+        runtime = self._runtime
+        if runtime is None:
+            from core.compat.runtime import get_runtime
+
+            runtime = get_runtime()
+        resolver = getattr(runtime, "resolve_execution_profile", None)
+        if not callable(resolver):
+            raise AgentLimitError(
+                "choosing a model per sub-agent is not supported by this runtime; "
+                "omit 'model' to use the current one"
+            )
+        try:
+            profile = resolver(
+                connection_id=parent.connection_id if parent is not None else None,
+                model=model,
+                reasoning_effort=(
+                    effort
+                    if effort is not None
+                    else (parent.reasoning_effort if parent is not None else None)
+                ),
+                phase="implementation",
+            )
+        except (ValueError, LookupError) as exc:  # ConfigError is a ValueError
+            raise AgentLimitError(f"model {model!r} is not available: {exc}") from exc
+        self._require_listed_model(runtime, profile, model)
+        return profile
+
+    @staticmethod
+    def _require_listed_model(runtime: Any, profile: Any, model: str) -> None:
+        """Reject a model a manually-listed connection does not offer.
+
+        Connections with a manual model list are a closed set the user
+        curated; anything else is accepted once the resolver accepts it,
+        exactly as for the parent (no network lookups at spawn time).
+        """
+        connection_resolver = getattr(runtime, "connection_resolver", None)
+        resolve_connection = getattr(connection_resolver, "resolve_connection", None)
+        if not callable(resolve_connection):
+            return
+        try:
+            connection = resolve_connection(profile.connection_id)
+        except (ValueError, LookupError):
+            return
+        if getattr(connection, "model_catalog", None) != "manual":
+            return
+        listed = {
+            getattr(entry, "id", None)
+            for entry in getattr(connection, "manual_model_entries", ()) or ()
+        }
+        listed.discard(None)
+        if listed and model not in listed:
+            raise AgentLimitError(
+                f"model {model!r} is not offered by connection "
+                f"{profile.connection_id!r}; available: {', '.join(sorted(listed))}"
+            )
 
     def _fork_history(self, fork_turns: str | int) -> list:
         """The filtered slice of parent history a forked sub-agent inherits."""
@@ -592,11 +694,14 @@ class AgentControl:
             def tool_filter(names: tuple[str, ...]) -> tuple[str, ...]:
                 return tuple(n for n in names if n in allowed)
 
+        child_profile = sub.execution_profile or self._execution_profile
         session, _model, _engine = build_agent_session(
             workspace=workspace,
-            model=self._model,
+            model=child_profile.model_id if child_profile is not None else self._model,
+            # Only consulted without a profile (legacy runtimes).
+            reasoning_effort=sub.effort if child_profile is None else None,
             system_prompt="\n\n".join(prompt_sections),
-            execution_profile=self._execution_profile,
+            execution_profile=child_profile,
             allow_spawn=False,  # depth cap: sub-agents cannot spawn again
             injection_callback=self._make_inbox_drainer(sub),
             agent_context=(sub.id, "subagent"),  # fires SubagentStart/Stop hooks

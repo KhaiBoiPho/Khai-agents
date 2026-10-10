@@ -356,6 +356,96 @@ describe("sendInteractiveTurn", () => {
   });
 });
 
+describe("sendInteractiveTurn with DeepThink", () => {
+  it("sends mode on turn/start", async () => {
+    const calls: RecordedCall[] = [];
+    const started = turn("turn-d", "queued", 2);
+    const runtime = scriptedRuntime(
+      [{ method: "turn/start", result: startResult(started) }],
+      calls,
+    );
+
+    const result = await sendInteractiveTurn(runtime, {
+      threadId: "thread-1",
+      prompt: "compare A and B",
+      cachedActiveTurnId: null,
+      messageId: "message-1",
+      mode: "deepthink",
+    });
+
+    expect(result.delivery).toBe("started");
+    expect(calls).toEqual([
+      {
+        method: "turn/start",
+        params: {
+          threadId: "thread-1",
+          prompt: "compare A and B",
+          messageId: "message-1",
+          mode: "deepthink",
+        },
+      },
+    ]);
+  });
+
+  it("queues instead of steering a running Turn", async () => {
+    const calls: RecordedCall[] = [];
+    const queued = turn("turn-q", "queued", 3);
+    const runtime = scriptedRuntime(
+      [{ method: "turn/enqueue", result: startResult(queued) }],
+      calls,
+    );
+
+    const result = await sendInteractiveTurn(runtime, {
+      threadId: "thread-1",
+      prompt: "research",
+      cachedActiveTurnId: "turn-a",
+      messageId: "message-1",
+      mode: "deepthink",
+    });
+
+    expect(result.delivery).toBe("queued");
+    expect(calls.map((call) => call.method)).toEqual(["turn/enqueue"]);
+    expect(calls[0].params).toMatchObject({ mode: "deepthink" });
+  });
+
+  it("queues when the start races an active Turn", async () => {
+    const calls: RecordedCall[] = [];
+    const runtime = scriptedRuntime(
+      [
+        { method: "turn/start", error: bridgeError("TURN_ALREADY_ACTIVE", "turn-a") },
+        { method: "turn/enqueue", result: startResult(turn("turn-q", "queued", 3)) },
+      ],
+      calls,
+    );
+
+    const result = await sendInteractiveTurn(runtime, {
+      threadId: "thread-1",
+      prompt: "research",
+      cachedActiveTurnId: null,
+      messageId: "message-1",
+      mode: "deepthink",
+    });
+
+    expect(result.delivery).toBe("queued");
+    expect(calls.map((call) => call.method)).toEqual(["turn/start", "turn/enqueue"]);
+  });
+
+  it("omits mode for normal Turns", async () => {
+    const calls: RecordedCall[] = [];
+    const runtime = scriptedRuntime(
+      [{ method: "turn/start", result: startResult(turn("turn-n", "queued", 2)) }],
+      calls,
+    );
+    await sendInteractiveTurn(runtime, {
+      threadId: "thread-1",
+      prompt: "hi",
+      cachedActiveTurnId: null,
+      messageId: "message-1",
+    });
+    expect(calls[0].params).not.toHaveProperty("mode");
+  });
+});
+
 describe("latestExecutingTurn", () => {
   it("ignores queued and other-thread Turns and chooses the latest execution", () => {
     const other = { ...turn("other", "running", 9), threadId: "thread-2" };

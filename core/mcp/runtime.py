@@ -12,6 +12,7 @@ from loguru import logger
 from core.agent_runtime.tools.base import Tool, ToolResult
 from core.agent_runtime.tools.registry import ToolRegistry
 from core.mcp.connection import CredentialResolver, McpConnection, OAuthProviderFactory
+from core.mcp.firecrawl import redact_secrets
 from core.mcp.genoffice import builtin_server_instructions
 from core.mcp.models import McpRuntimePlan, McpServerSource, McpStartupError
 from core.mcp.naming import visible_tool_name
@@ -230,7 +231,7 @@ class McpSessionRuntime:
             for connection, result in zip(connections.values(), results, strict=True):
                 server = connection.server
                 if isinstance(result, BaseException):
-                    error = f"{type(result).__name__}: {result}"
+                    error = redact_secrets(f"{type(result).__name__}: {result}")
                     self._statuses[server.server_id] = McpServerRuntimeStatus(
                         server.server_id,
                         server.name,
@@ -335,7 +336,7 @@ class McpSessionRuntime:
                 self._publish_statuses()
                 raise
             except BaseException as exc:  # noqa: BLE001 - startup boundary
-                error = f"{type(exc).__name__}: {exc}"
+                error = redact_secrets(f"{type(exc).__name__}: {exc}")
                 self._statuses[server_id] = McpServerRuntimeStatus(
                     server.server_id,
                     server.name,

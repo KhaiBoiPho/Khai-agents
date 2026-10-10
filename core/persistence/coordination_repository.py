@@ -530,6 +530,25 @@ class RuntimeCoordinationRepository:
                 raise IntegrityError("Turn claim changed during release")
         return True
 
+    def release_thread_leases(self, thread_id: str, released_at: datetime, reason: str) -> int:
+        """Release every lease held by a Turn of this Thread, whoever holds
+        it. Only for a Thread that is being removed: its Turns can no longer
+        run, and a lease left behind would block deleting them."""
+
+        self._require_write_transaction()
+        require_aware(released_at, "released_at")
+        require_non_empty(reason, "reason")
+        encoded = dump_datetime(released_at)
+        cursor = self.connection.execute(
+            "UPDATE resource_leases SET "
+            "holder_worker_id = NULL, holder_turn_id = NULL, holder_turn_epoch = NULL, "
+            "released_at = CASE WHEN heartbeat_at > ? THEN heartbeat_at ELSE ? END, "
+            "release_reason = ? "
+            "WHERE holder_turn_id IN (SELECT id FROM turns WHERE thread_id = ?)",
+            (encoded, encoded, reason, thread_id),
+        )
+        return cursor.rowcount
+
     def _claim_resources(
         self,
         worker_id: str,

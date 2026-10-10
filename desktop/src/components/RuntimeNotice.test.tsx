@@ -22,7 +22,7 @@ afterEach(() => {
   __setLocaleForTests("en");
 });
 
-it.each(["en", "zh-CN"] as const)(
+it.each(["en", "vi"] as const)(
   "explains browser authorization in %s without offering a futile reconnect",
   (locale) => {
     __setLocaleForTests(locale);
@@ -38,7 +38,7 @@ it.each(["en", "zh-CN"] as const)(
     );
     expect(screen.getByRole("alert").textContent).toContain("deepcode web");
     expect(screen.getByRole("alert").textContent).toContain(
-      locale === "en" ? "Browser access required" : "需要授权浏览器访问",
+      locale === "en" ? "Browser access required" : "Cần cấp quyền truy cập cho trình duyệt",
     );
     expect(screen.getByRole("alert").textContent).not.toContain("APP_SERVER_OFFLINE");
     expect(screen.queryByRole("button")).toBeNull();

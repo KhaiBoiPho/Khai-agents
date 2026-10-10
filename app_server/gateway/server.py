@@ -20,6 +20,7 @@ POST /api/admin/users/...  admin      approve, reject, disable, enable, role,
 GET  /api/rpc              session    WebSocket, relayed to the user's worker
 POST /api/uploads          session    relayed to the user's worker
 GET  /api/download         session    relayed to the user's worker
+GET  /api/preview-pdf      session    relayed to the user's worker
 *    /api/*, /socket.io/*,  session    KhaiDocs (Docmost), as the user's own
      /collab                           Docmost account (gateway/khaidocs.py)
 =========================  =========  ========================================
@@ -37,6 +38,7 @@ import contextlib
 import json
 import logging
 import os
+import time
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -65,6 +67,12 @@ from core.version import __version__
 logger = logging.getLogger(__name__)
 
 MAX_JSON = 16 * 1024
+# How long an "is this account active" answer is reused (see _active_user).
+USER_CACHE_SECONDS = 5.0
+# Public routes that never need the session.
+STATIC_PATHS = frozenset(
+    {"/", "/index.html", "/web-build.json", "/health/live", "/auth/config"}
+)
 MAX_UPLOAD = 10 * 1024 * 1024 + 1024
 USER = web.AppKey("user", object)
 SESSION = web.AppKey("session", object)
@@ -125,6 +133,17 @@ class Gateway:
         self.workers = workers
         # Live browser sockets per user, closed when that user's sessions end.
         self._sockets: dict[str, set[web.WebSocketResponse]] = {}
+        self._user_cache: dict[str, tuple[User | None, float]] = {}
+        ws = settings.public_origin.replace("http", "ws", 1)
+        self._csp = (
+            "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; "
+            "img-src 'self' data: blob:; font-src 'self' data:; worker-src 'self' blob:; "
+            f"connect-src 'self' {ws}; object-src 'none'; base-uri 'none'; "
+            "frame-ancestors 'none'; form-action 'self'"
+        )
+        self._build: tuple[float, dict | None] | None = None
+        # One pooled HTTP client for every relay to the workers.
+        self._http: aiohttp.ClientSession | None = None
         # Which session opened each socket, so ending one device closes its sockets.
         self._socket_sessions: dict[web.WebSocketResponse, str] = {}
 
@@ -163,6 +182,7 @@ class Gateway:
                 web.post("/api/uploads", self.upload),
                 web.post("/api/workspace/upload", self.upload),
                 web.get("/api/download", self.download),
+                web.get("/api/preview-pdf", self.download),
             ]
         )
         if self.khaidocs is not None:
@@ -194,6 +214,8 @@ class Gateway:
 
     async def _cleanup(self, _app) -> None:
         await self.workers.close()
+        if self._http is not None:
+            await self._http.close()
         if self.khaidocs is not None:
             await self.khaidocs.accounts.close()
         await self.redis.aclose()
@@ -211,12 +233,17 @@ class Gateway:
 
     @web.middleware
     async def _authenticate(self, request: web.Request, handler):
+        if self._is_static(request.path):
+            # Public files: no session lookup (two round trips) per asset.
+            request[USER] = None
+            request[SESSION] = ""
+            return await handler(request)
         record = await self.sessions.resolve(
             request.cookies.get(self.settings.cookie_name)
         )
         user = None
         if record is not None:
-            user = await asyncio.to_thread(self.users.active, record.user_id)
+            user = await self._active_user(record.user_id)
             if user is None:
                 # Disabled or deleted since sign-in.
                 await self.sessions.revoke_all(record.user_id)
@@ -224,21 +251,72 @@ class Gateway:
         request[SESSION] = record.id if user is not None and record is not None else ""
         return await handler(request)
 
-    async def _headers(self, _request, response) -> None:
-        response.headers["Cache-Control"] = "no-store"
+    @staticmethod
+    def _is_static(path: str) -> bool:
+        return (
+            path in STATIC_PATHS
+            or path.startswith("/assets/")
+            or path.startswith("/khaidocs/")
+        )
+
+    async def _active_user(self, user_id: str) -> User | None:
+        """The active account, cached for a few seconds: a page load fires
+        many requests at once, and each would otherwise query Postgres."""
+
+        cached = self._user_cache.get(user_id)
+        now = time.monotonic()
+        if cached is not None and cached[1] > now:
+            return cached[0]
+        user = await asyncio.to_thread(self.users.active, user_id)
+        self._user_cache[user_id] = (user, now + USER_CACHE_SECONDS)
+        if len(self._user_cache) > 4096:
+            self._user_cache = {
+                key: value for key, value in self._user_cache.items() if value[1] > now
+            }
+        return user
+
+    def _http_client(self) -> aiohttp.ClientSession:
+        if self._http is None or self._http.closed:
+            self._http = aiohttp.ClientSession(
+                timeout=aiohttp.ClientTimeout(total=None, sock_connect=10)
+            )
+        return self._http
+
+    def _web_build(self) -> dict | None:
+        """web-build.json, re-read only when the file changes."""
+
+        try:
+            mtime = (self.settings.assets / "web-build.json").stat().st_mtime
+        except OSError:
+            return None
+        if self._build is None or self._build[0] != mtime:
+            self._build = (mtime, read_web_build(self.settings.assets))
+        return self._build[1]
+
+    def _forget_user(self, user_id: str) -> None:
+        self._user_cache.pop(user_id, None)
+
+    async def _headers(self, request, response) -> None:
+        path = request.path
+        if path.startswith("/assets/"):
+            # Content-hashed file names: a changed file gets a new name.
+            response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+        elif path.startswith("/khaidocs/"):
+            # Locales and icons: stable names, so revalidate after a day.
+            response.headers["Cache-Control"] = "public, max-age=86400"
+        elif path in {"/", "/index.html", "/web-build.json"}:
+            # Revalidated on every load (ETag), so a new release shows at once.
+            response.headers["Cache-Control"] = "no-cache"
+        elif "Cache-Control" not in response.headers:
+            # Accounts and APIs; a relayed response keeps its own policy.
+            response.headers["Cache-Control"] = "no-store"
         response.headers["Referrer-Policy"] = "no-referrer"
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["X-Frame-Options"] = "DENY"
         response.headers["Cross-Origin-Opener-Policy"] = "same-origin"
         if self.settings.secure:
             response.headers["Strict-Transport-Security"] = "max-age=31536000"
-        ws = self.settings.public_origin.replace("http", "ws", 1)
-        response.headers["Content-Security-Policy"] = (
-            "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; "
-            "img-src 'self' data: blob:; font-src 'self' data:; worker-src 'self' blob:; "
-            f"connect-src 'self' {ws}; object-src 'none'; base-uri 'none'; "
-            "frame-ancestors 'none'; form-action 'self'"
-        )
+        response.headers["Content-Security-Policy"] = self._csp
 
     # -- helpers --------------------------------------------------------------
 
@@ -307,6 +385,7 @@ class Gateway:
     async def _end_user(self, user_id: str) -> None:
         """Cut a user off: sessions, open sockets, worker and database role."""
 
+        self._forget_user(user_id)
         await self.sessions.revoke_all(user_id)
         for socket in list(self._sockets.get(user_id, ())):
             await socket.close(code=4401, message=b"Signed out")
@@ -322,12 +401,12 @@ class Gateway:
 
     async def index(self, _request) -> web.StreamResponse:
         index = self.settings.assets / "index.html"
-        if read_web_build(self.settings.assets) is None or not index.is_file():
+        if self._web_build() is None or not index.is_file():
             return web.Response(status=503, text="Web assets are missing; build them first.")
         return web.FileResponse(index)
 
     async def manifest(self, _request) -> web.Response:
-        build = read_web_build(self.settings.assets)
+        build = self._web_build()
         if build is None:
             raise web.HTTPServiceUnavailable(text="Web assets are unavailable")
         return web.json_response(build)
@@ -442,7 +521,7 @@ class Gateway:
                 "authenticated": True,
                 "phase": "ready",
                 "version": __version__,
-                "webBuild": read_web_build(self.settings.assets),
+                "webBuild": self._web_build(),
                 "user": user.to_dict(),
             }
         )
@@ -482,6 +561,7 @@ class Gateway:
             raise web.HTTPNotFound()
         try:
             updated = await asyncio.to_thread(operation)
+            self._forget_user(updated.id)
         except AuthError as exc:
             return self._error(exc)
         if action == "disable":
@@ -565,17 +645,18 @@ class Gateway:
     async def rpc(self, request: web.Request) -> web.WebSocketResponse:
         user = self._require_user(request)
         worker = await self._worker(user)
-        client = web.WebSocketResponse(heartbeat=30, max_msg_size=8 * 1024 * 1024)
-        session = aiohttp.ClientSession()
+        # permessage-deflate: RPC traffic is large JSON that compresses well.
+        client = web.WebSocketResponse(
+            heartbeat=30, max_msg_size=8 * 1024 * 1024, compress=15
+        )
         try:
-            upstream = await session.ws_connect(
+            upstream = await self._http_client().ws_connect(
                 f"{worker.url.replace('http', 'ws', 1)}/api/rpc",
                 headers={"Authorization": f"Bearer {worker.token}"},
                 heartbeat=30,
                 max_msg_size=8 * 1024 * 1024,
             )
         except aiohttp.ClientError as exc:
-            await session.close()
             raise web.HTTPBadGateway(text="Your workspace is not responding") from exc
         await client.prepare(request)
         sockets = self._sockets.setdefault(user.id, set())
@@ -606,7 +687,6 @@ class Gateway:
             self._socket_sessions.pop(client, None)
             self.workers.closed(worker)
             await upstream.close()
-            await session.close()
             await client.close()
         return client
 
@@ -619,23 +699,22 @@ class Gateway:
         }
         headers["Authorization"] = f"Bearer {worker.token}"
         worker.touch()
-        async with aiohttp.ClientSession() as session:
-            async with session.request(
-                request.method,
-                f"{worker.url}{request.rel_url.path_qs}",
-                headers=headers,
-                data=request.content if request.body_exists else None,
-                allow_redirects=False,
-            ) as upstream:
-                response = web.StreamResponse(status=upstream.status, reason=upstream.reason)
-                for name, value in upstream.headers.items():
-                    if name.lower() not in _HOP and name.lower() != "content-encoding":
-                        response.headers[name] = value
-                await response.prepare(request)
-                async for chunk in upstream.content.iter_chunked(64 * 1024):
-                    await response.write(chunk)
-                await response.write_eof()
-                return response
+        async with self._http_client().request(
+            request.method,
+            f"{worker.url}{request.rel_url.path_qs}",
+            headers=headers,
+            data=request.content if request.body_exists else None,
+            allow_redirects=False,
+        ) as upstream:
+            response = web.StreamResponse(status=upstream.status, reason=upstream.reason)
+            for name, value in upstream.headers.items():
+                if name.lower() not in _HOP and name.lower() != "content-encoding":
+                    response.headers[name] = value
+            await response.prepare(request)
+            async for chunk in upstream.content.iter_chunked(64 * 1024):
+                await response.write(chunk)
+            await response.write_eof()
+            return response
 
     async def docs(self, request: web.Request) -> web.StreamResponse:
         """KhaiDocs, always as the signed-in user's own Docmost account."""

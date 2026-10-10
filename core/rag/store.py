@@ -10,7 +10,7 @@ from __future__ import annotations
 import hashlib
 import math
 import time
-from collections.abc import Iterable, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
@@ -29,6 +29,11 @@ class DocumentRecord:
     chunk_count: int
     model: str | None
     indexed_at: float | None
+    # Index-time enrichment: PDF pages read by the vision model, pages it
+    # failed on, and chunks that carry a contextual-retrieval context.
+    visual_pages: int = 0
+    visual_failed: int = 0
+    contextualized: int = 0
 
 
 @dataclass(frozen=True, slots=True)
@@ -39,6 +44,8 @@ class SearchHit:
     text: str
     score: float
     ordinal: int
+    # The passage was transcribed from a PDF page image (figure or scan).
+    visual: bool = False
 
 
 def workspace_key(root: str | Path) -> str:
@@ -80,6 +87,44 @@ class DocumentStore(Protocol):
     ) -> list[SearchHit]: ...
 
 
+class EnrichmentCache(Protocol):
+    """Optional store capability: remembered enrichment answers.
+
+    ``kind`` separates the namespaces (``context``, ``visual``); keys are
+    content hashes that already include the model and prompt version."""
+
+    def cached_values(self, kind: str, keys: Sequence[str]) -> dict[str, str]: ...
+
+    def cache_values(self, kind: str, model: str, values: Mapping[str, str]) -> None: ...
+
+
+def read_cache(store: object, kind: str, keys: Sequence[str]) -> dict[str, str]:
+    """Cached values, or nothing when the store has no cache or it fails."""
+
+    method = getattr(store, "cached_values", None)
+    if method is None or not keys:
+        return {}
+    try:
+        return dict(method(kind, list(dict.fromkeys(keys))))
+    except Exception as exc:  # noqa: BLE001 - a cache miss is never fatal
+        from core.rag.llm import log_once
+
+        log_once("RAG enrichment cache read failed: {}", type(exc).__name__)
+        return {}
+
+
+def write_cache(store: object, kind: str, model: str, values: Mapping[str, str]) -> None:
+    method = getattr(store, "cache_values", None)
+    if method is None or not values:
+        return
+    try:
+        method(kind, model, dict(values))
+    except Exception as exc:  # noqa: BLE001
+        from core.rag.llm import log_once
+
+        log_once("RAG enrichment cache write failed: {}", type(exc).__name__)
+
+
 def _path_selected(path: str, selectors: Sequence[str] | None) -> bool:
     if not selectors:
         return True
@@ -98,6 +143,9 @@ def now() -> float:
 
 __all__ = [
     "DocumentRecord",
+    "EnrichmentCache",
+    "read_cache",
+    "write_cache",
     "DocumentStore",
     "SearchHit",
     "normalize",

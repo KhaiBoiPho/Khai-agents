@@ -18,6 +18,8 @@ Design:
 
 from __future__ import annotations
 
+import os
+
 import asyncio
 from collections.abc import Awaitable, Callable
 from contextvars import ContextVar
@@ -64,6 +66,7 @@ from core.events.protocol import (
     summarize_call,
     summarize_result,
 )
+from core.config import host_agent_defaults, output_budget_for_effort
 from core.mcp.models import McpStartupError
 from core.mcp.runtime import McpSessionRuntime
 from core.providers.base import LLMProvider
@@ -72,7 +75,11 @@ from core.reasoning import ReasoningAvailability, ReasoningChannel
 from core.skills.models import SkillError
 from core.skills.runtime import SkillRuntime, SkillTurnContext
 
-_DEFAULT_MAX_TOOL_RESULT_CHARS = 60_000
+# Fallback per-result cap (chars) when no host setting applies; the host's
+# ``agents.defaults.maxToolResultChars`` (default 12k, env
+# KHAI_MAX_TOOL_RESULT_CHARS) normally wins. Larger results are spilled to a
+# file and replaced by a head/tail preview the model can page past.
+_DEFAULT_MAX_TOOL_RESULT_CHARS = 12_000
 
 
 def _one_line_detail(value: str, *, limit: int = 80) -> str:
@@ -375,6 +382,24 @@ class _EventEmittingHook(AgentHook):
             )
 
 
+
+def _env_spend_limit(name: str) -> float | None:
+    """A positive USD limit from the server environment, else ``None``."""
+
+    raw = (os.environ.get(name) or "").strip()
+    try:
+        value = float(raw) if raw else 0.0
+    except ValueError:
+        return None
+    return value if value > 0 else None
+
+
+def _tightest(*limits: float | None) -> float | None:
+    """The smallest set limit (``None`` means unlimited)."""
+
+    set_limits = [limit for limit in limits if limit is not None and limit > 0]
+    return min(set_limits) if set_limits else None
+
 class AgentSession:
     """A conversational agent addressed through the SQ/EQ protocol."""
 
@@ -402,8 +427,34 @@ class AgentSession:
         closure_callback: Any | None = None,
         mcp_runtime: McpSessionRuntime | None = None,
         provider_cleanup: Callable[[], Awaitable[None]] | None = None,
+        max_turn_cost_usd: float | None = None,
+        max_session_cost_usd: float | None = None,
     ) -> None:
         self._runner = AgentRunner(provider)
+        # Host cost controls (home config + env; a project config cannot
+        # loosen them). Explicit constructor values win.
+        cost = host_agent_defaults()
+        self._max_tool_result_chars = (
+            cost.max_tool_result_chars
+            if cost.max_tool_result_chars and cost.max_tool_result_chars > 0
+            else _DEFAULT_MAX_TOOL_RESULT_CHARS
+        )
+        self._max_parallel_tools = max(1, int(cost.max_parallel_tools or 1))
+        self._compact_trigger_tokens = cost.compact_trigger_tokens or None
+        # The server's env limits are a ceiling: a user's home config (which
+        # a hosted member can edit) may only tighten them.
+        self._max_turn_cost_usd = _tightest(
+            max_turn_cost_usd if max_turn_cost_usd is not None else cost.max_turn_cost_usd,
+            _env_spend_limit("KHAI_MAX_TURN_COST_USD"),
+        )
+        self._max_session_cost_usd = _tightest(
+            max_session_cost_usd
+            if max_session_cost_usd is not None
+            else cost.max_session_cost_usd,
+            _env_spend_limit("KHAI_MAX_SESSION_COST_USD"),
+        )
+        # Known USD spent by this Session's completed Turns (spend guard).
+        self._session_cost_usd = 0.0
         self._provider = provider
         self._provider_cleanup = provider_cleanup
         self._tools = tools
@@ -590,6 +641,27 @@ class AgentSession:
 
         return dict(self._last_usage)
 
+    @property
+    def session_cost_usd(self) -> float:
+        """Known USD cost of this Session's completed Turns (reported or list)."""
+
+        return self._session_cost_usd
+
+    def _request_output_budget(self) -> int | None:
+        """Per-request ``max_tokens``: smaller for low-effort Turns.
+
+        ``None`` keeps the provider's configured default.
+        """
+        effort = getattr(self.execution_profile, "reasoning_effort", None)
+        generation = getattr(self._provider, "generation", None)
+        if effort is None:
+            effort = getattr(generation, "reasoning_effort", None)
+        ceiling = getattr(generation, "max_tokens", None)
+        return output_budget_for_effort(
+            effort if isinstance(effort, str) else None,
+            ceiling if isinstance(ceiling, int) else None,
+        )
+
     def _record_usage(self, usage: dict[str, int]) -> None:
         for key, value in usage.items():
             self._last_usage[key] = self._last_usage.get(key, 0) + value
@@ -637,7 +709,7 @@ class AgentSession:
             tools=self._tools,
             model=self._model,
             max_iterations=1,
-            max_tool_result_chars=_DEFAULT_MAX_TOOL_RESULT_CHARS,
+            max_tool_result_chars=self._max_tool_result_chars,
             context_window_tokens=self._context_window_tokens,
             token_meter=self._token_meter,
             compaction_summary_sink=self._compaction_summary_sink,
@@ -966,8 +1038,6 @@ class AgentSession:
         initial: list[dict[str, Any]] = []
         if self._system_prompt:
             initial.append({"role": "system", "content": self._system_prompt})
-        for ctx in hook_contexts:
-            initial.append({"role": "system", "content": ctx})
         initial.extend(self._history)
 
         turn_context_messages: list[dict[str, Any]] = []
@@ -982,6 +1052,13 @@ class AgentSession:
             mcp_context = self._mcp_runtime.instruction_context()
             if mcp_context:
                 turn_context_messages.append({"role": "system", "content": mcp_context})
+        # Hook-injected context (SessionStart / UserPromptSubmit) can differ on
+        # every prompt. It still reaches the model as system-priority context,
+        # but it is merged LAST, after the stable system prompt, Skill catalog
+        # and MCP instructions, so a changing hook value no longer breaks the
+        # provider's cached prompt prefix in the middle of the system block.
+        for ctx in hook_contexts:
+            turn_context_messages.append({"role": "system", "content": ctx})
 
         pre_tool_hook = post_tool_hook = permission_request_hook = stop_hook = None
         pre_compact_hook = post_compact_hook = None
@@ -1061,9 +1138,19 @@ class AgentSession:
             tools=self._tools,
             model=self._model,
             max_iterations=self._max_iterations,
-            max_tool_result_chars=_DEFAULT_MAX_TOOL_RESULT_CHARS,
+            max_tool_result_chars=self._max_tool_result_chars,
             token_meter=self._token_meter,
             transient_context_messages=tuple(turn_context_messages),
+            # Consecutive concurrency-safe (read-only, non-exclusive) calls in
+            # one model response run together (at most ``max_parallel_tools``
+            # per batch, identical ones once); everything else stays serial.
+            concurrent_tools=True,
+            max_parallel_tools=self._max_parallel_tools,
+            compact_trigger_tokens=self._compact_trigger_tokens,
+            max_turn_cost_usd=self._max_turn_cost_usd,
+            max_session_cost_usd=self._max_session_cost_usd,
+            prior_session_cost_usd=self._session_cost_usd,
+            max_tokens=self._request_output_budget(),
             workspace=self._workspace,
             context_window_tokens=self._context_window_tokens,
             hook=event_hook,
@@ -1103,6 +1190,7 @@ class AgentSession:
         # Persist the turn's messages (minus the system prompt) as history.
         self._history = [m for m in result.messages if m.get("role") != "system"]
         self._last_usage = dict(result.usage)
+        self._session_cost_usd += max(0.0, float(getattr(result, "cost_usd", 0.0) or 0.0))
 
         if result.final_content:
             self._emit(

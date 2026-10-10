@@ -7,7 +7,7 @@ import os
 import logging
 import threading
 import time
-from collections.abc import Callable, Iterator
+from collections.abc import AsyncIterator, Callable, Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass, replace
 from pathlib import Path
@@ -87,6 +87,7 @@ from core.domain.project import TrustState
 from core.domain.runtime_coordination import ExecutionClass, ResourceClaim
 from core.domain.thread import Thread, ThreadStatus
 from core.domain.turn import Turn, TurnExecutor, TurnStatus
+from core.domain.turn_mode import TURN_MODE_PAYLOAD_KEY, TurnMode, parse_turn_mode
 from core.events import Event, SkillLoaded, TurnStarted, UserInput
 from core.persistence.coordination_repository import RuntimeCoordinationRepository
 from core.persistence.database import Connection, Database
@@ -103,6 +104,7 @@ from core.persistence.usage_repository import UsageRepository
 from core.sessions import SessionStore
 from core.skills.host import SkillWorkspaceRegistry
 from core.sessions.continuation import assistant_continuation_metadata
+from core.sessions.transcript import visible_kernel_history
 from core.skills.models import MAX_SELECTED_SKILLS, SkillInvocation, SkillSelection
 
 TurnSettledListener = Callable[[Turn], None]
@@ -247,6 +249,10 @@ class TurnService:
         # Threads whose resident context is being summarized right now.
         self._compacting_lock = threading.Lock()
         self._compacting: set[str] = set()
+        # Event source for ``mode=deepthink`` Turns; replaceable in tests.
+        self.deepthink_stream_factory: Callable[..., AsyncIterator[Event]] = (
+            _default_deepthink_stream
+        )
 
     def configure_execution_coordinator(
         self,
@@ -341,6 +347,7 @@ class TurnService:
         execution_class: ExecutionClass | None = None,
         execution_security_profile: ExecutionSecurityProfile | None = None,
         execution_permission_mode: ExecutionPermissionMode | None = None,
+        mode: TurnMode | str | None = None,
     ) -> TurnSnapshot:
         with self._goal_submission(thread_id) as association:
             self._require_goal_association(association, expected_goal_id)
@@ -358,6 +365,7 @@ class TurnService:
                 client_surface=client_surface,
                 input_source=input_source,
                 input_delivery=TurnInputDelivery.CURRENT_TURN,
+                mode=mode,
                 execution_class=(execution_class or _execution_class_for(input_source)),
                 execution_security_profile_override=execution_security_profile,
                 execution_permission_mode_override=execution_permission_mode,
@@ -446,6 +454,7 @@ class TurnService:
         reasoning_effort: str | None = None,
         event_observer: Callable[[Event], None] | None = None,
         client_surface: ClientSurface = ClientSurface.INTERNAL,
+        mode: TurnMode | str | None = None,
     ) -> TurnSnapshot:
         """Persist a next Turn and run it after earlier Turns settle."""
 
@@ -465,6 +474,7 @@ class TurnService:
                 input_source=TurnInputSource.QUEUE,
                 input_delivery=TurnInputDelivery.NEXT_TURN,
                 execution_class=ExecutionClass.INTERACTIVE,
+                mode=mode,
                 goal_id=association.goal_id if association is not None else None,
                 goal_turn_settlement_ids=(
                     association.turn_settlement_ids
@@ -500,7 +510,9 @@ class TurnService:
         transaction_participant: (
             TurnTransactionParticipant[ParticipantResultT] | None
         ) = None,
+        mode: TurnMode | str | None = None,
     ) -> _TurnSubmission[ParticipantResultT]:
+        turn_mode = parse_turn_mode(mode)
         clean_prompt = prompt.strip()
         if not clean_prompt:
             raise EmptyInputError("turn prompt must not be empty")
@@ -530,6 +542,7 @@ class TurnService:
                 execution_class=execution_class,
                 security_override=execution_security_profile_override,
                 permission_override=execution_permission_mode_override,
+                mode=turn_mode.value,
             )
             if input_message_id is not None
             else None
@@ -728,6 +741,11 @@ class TurnService:
                     "executionSecurityProfile": (execution_security_profile.to_dict()),
                     **input_metadata,
                     "goal": ({"id": goal_id} if goal_id is not None else None),
+                    **(
+                        {TURN_MODE_PAYLOAD_KEY: turn_mode.value}
+                        if turn_mode is not TurnMode.NORMAL
+                        else {}
+                    ),
                 },
                 created_at=now,
                 updated_at=now,
@@ -810,7 +828,9 @@ class TurnService:
         *,
         use_current_selection: bool = False,
     ) -> TurnSnapshot:
-        original = self.read(turn_id).turn
+        original_snapshot = self.read(turn_id)
+        original = original_snapshot.turn
+        original_mode = _turn_mode_of(original_snapshot.items)
         if not original.status.is_terminal:
             raise ConflictError(
                 "only a completed, failed, or interrupted Turn can retry"
@@ -844,6 +864,9 @@ class TurnService:
                 client_surface=ClientSurface.INTERNAL,
                 input_source=TurnInputSource.RETRY,
                 execution_class=ExecutionClass.INTERACTIVE,
+                # The mode is part of what the user asked for: a retried
+                # DeepThink Turn reruns DeepThink.
+                mode=original_mode,
             )
         return self._activate_submission(submission).snapshot
 
@@ -1636,14 +1659,33 @@ class TurnService:
                 else {}
             )
             turn_client = _client_surface_value(initial_input_metadata.get("client"))
-            async for event in session.run_stream(
-                UserInput(
-                    text=turn.prompt,
-                    skills=tuple(
-                        SkillSelection(skill_id=skill_id) for skill_id in turn.skill_ids
-                    ),
+            deepthink = (
+                initial_item is not None
+                and _turn_mode_of((initial_item,)) is TurnMode.DEEPTHINK
+            )
+            deepthink_history_before: list[Any] = []
+            if deepthink:
+                # DeepThink replaces the agent loop for this Turn but emits
+                # the same Session events, so persistence, usage, history and
+                # titling below stay on the normal path.
+                turn_identity_metadata[TURN_MODE_PAYLOAD_KEY] = TurnMode.DEEPTHINK.value
+                deepthink_history_before = list(getattr(session, "history", ()))
+                event_stream = self.deepthink_stream_factory(
+                    session,
+                    prompt=turn.prompt,
+                    execution_profile=execution_profile,
                 )
-            ):
+            else:
+                event_stream = session.run_stream(
+                    UserInput(
+                        text=turn.prompt,
+                        skills=tuple(
+                            SkillSelection(skill_id=skill_id)
+                            for skill_id in turn.skill_ids
+                        ),
+                    )
+                )
+            async for event in event_stream:
                 if isinstance(event.msg, TurnStarted):
                     for invocation in event.msg.skill_invocations:
                         skill_invocations[invocation.skill_id] = invocation
@@ -1699,9 +1741,15 @@ class TurnService:
             raw_usage = getattr(session, "last_usage", {})
             if not projection.usage:
                 turn_usage = normalize_usage(raw_usage)
+            kernel_history = getattr(session, "history", ())
+            if deepthink and list(kernel_history) == deepthink_history_before:
+                # A research-only DeepThink run never touches the kernel
+                # history; one that handed a deliverable to the agent loop
+                # did, and that history is persisted like any agent Turn.
+                kernel_history = ()
             self.session_runtimes.persist_kernel_history(
                 turn.thread_id,
-                getattr(session, "history", ()),
+                kernel_history,
                 extra_metadata={
                     "schemaVersion": 3,
                     "client": turn_client,
@@ -1767,6 +1815,14 @@ class TurnService:
                         )
                 if stored_user or projection.final_text:
                     self.session_runtimes.mark_persisted(turn.thread_id)
+                if deepthink:
+                    # The exchange bypassed the live kernel's history; reload
+                    # it from the canonical transcript so the next Turn sees
+                    # this question and answer.
+                    canonical = self.session_store.get_session(turn.thread_id)
+                    if canonical is not None:
+                        session.load_history(visible_kernel_history(canonical.messages))
+                        self.session_runtimes.mark_persisted(turn.thread_id)
                 stop_reason = projection.stop_reason or "completed"
                 if stop_reason == "interrupted":
                     status = TurnStatus.INTERRUPTED
@@ -2492,3 +2548,35 @@ def _client_surface_value(value: object) -> str:
         return ClientSurface(value).value
     except (TypeError, ValueError):
         return ClientSurface.INTERNAL.value
+
+
+def _default_deepthink_stream(
+    session: Any,
+    *,
+    prompt: str,
+    execution_profile: ExecutionProfile | None,
+) -> AsyncIterator[Event]:
+    # Imported lazily: LangGraph loads only when a DeepThink Turn runs.
+    from core.deepthink.turn import deepthink_event_stream
+
+    return deepthink_event_stream(
+        session,
+        prompt=prompt,
+        execution_profile=execution_profile,
+    )
+
+
+def _turn_mode_of(items: tuple[Item, ...] | list[Item]) -> TurnMode:
+    """The mode persisted on a Turn's initial user message (normal if absent)."""
+
+    initial = next(
+        (
+            item
+            for item in items
+            if item.kind is ItemKind.USER_MESSAGE and item.ordinal == 1
+        ),
+        None,
+    )
+    if initial is None:
+        return TurnMode.NORMAL
+    return parse_turn_mode(initial.payload.get(TURN_MODE_PAYLOAD_KEY))

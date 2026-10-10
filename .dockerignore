@@ -21,6 +21,9 @@ env
 # Built in the image's web stage
 app_server/web_assets
 
+# Built in the image's genoffice stage (a local bundle may be macOS-only)
+tools/genoffice
+
 # Secrets (anywhere: docker/stack/.env and docker/deploy/.env hold passwords)
 **/.env
 **/.env.*
@@ -40,9 +43,13 @@ uploads
 logs
 *.log
 
-# Not needed in the image
+# Not needed in the image (top level only; skill folders keep theirs)
 eval
 website
+tests
+docs
+examples
+khaidocs
 
 # Local tooling output
 .playwright-mcp

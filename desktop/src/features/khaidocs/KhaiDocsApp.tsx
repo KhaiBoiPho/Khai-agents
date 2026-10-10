@@ -10,6 +10,7 @@
  * see docker/khaidocs.
  */
 
+import "@fontsource-variable/inter";
 import "@mantine/core/styles.css";
 import "./mantine.css";
 import "./khaidocs-baseline.css";

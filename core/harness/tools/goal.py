@@ -79,6 +79,12 @@ class UpdateGoalTool(Tool):
         # mutate the workspace, grant permissions, or bypass host validation.
         return True
 
+    @property
+    def exclusive(self) -> bool:
+        # Read-only for permission purposes, but never run in parallel:
+        # it records Goal state; ordering with other calls matters.
+        return True
+
     async def execute(
         self,
         *,

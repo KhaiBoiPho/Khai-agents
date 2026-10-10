@@ -11,11 +11,16 @@ import type { DocumentEntry } from "../../generated/app-server";
 import type { ClientRuntime } from "../../rpc/contracts";
 import { FileBadge } from "../../components/FileBadge";
 import { LoadingDots } from "../../components/Motion";
-import { MarkdownContent } from "../thread/MarkdownContent";
 import { documentKind } from "../inspector/documentKinds";
 import styles from "./Pages.module.css";
 
 const DocumentViewer = lazy(() => import("../inspector/DocumentViewer"));
+// The Markdown renderer (react-markdown, Prism) loads with the first preview.
+const MarkdownContent = lazy(() =>
+  import("../thread/MarkdownContent").then((module) => ({
+    default: module.MarkdownContent,
+  })),
+);
 
 const TABS = [
   { id: "all", label: "All" },
@@ -247,6 +252,7 @@ function DocumentPreview({
   if (kind) return <DocumentViewer key={document.id} path={document.path} load={load} />;
   if (error) return <p className={styles.previewMessage}>Could not load this file: {error}</p>;
   if (text === null) return <div className={styles.previewLoading}><LoadingDots /> Opening document</div>;
+  // Suspends inside the preview's Suspense boundary while the renderer loads.
   if (/\.(md|mdx|markdown)$/i.test(document.path)) return <MarkdownContent>{text}</MarkdownContent>;
   return <pre className={styles.plainPreview}>{text}</pre>;
 }

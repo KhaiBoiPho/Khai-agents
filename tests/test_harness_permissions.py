@@ -162,12 +162,86 @@ def test_never_approval_policy_turns_explicit_ask_rule_into_deny():
     assert "approval policy is never" in reason
 
 
-def test_mcp_prefixed_tools_recognized_as_read_only():
+def test_mcp_tool_name_suffix_never_grants_read_only():
+    # A server picks its own tool names; ending in ``_read_file`` / ``_grep``
+    # must not make a tool auto-allowed or plan-mode exempt.
     engine = PermissionEngine(mode=PermissionMode.DEFAULT, cwd="/w")
     assert (
         _decide(engine, "mcp_code-implementation_read_file", file_path="/w/a.py")
-        is ALLOW
+        is ASK
     )
+    assert _decide(engine, "mcp_x_rm_grep", pattern="*") is ASK
+    assert _decide(engine, "mcp_x_update_plan") is ASK
+    assert not engine.is_read_only("mcp_x_rm_ls")
+    plan = PermissionEngine(mode=PermissionMode.PLAN, cwd="/w")
+    assert _decide(plan, "mcp_x_rm_grep", pattern="*") is DENY
+    # Built-in read-only names keep their exact-name behavior.
+    assert _decide(engine, "grep", pattern="x") is ALLOW
+
+
+def test_mcp_read_only_requires_annotation_or_explicit_rule():
+    from types import SimpleNamespace
+
+    from core.agent_runtime.tools.registry import ToolRegistry
+    from core.mcp.models import McpToolAnnotations
+    from core.mcp.tools import McpToolAdapter
+
+    def adapter(raw: str, visible: str, read_only_hint: bool | None):
+        server = SimpleNamespace(
+            server_id="srv",
+            name="x",
+            source=SimpleNamespace(value="user"),
+            definition=SimpleNamespace(
+                policy_for=lambda _name: SimpleNamespace(value="auto"),
+                supports_parallel_tool_calls=True,
+            ),
+        )
+        annotations = (
+            SimpleNamespace(readOnlyHint=read_only_hint)
+            if read_only_hint is not None
+            else None
+        )
+        definition = SimpleNamespace(
+            name=raw,
+            description="d",
+            inputSchema={"type": "object", "properties": {}},
+            annotations=annotations,
+        )
+        return McpToolAdapter(
+            SimpleNamespace(server=server), definition, visible_name=visible
+        )
+
+    malicious = adapter("rm_grep", "mcp_x_rm_grep", None)
+    annotated = adapter("lookup", "mcp_x_lookup", True)
+    assert malicious.read_only is False
+    assert annotated.annotations == McpToolAnnotations.from_sdk(
+        SimpleNamespace(readOnlyHint=True)
+    )
+
+    registry = ToolRegistry()
+    registry.register(malicious)
+    registry.register(annotated)
+    engine = PermissionEngine(mode=PermissionMode.DEFAULT, cwd="/w")
+    _wire_tool_permissions(registry, engine)
+
+    # Plain evaluation (registry-declared metadata) and the session's
+    # evaluate_tool path (adapter metadata) agree.
+    assert _decide(engine, "mcp_x_rm_grep") is ASK
+    assert _decide(engine, "mcp_x_lookup") is ALLOW
+    assert engine.evaluate_tool("mcp_x_rm_grep", {}, read_only=malicious.read_only)[0] is ASK
+    assert engine.evaluate_tool("mcp_x_lookup", {}, read_only=annotated.read_only)[0] is ALLOW
+    plan = PermissionEngine(mode=PermissionMode.PLAN, cwd="/w")
+    _wire_tool_permissions(registry, plan)
+    assert _decide(plan, "mcp_x_rm_grep") is DENY
+    assert _decide(plan, "mcp_x_lookup") is ALLOW
+
+    # An explicit user rule can still allow an unannotated MCP tool.
+    ruled = PermissionEngine(
+        mode=PermissionMode.DEFAULT,
+        rules=rules_from_config({"mcp_x_rm_grep": "allow"}),
+        cwd="/w",
+    )
+    assert _decide(ruled, "mcp_x_rm_grep") is ALLOW
 
 
 # ---- two-dimensional wildcard rules, last-match-wins ------------------------

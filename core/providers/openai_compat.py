@@ -307,8 +307,22 @@ class OpenAICompatProvider(LLMProvider):
         cls,
         messages: list[dict[str, Any]],
         tools: list[dict[str, Any]] | None,
+        *,
+        system_only: bool = False,
     ) -> tuple[list[dict[str, Any]], list[dict[str, Any]] | None]:
-        """Inject cache_control markers for prompt caching."""
+        """Inject cache_control markers for prompt caching.
+
+        Breakpoints sit on the stable prefix: the tool list (last built-in and
+        last tool, so a late MCP tool only invalidates its own tail), the system
+        message, and the LAST message. Marking the last message (not the one
+        before it) writes the newest tool results into the cache once, and the
+        next request reads them back through the provider's lookback instead
+        of paying full price for them a second time. Four markers at most,
+        which is Anthropic's limit.
+
+        ``system_only`` places a single breakpoint on the system message, for
+        gateways that honour only one (OpenRouter → Gemini).
+        """
         cache_marker = {"type": "ephemeral"}
         new_messages = list(messages)
 
@@ -331,10 +345,13 @@ class OpenAICompatProvider(LLMProvider):
                 return {**msg, "content": nc}
             return msg
 
-        if new_messages and new_messages[0].get("role") == "system":
+        has_system = bool(new_messages) and new_messages[0].get("role") == "system"
+        if has_system:
             new_messages[0] = _mark(new_messages[0])
-        if len(new_messages) >= 3:
-            new_messages[-2] = _mark(new_messages[-2])
+        if system_only:
+            return new_messages, tools
+        if len(new_messages) >= (2 if has_system else 1):
+            new_messages[-1] = _mark(new_messages[-1])
 
         new_tools = tools
         if tools:
@@ -421,6 +438,89 @@ class OpenAICompatProvider(LLMProvider):
                 clean["tool_call_id"] = map_id(clean["tool_call_id"])
         return self._enforce_role_alternation(sanitized)
 
+    def _accepts_images(self) -> bool:
+        modalities = getattr(self, "input_modalities", None)
+        return modalities is None or "image" in modalities
+
+    @staticmethod
+    def _lift_tool_result_images(
+        messages: list[dict[str, Any]],
+        *,
+        drop_images: bool = False,
+    ) -> list[dict[str, Any]]:
+        """Move images out of tool results into a user message after them.
+
+        Chat Completions (and the Responses ``function_call_output`` string
+        this adapter sends) accept only text in a tool result, so a tool
+        message's images (its ``images`` key, set by the agent runner, or
+        ``image_url`` parts in list content) ride the next user turn: merged
+        into it when the tool run is followed by a user message, otherwise in
+        a new user message right after the run. Tool messages keep their
+        text, so every tool call still gets its matching result. With
+        ``drop_images`` (a model declared text-only) images are discarded;
+        the tool text already names each one.
+        """
+
+        if not any(
+            message.get("role") == "tool"
+            and (isinstance(message.get("content"), list) or message.get("images"))
+            for message in messages
+        ):
+            return messages
+        result: list[dict[str, Any]] = []
+        pending: list[dict[str, Any]] = []
+
+        def flush(next_message: dict[str, Any] | None) -> dict[str, Any] | None:
+            if drop_images:
+                pending.clear()
+            if not pending:
+                return next_message
+            header = {
+                "type": "text",
+                "text": "Images returned by the tool calls above:",
+            }
+            parts = [header, *pending]
+            pending.clear()
+            if next_message is not None and next_message.get("role") == "user":
+                content = next_message.get("content")
+                if isinstance(content, str):
+                    content = [{"type": "text", "text": content}] if content else []
+                elif not isinstance(content, list):
+                    content = []
+                return {**next_message, "content": [*parts, *content]}
+            result.append({"role": "user", "content": parts})
+            return next_message
+
+        for message in messages:
+            if message.get("role") == "tool":
+                images = message.get("images")
+                if "images" in message:
+                    message = {k: v for k, v in message.items() if k != "images"}
+                if isinstance(images, list):
+                    pending.extend(
+                        part
+                        for part in images
+                        if isinstance(part, dict) and part.get("type") == "image_url"
+                    )
+                content = message.get("content")
+                if isinstance(content, list):
+                    texts: list[str] = []
+                    for part in content:
+                        if isinstance(part, dict) and part.get("type") == "image_url":
+                            pending.append(part)
+                        elif isinstance(part, dict) and isinstance(part.get("text"), str):
+                            texts.append(part["text"])
+                        elif isinstance(part, str):
+                            texts.append(part)
+                    message = {**message, "content": "\n".join(texts) or "(image)"}
+                result.append(message)
+                continue
+            lifted = flush(message)
+            if lifted is not None:
+                result.append(lifted)
+        flush(None)
+        return result
+
     def _rehydrate_provider_state(
         self, messages: list[dict[str, Any]]
     ) -> list[dict[str, Any]]:
@@ -468,8 +568,16 @@ class OpenAICompatProvider(LLMProvider):
         spec = self._spec
 
         if spec and spec.supports_prompt_caching:
-            if any(model_name.lower().startswith(k) for k in ("anthropic/", "claude")):
+            lowered = model_name.lower()
+            if any(lowered.startswith(k) for k in ("anthropic/", "claude")):
                 messages, tools = self._apply_cache_control(messages, tools)
+            elif lowered.startswith("google/") and spec.name == "openrouter":
+                # OpenRouter honours one cache_control breakpoint for Gemini;
+                # put it on the stable prefix (tools + system). openai/* and
+                # most others cache automatically on a byte-stable prefix.
+                messages, tools = self._apply_cache_control(
+                    messages, tools, system_only=True
+                )
 
         compat = resolve_model_compat(
             model_name=model_name, spec=spec, reasoning_effort=reasoning_effort
@@ -478,7 +586,13 @@ class OpenAICompatProvider(LLMProvider):
         kwargs: dict[str, Any] = {
             "model": compat.model_name,
             "messages": self._sanitize_messages(
-                self._sanitize_empty_content(self._rehydrate_provider_state(messages))
+                self._sanitize_empty_content(
+                    self._rehydrate_provider_state(
+                        self._lift_tool_result_images(
+                            messages, drop_images=not self._accepts_images()
+                        )
+                    )
+                )
             ),
         }
 
@@ -629,7 +743,12 @@ class OpenAICompatProvider(LLMProvider):
         self.validate_request_capabilities(messages, tools)
         model_name = model or self.default_model
         sanitized_messages = self._sanitize_messages(
-            self._sanitize_empty_content(messages), preserve_provider_state=True
+            self._sanitize_empty_content(
+                self._lift_tool_result_images(
+                    messages, drop_images=not self._accepts_images()
+                )
+            ),
+            preserve_provider_state=True,
         )
         instructions, input_items = convert_messages(sanitized_messages)
 
@@ -823,6 +942,20 @@ class OpenAICompatProvider(LLMProvider):
                 cached = cls._get_nested_int(usage_obj, path)
             if cached:
                 result["cached_tokens"] = cached
+                break
+
+        # --- cache writes (OpenRouter reports them for providers that bill a
+        # write, e.g. Anthropic/Gemini behind ``cache_control``). Normalised to
+        # Anthropic's key so both paths read the same in usage records. ---
+        for path in (
+            ("prompt_tokens_details", "cache_write_tokens"),  # OpenRouter
+            ("cache_creation_input_tokens",),  # Anthropic-compatible gateways
+        ):
+            written = cls._get_nested_int(usage_map, path)
+            if not written and usage_obj:
+                written = cls._get_nested_int(usage_obj, path)
+            if written:
+                result["cache_creation_input_tokens"] = written
                 break
 
         # --- cost: what the provider charged (OpenRouter), in nano-USD so it

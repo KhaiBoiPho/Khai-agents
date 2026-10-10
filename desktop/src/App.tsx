@@ -30,10 +30,6 @@ import { isChatsProject } from "./app/chats";
 import { HomeView } from "./features/home/HomeView";
 import { DocumentsPage } from "./features/pages/DocumentsPage";
 import { requestFilePreview } from "./features/inspector/filePreviewRequests";
-import { NotesPage } from "./features/planner/notes/NotesPage";
-import { CalendarPage } from "./features/planner/calendar/CalendarPage";
-import { TasksPage } from "./features/planner/tasks/TasksPage";
-import { SchedulePage } from "./features/planner/schedule/SchedulePage";
 import { AppsPage } from "./features/apps/AppsPage";
 import { ReviewResizer } from "./features/inspector/ReviewResizer";
 import { useReviewWidth } from "./features/inspector/useReviewWidth";
@@ -56,6 +52,28 @@ const Inspector = lazy(() =>
 // Docmost's client and its editor stack are large; load them only when
 // KhaiDocs is opened. See src/khaidocs-app.d.ts for the typed boundary.
 const KhaiDocsApp = lazy(() => import("khaidocs-app"));
+// The planner pages (and their stylesheets) are opened rarely; keep them,
+// and the Markdown stack the notes pull in, out of the startup bundle.
+const NotesPage = lazy(() =>
+  import("./features/planner/notes/NotesPage").then((module) => ({
+    default: module.NotesPage,
+  })),
+);
+const CalendarPage = lazy(() =>
+  import("./features/planner/calendar/CalendarPage").then((module) => ({
+    default: module.CalendarPage,
+  })),
+);
+const TasksPage = lazy(() =>
+  import("./features/planner/tasks/TasksPage").then((module) => ({
+    default: module.TasksPage,
+  })),
+);
+const SchedulePage = lazy(() =>
+  import("./features/planner/schedule/SchedulePage").then((module) => ({
+    default: module.SchedulePage,
+  })),
+);
 const ManagementWorkspace = lazy(() =>
   import("./features/management/ManagementWorkspace").then((module) => ({
     default: module.ManagementWorkspace,
@@ -76,6 +94,17 @@ const WorkflowComposer = lazy(() =>
     default: module.WorkflowComposer,
   })),
 );
+
+/** Run `task` once the browser is idle (or after a short wait without
+ * requestIdleCallback, as in WebKit); returns a cancel function. */
+function whenIdle(task: () => void): () => void {
+  if (typeof window.requestIdleCallback === "function") {
+    const handle = window.requestIdleCallback(task, { timeout: 3000 });
+    return () => window.cancelIdleCallback(handle);
+  }
+  const handle = window.setTimeout(task, 1500);
+  return () => window.clearTimeout(handle);
+}
 
 function LoadingSurface({
   children,
@@ -316,16 +345,23 @@ export function App({
   // them is instant; a new chat or another session drops that cache.
   const openSessionId =
     showingThreads && !showHome && page === null ? (selectedThread?.id ?? null) : null;
+  // The read-ahead waits for an idle moment so it does not compete with the
+  // session's own first render and event replay.
   useEffect(() => {
     if (!openSessionId) {
       enterSession(null);
       return;
     }
+    enterSession(openSessionId);
     let current = true;
-    void import("./features/workbench/LocalMonacoEditor");
-    void prefetchSession(runtime, openSessionId, () => current);
+    const cancelIdle = whenIdle(() => {
+      if (!current) return;
+      void import("./features/workbench/LocalMonacoEditor");
+      void prefetchSession(runtime, openSessionId, () => current);
+    });
     return () => {
       current = false;
+      cancelIdle();
     };
   }, [openSessionId, runtime]);
 
@@ -457,13 +493,21 @@ export function App({
             </header>
             <section className={styles.threadViewport}>
               {page === "notes" ? (
-                <NotesPage />
+                <Suspense fallback={null}>
+                  <NotesPage />
+                </Suspense>
               ) : page === "calendar" ? (
-                <CalendarPage />
+                <Suspense fallback={null}>
+                  <CalendarPage />
+                </Suspense>
               ) : page === "plan" ? (
-                <TasksPage />
+                <Suspense fallback={null}>
+                  <TasksPage />
+                </Suspense>
               ) : page === "schedule" ? (
-                <SchedulePage />
+                <Suspense fallback={null}>
+                  <SchedulePage />
+                </Suspense>
               ) : page === "apps" ? (
                 <AppsPage />
               ) : page === "khaidocs" ? (
@@ -518,7 +562,7 @@ export function App({
                 }}
                 onAddFolder={() => void controller.openProject()}
                 onOpenSettings={(section) => ui.openSettings(section)}
-                onStart={(projectId, prompt, model, files) => {
+                onStart={(projectId, prompt, model, files, options) => {
                   void (async () => {
                     const target =
                       projectId ?? (await controller.ensureChatsProject()).id;
@@ -543,6 +587,7 @@ export function App({
                       prompt: text,
                       skillIds: [],
                       autoSend: true,
+                      ...(options?.mode ? { mode: options.mode } : {}),
                     });
                     setHomeOpen(false);
                   })();

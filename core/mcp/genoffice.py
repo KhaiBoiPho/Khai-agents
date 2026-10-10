@@ -68,8 +68,9 @@ names or explain away a failed check. Image layouts must include a real image \
 query or a workspace image; do not omit `images`. \
 2) build with these tools, writing only workspace-relative paths such as \
 `reports/<name>.docx` (paths outside the workspace are refused); \
-3) check (`docs_check`, `sheet_check`, `slides_audit`) and look (`render` or \
-`slides_render`), fixing at most twice; \
+3) check (`docs_check`, `sheet_check`, `slides_audit`) and, if render is \
+available, look (`render` or `slides_render`); on `app_unavailable` continue \
+without it and say the visual check was skipped; fix at most twice; \
 4) present: name each file's workspace path with a one-line summary; the chat \
 shows it as a card the user can open, so do not paste the document back. \
 For `create_docx`, always pass non-empty `markdown` (preferred) or supported \
@@ -154,15 +155,43 @@ def builtin_server_instructions(server_name: str) -> str | None:
 def builtin_server_definitions(
     env: Mapping[str, str] | None = None,
 ) -> dict[str, McpServerDefinition]:
-    """Built-in servers available on this machine, keyed by server name."""
+    """Built-in servers available on this machine, keyed by server name.
 
+    GenOffice appears when its binary resolves; the Firecrawl web search
+    server (deferred, keyless URL) unless ``$KHAI_BUILTIN_WEBSEARCH`` is set
+    to an off value.
+    """
+
+    from core.mcp.firecrawl import (
+        FIRECRAWL_SERVER_NAME,
+        firecrawl_server_definition,
+    )
+
+    environ = os.environ if env is None else env
+    servers: dict[str, McpServerDefinition] = {}
     binary = resolve_genoffice_binary(env)
-    if binary is None:
-        return {}
-    return {GENOFFICE_SERVER_NAME: genoffice_server_definition(binary)}
+    if binary is not None:
+        servers[GENOFFICE_SERVER_NAME] = genoffice_server_definition(binary)
+    if builtin_websearch_enabled(environ):
+        servers[FIRECRAWL_SERVER_NAME] = firecrawl_server_definition()
+    return servers
+
+
+BUILTIN_WEBSEARCH_ENV = "KHAI_BUILTIN_WEBSEARCH"
+_OFF_VALUES = frozenset({"", "0", "false", "no", "off"})
+
+
+def builtin_websearch_enabled(env: Mapping[str, str] | None = None) -> bool:
+    """Whether the built-in Firecrawl server is offered (default: yes)."""
+
+    environ = os.environ if env is None else env
+    if BUILTIN_WEBSEARCH_ENV not in environ:
+        return True
+    return environ[BUILTIN_WEBSEARCH_ENV].strip().lower() not in _OFF_VALUES
 
 
 __all__ = [
+    "BUILTIN_WEBSEARCH_ENV",
     "BUNDLED_GENOFFICE_BIN",
     "GENOFFICE_BIN_ENV",
     "GENOFFICE_DISABLED_TOOLS",
@@ -170,6 +199,7 @@ __all__ = [
     "GENOFFICE_KHAI_INSTRUCTIONS",
     "builtin_server_definitions",
     "builtin_server_instructions",
+    "builtin_websearch_enabled",
     "genoffice_server_definition",
     "resolve_genoffice_binary",
 ]

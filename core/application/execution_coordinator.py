@@ -669,7 +669,31 @@ class ExecutionCoordinator:
                 return claim
         return None
 
+    def _has_dispatch_candidates(self) -> bool:
+        """Lock-free probe: is any queued Turn eligible for this worker?
+
+        The claiming transaction takes the user's write lock, which also
+        serializes that user's streaming writes; an idle pass skips it.
+        """
+
+        with self._admission_lock:
+            if self._admission_paused:
+                return False
+        with self.database.read() as connection:
+            return bool(
+                RuntimeCoordinationRepository(connection).list_queued_turn_candidates(
+                    self.worker_id,
+                    limit=1,
+                )
+            )
+
     def _run(self) -> None:
+        # The first pass, and any pass after offer()/a release woke the loop,
+        # claims directly. A timed-out pass first probes without the write
+        # lock, so idle workers no longer open a dispatch transaction every
+        # heartbeat while queued work from other processes is still seen on
+        # the same cadence.
+        woken = True
         while not self._stop.is_set():
             try:
                 stale = self.heartbeat()
@@ -685,10 +709,11 @@ class ExecutionCoordinator:
                 self.recover_candidates(heartbeat_before=heartbeat_before)
                 if self._stop.is_set():
                     break
-                self.dispatch_once()
+                if woken or self._has_dispatch_candidates():
+                    self.dispatch_once()
             except Exception:
                 logger.exception("execution coordinator pass failed")
-            self._wake.wait(self.heartbeat_interval)
+            woken = self._wake.wait(self.heartbeat_interval)
             self._wake.clear()
 
     def _start_background_locked(self) -> None:

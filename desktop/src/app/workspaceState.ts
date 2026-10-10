@@ -87,6 +87,8 @@ export type WorkspaceAction =
   | { type: "workflow-snapshot"; snapshot: WorkflowSnapshotResult }
   | { type: "goal"; goal: Goal | null; outcome: GoalOutcome | null }
   | { type: "event"; event: Event }
+  /** Several events applied in one reducer pass (streamed deltas, replay). */
+  | { type: "events"; events: Event[] }
   | { type: "select-item"; itemId: string | null }
   | { type: "busy"; busy: boolean }
   | { type: "error"; error: BridgeError | null }
@@ -615,6 +617,8 @@ export function workspaceReducer(
       };
     case "event":
       return applyDomainEvent(state, action.event);
+    case "events":
+      return action.events.reduce(applyDomainEvent, state);
     case "select-item":
       return { ...state, selectedItemId: action.itemId };
     case "busy":

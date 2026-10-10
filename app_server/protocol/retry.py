@@ -46,6 +46,7 @@ READ_METHODS = frozenset(
         "rag/status",
         "thread/usage",
         "provider/balance",
+        "websearch/status",
     }
 )
 

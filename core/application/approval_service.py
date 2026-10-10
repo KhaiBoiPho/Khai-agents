@@ -45,7 +45,9 @@ class _LocalDecisionWaiter:
 class ApprovalService:
     """Create, resolve, cancel, and resume permission-gated tool calls."""
 
-    _DEFAULT_DECISION_POLL_SECONDS = 0.2
+    # Only the cross-process fallback: a decision made in this process wakes
+    # the waiter's Future at once.
+    _DEFAULT_DECISION_POLL_SECONDS = 2.0
     _ALLOWED_DECISIONS = {
         ApprovalStatus.APPROVED_ONCE,
         ApprovalStatus.APPROVED_SESSION,
@@ -385,8 +387,8 @@ class ApprovalService:
         """
 
         while True:
-            with self.database.read() as connection:
-                current = ApprovalRepository(connection).get(approval_id)
+            # Off the event loop: other turns share it.
+            current = await asyncio.to_thread(self._read_approval, approval_id)
             if current is None:
                 raise ApprovalNotFoundError(f"approval not found: {approval_id}")
             if current.status is not ApprovalStatus.PENDING:
@@ -395,6 +397,10 @@ class ApprovalService:
                 (local_wake,),
                 timeout=self.decision_poll_seconds,
             )
+
+    def _read_approval(self, approval_id: str) -> Approval | None:
+        with self.database.read() as connection:
+            return ApprovalRepository(connection).get(approval_id)
 
     @staticmethod
     def _category(tool_name: str, arguments: dict[str, Any]) -> ApprovalCategory:

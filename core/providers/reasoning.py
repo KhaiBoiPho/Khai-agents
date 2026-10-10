@@ -114,6 +114,44 @@ def declared_reasoning_capabilities(
     )
 
 
+#: The effort levels the app offers for every model (Low = faster,
+#: Medium = smarter; desktop EffortSlider).
+PRODUCT_EFFORTS = ("low", "medium")
+
+#: Named efforts from least to most reasoning, for nearest-level mapping.
+_EFFORT_ORDER = ("minimal", "low", "medium", "high", "xhigh", "max")
+
+
+def _map_product_effort(
+    effort: str, capabilities: ModelReasoningCapabilities
+) -> str | None:
+    """Low or Medium on a model that may not publish those exact levels.
+
+    A model with named levels gets the requested one, else the nearest (ties
+    go down for Low, up for Medium). A model that publishes no levels gets
+    the level as asked; its adapter passes it on or drops it as the provider
+    requires (as for any explicit effort on such a model).
+    """
+
+    supported = capabilities.supported_efforts
+    if not supported:
+        return effort
+    if effort in supported:
+        return effort
+    target = _EFFORT_ORDER.index(effort)
+    ranked = [level for level in supported if level in _EFFORT_ORDER]
+    if not ranked:
+        return capabilities.default_effort
+    prefer_up = effort == "medium"
+    return min(
+        ranked,
+        key=lambda level: (
+            abs(_EFFORT_ORDER.index(level) - target),
+            (_EFFORT_ORDER.index(level) < target) if prefer_up else (_EFFORT_ORDER.index(level) > target),
+        ),
+    )
+
+
 def resolve_reasoning_effort(
     *,
     requested: str | None,
@@ -141,6 +179,10 @@ def resolve_reasoning_effort(
             raise ValueError("reasoning cannot be disabled for this model")
         return "none"
 
+    if candidate in PRODUCT_EFFORTS and capabilities is not None:
+        # The two levels every model is offered in the app, whatever its
+        # provider publishes: map them onto what this model supports.
+        return _map_product_effort(candidate, capabilities)
     if capabilities is None or not capabilities.supported_efforts:
         return candidate
     if candidate in capabilities.supported_efforts:

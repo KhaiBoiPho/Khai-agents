@@ -20,6 +20,12 @@ class ToolRegistry:
     def __init__(self):
         self._tools: dict[str, Tool] = {}
         self._cached_definitions: list[dict[str, Any]] | None = None
+        # Provider prompt caches match on a byte-stable PREFIX, and tools are
+        # the head of that prefix. Built-ins are sorted by name; MCP tools get
+        # a slot the first time definitions are built with them present and
+        # keep it, so a server that connects late only appends at the end
+        # instead of reshuffling (and un-caching) everything after it.
+        self._mcp_slots: dict[str, int] = {}
         self._exit_stack: AsyncExitStack = AsyncExitStack()
         self._owned_server_stacks: dict[str, AsyncExitStack] = {}
 
@@ -62,8 +68,17 @@ class ToolRegistry:
                 builtins.append(schema)
 
         builtins.sort(key=self._schema_name)
-        mcp_tools.sort(key=self._schema_name)
-        self._cached_definitions = builtins + mcp_tools
+        new_names = sorted(
+            name
+            for name in (self._schema_name(schema) for schema in mcp_tools)
+            if name not in self._mcp_slots
+        )
+        for name in new_names:
+            self._mcp_slots[name] = len(self._mcp_slots)
+        mcp_tools.sort(key=lambda schema: self._mcp_slots[self._schema_name(schema)])
+        self._cached_definitions = builtins + [
+            canonical_schema(schema) for schema in mcp_tools
+        ]
         return self._cached_definitions
 
     def prepare_call(
@@ -194,6 +209,21 @@ class ToolRegistry:
                     )
                 else:
                     logger.warning("ToolRegistry.aclose: error draining stack: {}", exc)
+
+
+def canonical_schema(value: Any) -> Any:
+    """Return ``value`` with every mapping's keys in sorted order.
+
+    JSON objects are unordered, so this changes no meaning; it makes the
+    serialized bytes independent of the order an external (MCP) server
+    happened to emit keys in, which keeps the cached prompt prefix stable
+    across reconnects. Lists keep their order.
+    """
+    if isinstance(value, dict):
+        return {key: canonical_schema(value[key]) for key in sorted(value, key=str)}
+    if isinstance(value, list):
+        return [canonical_schema(item) for item in value]
+    return value
 
 
 def _is_benign_cancel_teardown(exc: BaseException) -> bool:

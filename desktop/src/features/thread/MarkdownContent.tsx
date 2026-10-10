@@ -1,12 +1,14 @@
 import { Check, Copy } from "lucide-react";
 import { Highlight, themes } from "prism-react-renderer";
 import {
+  memo,
   useEffect,
+  useMemo,
   useState,
   type AnchorHTMLAttributes,
   type ReactNode,
 } from "react";
-import ReactMarkdown from "react-markdown";
+import ReactMarkdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
 
 import { useThemeIsDark } from "../../app/useThemeIsDark";
@@ -88,48 +90,64 @@ function ExternalLink({
   );
 }
 
-export function MarkdownContent({
+function MarkdownLink({
+  node,
+  ...props
+}: AnchorHTMLAttributes<HTMLAnchorElement> & { node?: unknown }) {
+  void node;
+  const openCitation = useCitationHandler();
+  const citation = openCitation ? parseCitationHref(props.href) : null;
+  if (citation && openCitation) {
+    return (
+      <CitationLink {...citation} onOpen={openCitation}>
+        {props.children}
+      </CitationLink>
+    );
+  }
+  return <ExternalLink {...props} />;
+}
+
+// Module scope keeps these referentially stable: an inline object would hand
+// react-markdown new component types on every render and remount every node.
+const REMARK_PLUGINS = [remarkGfm];
+
+const MARKDOWN_COMPONENTS: Components = {
+  a: MarkdownLink,
+  pre: ({ children: preChildren }) => <>{preChildren}</>,
+  code: ({ node, className, children: codeChildren, ...props }) => {
+    void node;
+    const code = String(codeChildren).replace(/\n$/, "");
+    const language = /language-([\w-]+)/.exec(className ?? "")?.[1] ?? "";
+    const block = Boolean(language) || String(codeChildren).includes("\n");
+    if (block) {
+      return <CodeBlock code={code} language={language} />;
+    }
+    return (
+      <code {...props} className={className}>
+        {codeChildren as ReactNode}
+      </code>
+    );
+  },
+};
+
+export const MarkdownContent = memo(function MarkdownContent({
   children,
   compact = false,
 }: MarkdownContentProps) {
   const openCitation = useCitationHandler();
+  const markdown = useMemo(
+    () => (openCitation ? linkCitations(children) : children),
+    [children, openCitation],
+  );
   return (
     <div className={styles.markdown} data-compact={compact}>
       <ReactMarkdown
-        remarkPlugins={[remarkGfm]}
+        remarkPlugins={REMARK_PLUGINS}
         skipHtml
-        components={{
-          a: ({ node, ...props }) => {
-            void node;
-            const citation = openCitation ? parseCitationHref(props.href) : null;
-            if (citation && openCitation) {
-              return (
-                <CitationLink {...citation} onOpen={openCitation}>
-                  {props.children}
-                </CitationLink>
-              );
-            }
-            return <ExternalLink {...props} />;
-          },
-          pre: ({ children: preChildren }) => <>{preChildren}</>,
-          code: ({ node, className, children: codeChildren, ...props }) => {
-            void node;
-            const code = String(codeChildren).replace(/\n$/, "");
-            const language = /language-([\w-]+)/.exec(className ?? "")?.[1] ?? "";
-            const block = Boolean(language) || String(codeChildren).includes("\n");
-            if (block) {
-              return <CodeBlock code={code} language={language} />;
-            }
-            return (
-              <code {...props} className={className}>
-                {codeChildren as ReactNode}
-              </code>
-            );
-          },
-        }}
+        components={MARKDOWN_COMPONENTS}
       >
-        {openCitation ? linkCitations(children) : children}
+        {markdown}
       </ReactMarkdown>
     </div>
   );
-}
+});

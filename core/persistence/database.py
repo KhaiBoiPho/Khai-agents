@@ -264,6 +264,13 @@ def _pool(url: str) -> ConnectionPool:
                     "autocommit": False,
                     "application_name": "khai-agents",
                     "prepare_threshold": None if per_path else 5,
+                    # A stuck statement or an abandoned transaction must not
+                    # hold a user's write lock forever.
+                    "options": (
+                        "-c statement_timeout="
+                        + os.environ.get("KHAI_DATABASE_STATEMENT_TIMEOUT_MS", "120000")
+                        + " -c idle_in_transaction_session_timeout=60000"
+                    ),
                 },
                 open=True,
                 timeout=30,

@@ -94,18 +94,65 @@ class _Base(BaseModel):
 #: are billed for what the model writes, not for the cap.
 OUTPUT_TOKEN_BUDGET = 32_768
 
+#: Output cap for a turn whose reasoning effort is low (the app default) or
+#: off. Billing follows what the model writes, but gateways (OpenRouter)
+#: reserve credit against ``max_tokens`` and a runaway generation is bounded
+#: by it; a low-effort answer plus its hidden thinking fits comfortably here,
+#: and a cut-off reply still goes through the runner's length recovery.
+LOW_EFFORT_OUTPUT_TOKEN_BUDGET = 16_384
+_LOW_OUTPUT_EFFORTS = frozenset({"none", "minimal", "low"})
+
+
+def output_budget_for_effort(
+    effort: str | None, ceiling: int | None = None
+) -> int | None:
+    """Per-request ``max_tokens`` for ``effort``, never above ``ceiling``.
+
+    ``None`` means "keep the provider default" (unknown or higher effort).
+    """
+    normalized = effort.strip().lower() if isinstance(effort, str) else ""
+    if normalized not in _LOW_OUTPUT_EFFORTS:
+        return None
+    budget = LOW_EFFORT_OUTPUT_TOKEN_BUDGET
+    if isinstance(ceiling, int) and not isinstance(ceiling, bool) and ceiling > 0:
+        budget = min(budget, ceiling)
+    return budget
+
+
+def _env_float(name: str) -> float | None:
+    raw = (os.environ.get(name) or "").strip()
+    if not raw:
+        return None
+    try:
+        value = float(raw)
+    except ValueError:
+        return None
+    return value if value > 0 else None
+
+
+def _env_int(name: str, default: int) -> int:
+    raw = (os.environ.get(name) or "").strip()
+    if not raw:
+        return default
+    try:
+        return int(raw)
+    except ValueError:
+        return default
+
 
 class AgentDefaults(_Base):
     """Default LLM generation settings shared by all phases."""
 
     # Used when the config file sets no default; ``.env`` may supply them.
     connection: str | None = Field(
-        default_factory=lambda: os.environ.get("KHAI_DEFAULT_CONNECTION") or "gemini"
+        default_factory=lambda: os.environ.get("KHAI_DEFAULT_CONNECTION") or "openrouter"
     )
     provider: str = "auto"  # "auto" or registry name (e.g. "openai", "anthropic")
     model: str = Field(
+        # Luna 6 through OpenRouter: the default for every new account; each
+        # user enters their own OpenRouter API key (the client asks for it).
         default_factory=lambda: os.environ.get("KHAI_DEFAULT_MODEL")
-        or "models/gemini-3.6-flash"
+        or "openai/gpt-6-luna"
     )
     # Not a setting: every request asks for OUTPUT_TOKEN_BUDGET (see below).
     max_tokens: int = 32_768
@@ -121,8 +168,34 @@ class AgentDefaults(_Base):
     max_tokens_policy: str | None = None
     # Runner ergonomics (mirror nanobot's AgentDefaults).
     max_tool_iterations: int = 200
-    max_tool_result_chars: int = 16_000
+    # A single tool result above this many characters is spilled to a file
+    # under ``.deepcode/tool-results`` and replaced by a head/tail preview.
+    max_tool_result_chars: int = Field(
+        default_factory=lambda: _env_int("KHAI_MAX_TOOL_RESULT_CHARS", 12_000)
+    )
     context_window_tokens: int = 65_536
+    # ---- cost controls (the host pays for every token) ----
+    # Concurrency-safe (read-only) tool calls from one model response run in
+    # parallel batches of at most this many.
+    max_parallel_tools: int = Field(
+        default_factory=lambda: _env_int("KHAI_MAX_PARALLEL_TOOLS", 4)
+    )
+    # Auto-compaction fires at the smaller of 90% of the context budget and
+    # this many prompt tokens, so a huge-window model does not resend a
+    # 300k-token history on every step. 0 disables the cap.
+    compact_trigger_tokens: int = Field(
+        default_factory=lambda: _env_int("KHAI_COMPACT_TRIGGER_TOKENS", 80_000)
+    )
+    # Spend guards in USD (off when unset). A Turn stops with a clear message
+    # once its model calls cost more than ``maxTurnCostUsd``; a Session stops
+    # accepting work once it has cost more than ``maxSessionCostUsd``. Cost is
+    # what the provider reported (OpenRouter) or the catalog list price.
+    max_turn_cost_usd: float | None = Field(
+        default_factory=lambda: _env_float("KHAI_MAX_TURN_COST_USD")
+    )
+    max_session_cost_usd: float | None = Field(
+        default_factory=lambda: _env_float("KHAI_MAX_SESSION_COST_USD")
+    )
 
 
 class AgentPhase(_Base):
@@ -1044,6 +1117,24 @@ def load_config_for_workspace(workspace: str | Path) -> DeepCodeConfig:
     project = _project_runtime_layer(_load_raw(project_config_path(workspace)))
     raw = _resolve_env_refs(_deep_merge(base, project))
     return DeepCodeConfig.model_validate(raw)
+
+
+def host_agent_defaults() -> AgentDefaults:
+    """Host-level ``agents.defaults`` (user/home config + env), no project layer.
+
+    Cost controls (spend guards, parallel-tool cap, result and compaction
+    sizes) belong to whoever pays for the tokens, so a workspace's project
+    config cannot loosen them. Never raises: a broken or missing config falls
+    back to the env-derived defaults.
+    """
+
+    try:
+        raw = _resolve_env_refs(_load_raw(home_config_path()))
+        agents = raw.get("agents") if isinstance(raw, dict) else None
+        defaults = agents.get("defaults") if isinstance(agents, dict) else None
+        return AgentDefaults.model_validate(defaults or {})
+    except Exception:  # noqa: BLE001 - cost settings must never block a Session
+        return AgentDefaults()
 
 
 # ---------------------------------------------------------------------------

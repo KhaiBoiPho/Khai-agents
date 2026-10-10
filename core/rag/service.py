@@ -37,10 +37,13 @@ from core.rag.index import (
     IndexReport,
 )
 from core.persistence.database import Database
+from core.rag.enrich import Enrichment, default_enrichment
 from core.rag.store import DocumentStore, SearchHit, workspace_key
 from loguru import logger
 
 EmbedderFactory = Callable[[], Embedder]
+#: Index-time enrichment for a run, from the embedder it runs with.
+EnrichmentFactory = Callable[[Embedder], "Enrichment | None"]
 RAG_API_BASE_ENV = "KHAI_RAG_API_BASE"
 # After a failed run (service down, bad key) lazy triggers wait this long
 # before trying again, so every search does not re-pay the retry budget.
@@ -91,9 +94,11 @@ class RagService:
         *,
         database: Database | None = None,
         store_factory: StoreFactory | None = None,
+        enrichment_factory: EnrichmentFactory | None = None,
     ) -> None:
         self._database = database
         self._store_factory = store_factory
+        self._enrichment_factory = enrichment_factory or default_enrichment
         self._lock = threading.RLock()
         self._indexes: dict[str, DocumentIndex] = {}
         self._jobs: dict[str, _Job] = {}
@@ -177,6 +182,7 @@ class RagService:
                 return False
             embedder = factory()
             index = self.index_for(key)
+            enrichment = self._enrichment(embedder)
             job = _Job()
             self._jobs[key] = job
 
@@ -191,6 +197,7 @@ class RagService:
                         only=only,
                         progress=progress,
                         should_stop=job.stop.is_set,
+                        enrichment=enrichment,
                     )
                     job.error = job.report.error
                 except EmbeddingError as exc:
@@ -207,6 +214,13 @@ class RagService:
             )
             job.thread.start()
             return True
+
+    def _enrichment(self, embedder: Embedder) -> Enrichment | None:
+        try:
+            return self._enrichment_factory(embedder)
+        except Exception:  # noqa: BLE001 - enrichment is optional
+            logger.exception("could not set up RAG enrichment; indexing without it")
+            return None
 
     def wait(self, root: str | Path, timeout: float) -> bool:
         """Wait up to ``timeout`` seconds; ``True`` when no job is running."""
@@ -270,23 +284,34 @@ class RagService:
         *,
         k: int = 6,
         paths: list[str] | None = None,
+        only: set[str] | None = None,
         wait_s: float = 20.0,
     ) -> SearchOutcome:
-        """Bring the index up to date within ``wait_s`` and search it."""
+        """Bring the index up to date within ``wait_s`` and search it.
+
+        ``only`` confines both indexing and search to those workspace-relative
+        files (a code project's uploads), leaving every other document alone.
+        """
 
         embedder = factory()  # raises EmbeddingNotConfigured
         index = self.index_for(root)
         plan = index.plan(embedder.model)
         error: str | None = None
-        if plan.to_index or plan.to_remove:
-            if self.start(root, lambda: embedder, respect_cooldown=True):
+        pending = [path for path in plan.to_index if only is None or path in only]
+        if pending or (only is None and plan.to_remove):
+            if self.start(root, lambda: embedder, only=only, respect_cooldown=True):
                 self.wait(root, wait_s)
+        if only is not None:
+            selected = [path for path in (paths or []) if path in only]
+            paths = selected or sorted(only)
         with self._lock:
             job = self._jobs.get(self._key(root))
             if job is not None and not job.running:
                 error = job.error
         hits = index.search(embedder, query, k=k, paths=paths)
         documents, _truncated = index.document_statuses(embedder.model)
+        if only is not None:
+            documents = [d for d in documents if d.get("path") in only]
         return SearchOutcome(
             hits=hits,
             indexed=sum(1 for d in documents if d["status"] == STATUS_INDEXED),
@@ -295,6 +320,46 @@ class RagService:
             indexing=self.running(root),
             error=error,
         )
+
+
+# ---------------------------------------------------------------------------
+# Where document search applies
+# ---------------------------------------------------------------------------
+
+#: Files the web client uploads into a workspace (app_server/web_surface.py).
+UPLOAD_PREFIX = "deepcode-upload-"
+
+
+def is_document_workspace(root: str | Path) -> bool:
+    """True for the plain-chat workspace, where every document is fair game.
+
+    Any other workspace is a code project: there the code is read with the
+    file tools, and document search covers only files the user uploaded.
+    """
+
+    from core.config import deepcode_home
+
+    chats = (deepcode_home() / "chats").resolve()
+    resolved = Path(root).expanduser().resolve()
+    return resolved == chats or chats in resolved.parents
+
+
+def uploaded_documents(root: str | Path) -> set[str]:
+    """The supported documents the user uploaded to ``root`` (relative paths)."""
+
+    from core.rag.extract import is_supported
+
+    try:
+        entries = list(os.scandir(root))
+    except OSError:
+        return set()
+    return {
+        entry.name
+        for entry in entries
+        if entry.name.startswith(UPLOAD_PREFIX)
+        and is_supported(entry.name)
+        and entry.is_file(follow_symlinks=False)
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -358,6 +423,7 @@ def reset_rag_service(service: RagService | None = None) -> None:
 
 __all__ = [
     "EmbedderFactory",
+    "EnrichmentFactory",
     "RagService",
     "SearchOutcome",
     "embedder_configured",

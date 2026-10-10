@@ -113,6 +113,12 @@ class _CaptureTool(Tool):
     def read_only(self) -> bool:
         return True
 
+    @property
+    def exclusive(self) -> bool:
+        # Read-only for permission purposes, but never run in parallel:
+        # it records the one structured result.
+        return True
+
     async def execute(self, **kwargs: Any) -> Any:
         # Registry dispatch already validated kwargs against the schema
         # (prepare_call → validate_params); by the time we run, they conform.

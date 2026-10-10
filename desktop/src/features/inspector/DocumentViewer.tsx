@@ -17,29 +17,46 @@ const MAX_PDF_PAGES = 60;
 interface DocumentViewerProps {
   path: string;
   load(): Promise<ArrayBuffer>;
+  /**
+   * Optional server-rendered PDF (LibreOffice) of a Word or PowerPoint file:
+   * faithful layout and charts. Null or a failure falls back to `load`.
+   */
+  loadPdf?: () => Promise<ArrayBuffer | null>;
 }
 
-export default function DocumentViewer({ path, load }: DocumentViewerProps) {
-  const kind = documentKind(path)!;
-  const [bytes, setBytes] = useState<ArrayBuffer | null>(null);
+/** Kinds the browser renders only approximately; a server PDF wins when offered. */
+const PDF_RENDITION_KINDS: ReadonlySet<DocumentKind> = new Set(["docx", "pptx"]);
+
+export default function DocumentViewer({ path, load, loadPdf }: DocumentViewerProps) {
+  const original = documentKind(path)!;
+  const [doc, setDoc] = useState<{ kind: DocumentKind; bytes: ArrayBuffer } | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     // Keyed by path in FilesPanel, so a new file mounts a fresh viewer.
     let live = true;
-    load()
-      .then((data) => live && setBytes(data))
+    const rendition =
+      loadPdf && PDF_RENDITION_KINDS.has(original)
+        ? loadPdf().catch(() => null)
+        : Promise.resolve(null);
+    rendition
+      .then((pdf) =>
+        pdf
+          ? { kind: "pdf" as DocumentKind, bytes: pdf }
+          : load().then((bytes) => ({ kind: original, bytes })),
+      )
+      .then((next) => live && setDoc(next))
       .catch((reason: unknown) => live && setError(String(reason)));
     return () => {
       live = false;
     };
-  }, [load, path]);
+  }, [load, loadPdf, original, path]);
 
   if (error) return <p className={styles.problem}>Could not load this file: {error}</p>;
-  if (!bytes) return <Loading />;
+  if (!doc) return <Loading />;
   return (
-    <div className={styles.viewer} data-kind={kind}>
-      <Renderer kind={kind} bytes={bytes} path={path} />
+    <div className={styles.viewer} data-kind={doc.kind}>
+      <Renderer kind={doc.kind} bytes={doc.bytes} path={path} />
     </div>
   );
 }

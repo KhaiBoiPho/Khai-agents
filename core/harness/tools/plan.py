@@ -80,6 +80,12 @@ class UpdatePlanTool(Tool):
         return True
 
     @property
+    def exclusive(self) -> bool:
+        # Read-only for permission purposes, but never run in parallel:
+        # it rewrites the session plan; calls must apply in order.
+        return True
+
+    @property
     def plan(self) -> list[dict[str, str]]:
         """The current plan (for a UI to render)."""
         return list(self._plan)

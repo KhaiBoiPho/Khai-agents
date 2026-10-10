@@ -63,7 +63,9 @@ async def probe_mcp_server(
 
 
 def _safe_probe_error(exc: BaseException, server: ResolvedMcpServer) -> str:
-    message = f"{type(exc).__name__}: {exc}"
+    from core.mcp.firecrawl import redact_secrets
+
+    message = redact_secrets(f"{type(exc).__name__}: {exc}")
     names = {
         *server.definition.required_env_vars,
         *server.definition.env_url_params.values(),

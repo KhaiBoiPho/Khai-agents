@@ -6,14 +6,22 @@ aiohttp==3.14.3
 anthropic==0.116.0
 httpx==0.28.1
 json-repair==0.61.4
+langgraph==1.2.14
 loguru==0.7.3
 mcp==1.29.0
 openai==2.29.0
+openpyxl==3.1.5
 prompt-toolkit==3.0.52
 pydantic==2.12.5
 pydantic-settings==2.14.2
 pypdf==6.16.1
+pypdfium2==5.14.0
+python-docx==1.2.0
+python-pptx==1.0.2
 PyYAML==6.0.3
+# Transitive (langchain-core); held below 9.2 to stay co-installable with the
+# CI environment's google-genai, which caps tenacity<9.2.
+tenacity==9.1.4
 tiktoken==0.12.0
 
 # Packaging toolchain.

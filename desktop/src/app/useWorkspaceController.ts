@@ -25,6 +25,7 @@ import {
   latestExecutingTurn,
   sendInteractiveTurn,
   type InteractiveDelivery,
+  type TurnSendOptions,
 } from "./interactiveTurnRouter";
 import { ThreadEventStream } from "./threadEventStream";
 import {
@@ -121,8 +122,13 @@ export interface WorkspaceController {
   sendTurn(
     prompt: string,
     skillIds?: string[],
+    options?: TurnSendOptions,
   ): Promise<InteractiveDelivery | null>;
-  queueTurn(prompt: string, skillIds?: string[]): Promise<boolean>;
+  queueTurn(
+    prompt: string,
+    skillIds?: string[],
+    options?: TurnSendOptions,
+  ): Promise<boolean>;
   retryTurn(turnId: string): Promise<void>;
   interruptTurn(turnId: string): Promise<void>;
   pickContextFiles(): Promise<string[]>;
@@ -151,6 +157,53 @@ export function useWorkspaceController(runtime: ClientRuntime): WorkspaceControl
   const selectedThreadRef = useRef<string | null>(null);
   const loadedRuntimeRef = useRef(false);
   const eventStreamRef = useRef<ThreadEventStream | null>(null);
+  // The selected Thread's events arrive one per streamed delta; applying each
+  // on its own re-renders the whole app per token. They are queued and
+  // applied together once per frame (or after 50 ms when frames are paused,
+  // as in a background tab).
+  const eventQueueRef = useRef<{ threadId: string; events: Event[] } | null>(null);
+  const eventFlushRef = useRef<{ frame: number; timer: number } | null>(null);
+
+  const cancelEventFlush = useCallback(() => {
+    const handle = eventFlushRef.current;
+    if (!handle) return;
+    eventFlushRef.current = null;
+    cancelAnimationFrame(handle.frame);
+    window.clearTimeout(handle.timer);
+  }, []);
+
+  const flushEvents = useCallback(() => {
+    cancelEventFlush();
+    const queued = eventQueueRef.current;
+    eventQueueRef.current = null;
+    if (queued && queued.events.length && selectedThreadRef.current === queued.threadId) {
+      dispatch({ type: "events", events: queued.events });
+    }
+  }, [cancelEventFlush]);
+
+  const queueEvent = useCallback(
+    (threadId: string, event: Event) => {
+      if (eventQueueRef.current?.threadId !== threadId) {
+        flushEvents();
+        eventQueueRef.current = { threadId, events: [] };
+      }
+      eventQueueRef.current.events.push(event);
+      if (!eventFlushRef.current) {
+        eventFlushRef.current = {
+          frame: requestAnimationFrame(flushEvents),
+          timer: window.setTimeout(flushEvents, 50),
+        };
+      }
+    },
+    [flushEvents],
+  );
+
+  const discardQueuedEvents = useCallback(() => {
+    cancelEventFlush();
+    eventQueueRef.current = null;
+  }, [cancelEventFlush]);
+
+  useEffect(() => discardQueuedEvents, [discardQueuedEvents]);
 
   const reportError = useCallback((error: unknown) => {
     dispatch({ type: "error", error: normalizeError(error) });
@@ -160,13 +213,14 @@ export function useWorkspaceController(runtime: ClientRuntime): WorkspaceControl
     async (threadId: string) => {
       if (selectedThreadRef.current !== threadId) return;
       eventStreamRef.current?.stop();
+      discardQueuedEvents();
       dispatch({ type: "trace-reset" });
       const stream = new ThreadEventStream(
         runtime,
         threadId,
         (event) => {
           if (selectedThreadRef.current === threadId) {
-            dispatch({ type: "event", event });
+            queueEvent(threadId, event);
           }
         },
         reportError,
@@ -174,7 +228,7 @@ export function useWorkspaceController(runtime: ClientRuntime): WorkspaceControl
       eventStreamRef.current = stream;
       await stream.recover();
     },
-    [reportError, runtime],
+    [discardQueuedEvents, queueEvent, reportError, runtime],
   );
 
   const loadSettings = useCallback(
@@ -301,6 +355,7 @@ export function useWorkspaceController(runtime: ClientRuntime): WorkspaceControl
             eventStreamRef.current.receive(notification.params);
           }
         } else if (notification.method === "thread.updated") {
+          flushEvents();
           dispatch({ type: "event", event: notification.params });
         }
       }
@@ -845,6 +900,7 @@ export function useWorkspaceController(runtime: ClientRuntime): WorkspaceControl
     async (
       prompt: string,
       skillIds: string[] = [],
+      options: TurnSendOptions = {},
     ): Promise<InteractiveDelivery | null> => {
       if (!selectedThread) return null;
       const shouldTitleSession =
@@ -856,6 +912,7 @@ export function useWorkspaceController(runtime: ClientRuntime): WorkspaceControl
           prompt,
           cachedActiveTurnId: active?.id ?? null,
           skillIds,
+          ...(options.mode ? { mode: options.mode } : {}),
         }),
       );
       if (!result) return null;
@@ -911,7 +968,11 @@ export function useWorkspaceController(runtime: ClientRuntime): WorkspaceControl
   );
 
   const queueTurn = useCallback(
-    async (prompt: string, skillIds: string[] = []): Promise<boolean> => {
+    async (
+      prompt: string,
+      skillIds: string[] = [],
+      options: TurnSendOptions = {},
+    ): Promise<boolean> => {
       const accepted = await withBusy(async () => {
         if (!selectedThread) return;
         const snapshot = await runtime.request("turn/enqueue", {
@@ -921,6 +982,7 @@ export function useWorkspaceController(runtime: ClientRuntime): WorkspaceControl
           ...(skillIds.length
             ? { skills: skillIds as TurnStartParams["skills"] }
             : {}),
+          ...(options.mode ? { mode: options.mode } : {}),
         });
         dispatch({ type: "snapshot", snapshot });
         return true;

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import itertools
 import json
 import os
@@ -26,6 +27,11 @@ MAX_DOWNLOAD = 32 * 1024 * 1024
 # One folder-upload request (app_server.web_surface.workspace_upload).
 MAX_BATCH_FILES = 200
 MAX_BATCH_BYTES = 24 * 1024 * 1024
+# /api/preview-pdf: PDF renditions of Office files for the Files panel, cached
+# per workspace and keyed by path + mtime + size (core/documents/convert.py).
+PREVIEW_PDF_SUFFIXES = frozenset({".docx", ".doc", ".odt", ".pptx", ".ppt", ".odp"})
+PREVIEW_CACHE_DIR = ".deepcode/preview-cache"
+PREVIEW_CACHE_KEEP = 40
 
 
 def read_web_build(assets: Path = ASSET_DIRECTORY) -> dict | None:
@@ -60,6 +66,7 @@ class WebSurface:
         self.assets = assets.resolve()
         self._uploads = asyncio.Semaphore(4)
         self._upload_lock = asyncio.Lock()
+        self._preview_locks: dict[str, asyncio.Lock] = {}
 
     def build(self) -> dict | None:
         return read_web_build(self.assets)
@@ -74,6 +81,7 @@ class WebSurface:
             web.post("/api/uploads", self.upload),
             web.post("/api/workspace/upload", self.workspace_upload),
             web.get("/api/download", self.download),
+            web.get("/api/preview-pdf", self.preview_pdf),
         ]
 
     async def index(self, request):
@@ -322,11 +330,13 @@ class WebSurface:
 
         def start() -> None:
             from app_server.dispatcher import rag_embedder_factory
-            from core.rag.service import get_rag_service
+            from core.rag.service import get_rag_service, is_document_workspace
 
+            # In a code project index just this upload, not the repo's docs.
             get_rag_service().start(
                 context.root,
                 rag_embedder_factory(self.application, context.project.id),
+                only=None if is_document_workspace(context.root) else {filename},
             )
 
         try:
@@ -387,3 +397,59 @@ class WebSurface:
                 return response
             finally:
                 os.close(descriptor)
+
+    async def preview_pdf(self, request):
+        """A cached PDF rendition of a docx/pptx for faithful in-app previews.
+
+        404 when no converter is installed: the viewer then falls back to its
+        own in-browser renderer.
+        """
+        from core.documents import convert
+
+        self.auth.require(request)
+        try:
+            context = await asyncio.to_thread(
+                self.application.workspaces.resolve, request.query.get("threadId", "")
+            )
+            path = self.application.workspaces.path(
+                context, request.query.get("path", "")
+            )
+        except ApplicationError as exc:
+            raise web.HTTPForbidden(text=exc.user_message) from exc
+        if path.suffix.lower() not in PREVIEW_PDF_SUFFIXES:
+            raise web.HTTPBadRequest(text="No PDF preview for this file type")
+        if not convert.converter_available():
+            raise web.HTTPNotFound(text="converter_unavailable")
+        info = path.lstat()
+        if not stat.S_ISREG(info.st_mode) or info.st_size > MAX_DOWNLOAD:
+            raise web.HTTPBadRequest(text="Preview requires a regular file up to 32 MiB")
+        key = hashlib.sha256(
+            f"{path.resolve()}\0{info.st_mtime_ns}\0{info.st_size}".encode()
+        ).hexdigest()[:32]
+        cache = Path(context.root).resolve() / PREVIEW_CACHE_DIR
+        target = cache / f"{key}.pdf"
+        if len(self._preview_locks) > 256:
+            self._preview_locks.clear()
+        lock = self._preview_locks.setdefault(key, asyncio.Lock())
+        async with lock:
+            if not target.is_file():
+                try:
+                    await convert.export_pdf(path, target)
+                except convert.ConverterError as exc:
+                    busy = exc.code in {"busy", "timeout", "converter_unavailable"}
+                    return web.Response(status=503 if busy else 422, text=exc.code)
+                await asyncio.to_thread(_prune_preview_cache, cache, target)
+        return web.FileResponse(
+            target,
+            headers={"Content-Type": "application/pdf", "Cache-Control": "private, no-store"},
+        )
+
+
+def _prune_preview_cache(cache: Path, keep: Path) -> None:
+    try:
+        entries = sorted(cache.glob("*.pdf"), key=lambda p: p.stat().st_mtime, reverse=True)
+    except OSError:
+        return
+    for stale in entries[PREVIEW_CACHE_KEEP:]:
+        if stale != keep:
+            stale.unlink(missing_ok=True)

@@ -1,6 +1,46 @@
 {
   "schemaVersion": 1,
   "skills": {
+    "algorithmic-art": {
+      "repository": "https://github.com/anthropics/skills",
+      "revision": "dbd4588f9e1033efb41dad4bef2f7947c8993d44",
+      "path": "skills/algorithmic-art",
+      "license": "Apache-2.0",
+      "modified": "Adapted for Khai: frontmatter/description rewritten; claude.ai artifact and 'next Claude' wording replaced with workspace-file and Khai file-card wording; template branding referred to neutrally. templates/ unchanged."
+    },
+    "brand-guidelines": {
+      "repository": "https://github.com/anthropics/skills",
+      "revision": "dbd4588f9e1033efb41dad4bef2f7947c8993d44",
+      "path": "skills/brand-guidelines",
+      "license": "Apache-2.0",
+      "modified": "Adapted for Khai: SKILL.md condensed and rewritten to apply the Anthropic palette/typography through Khai's office and GenOffice workflows; description narrowed to explicit Anthropic/Claude look requests."
+    },
+    "canvas-design": {
+      "repository": "https://github.com/anthropics/skills",
+      "revision": "dbd4588f9e1033efb41dad4bef2f7947c8993d44",
+      "path": "skills/canvas-design",
+      "license": "Apache-2.0",
+      "modified": "Adapted for Khai: description rewritten; drawing via reportlab/Pillow in the worker image, fonts referenced from canvas-fonts/ (SIL OFL 1.1 files unchanged), output saved in the session workspace with a look-before-presenting step."
+    },
+    "claude-api": {
+      "repository": "https://github.com/anthropics/skills",
+      "revision": "dbd4588f9e1033efb41dad4bef2f7947c8993d44",
+      "path": "skills/claude-api",
+      "license": "Apache-2.0",
+      "modified": "Adapted for Khai: description shortened (1024-char limit) and made provider-aware; WebFetch/slash-command wording made tool-neutral; SKILL.md split to fit Khai's 64 KB limit, moving per-model notes, quick references, Managed Agents routing and Common Pitfalls verbatim into shared/current-models-detail.md, shared/api-quick-reference.md, shared/managed-agents-routing.md and shared/common-pitfalls.md. Other reference files unchanged."
+    },
+    "doc-coauthoring": {
+      "repository": "https://github.com/KhaiBoiPho/Khai-agents",
+      "revision": "1960c203c26be2cc4c130fe9635cacce25c09f85",
+      "path": "core/skills/builtin/doc-coauthoring",
+      "modified": "Original Khai-Agents skill (not adapted from an upstream source); revision is the base commit it was written on."
+    },
+    "document-design": {
+      "repository": "https://github.com/KhaiBoiPho/Khai-agents",
+      "revision": "1960c203c26be2cc4c130fe9635cacce25c09f85",
+      "path": "core/skills/builtin/document-design",
+      "modified": "Original Khai-Agents skill (not adapted from an upstream source); revision is the base commit it was written on. references/styles.md also includes ten themes adapted from anthropics/skills theme-factory (Apache-2.0, revision dbd4588f9e1033efb41dad4bef2f7947c8993d44); see document-design/NOTICE and LICENSE-theme-factory.txt."
+    },
     "frontend-design": {
       "repository": "https://github.com/anthropics/skills",
       "revision": "f17010c9bb483898c1d9c9f42dde2b3a98889434",
@@ -11,12 +51,43 @@
       "revision": "db347087628281d49e53d009183d2fb506c3a444",
       "path": "skills/genoffice",
       "license": "Apache-2.0",
-      "modified": "Adapted for Khai's built-in genoffice MCP tools and session-workspace paths; references/cli-reference.md keeps upstream sections verbatim."
+      "modified": "Adapted for Khai's built-in genoffice MCP tools and session-workspace paths; references/cli-reference.md keeps upstream sections verbatim. Khai also rewrote the description as the engine/tool reference, routes the no-engine case to the office-* skills' Python fallbacks, and makes the render step conditional."
+    },
+    "internal-comms": {
+      "repository": "https://github.com/anthropics/skills",
+      "revision": "dbd4588f9e1033efb41dad4bef2f7947c8993d44",
+      "path": "skills/internal-comms",
+      "license": "Apache-2.0",
+      "modified": "Adapted for Khai: SKILL.md rewritten around Khai's connected sources (MCP tools) with a no-invented-facts rule and office-docx handoff; examples/ unchanged except a typo fix."
     },
     "mcp-builder": {
       "repository": "https://github.com/anthropics/skills",
       "revision": "f17010c9bb483898c1d9c9f42dde2b3a98889434",
       "path": "skills/mcp-builder"
+    },
+    "office-docx": {
+      "repository": "https://github.com/KhaiBoiPho/Khai-agents",
+      "revision": "1960c203c26be2cc4c130fe9635cacce25c09f85",
+      "path": "core/skills/builtin/office-docx",
+      "modified": "Original Khai-Agents skill (not adapted from an upstream source); revision is the base commit it was written on."
+    },
+    "office-pdf": {
+      "repository": "https://github.com/KhaiBoiPho/Khai-agents",
+      "revision": "1960c203c26be2cc4c130fe9635cacce25c09f85",
+      "path": "core/skills/builtin/office-pdf",
+      "modified": "Original Khai-Agents skill (not adapted from an upstream source); revision is the base commit it was written on."
+    },
+    "office-pptx": {
+      "repository": "https://github.com/KhaiBoiPho/Khai-agents",
+      "revision": "1960c203c26be2cc4c130fe9635cacce25c09f85",
+      "path": "core/skills/builtin/office-pptx",
+      "modified": "Original Khai-Agents skill (not adapted from an upstream source); revision is the base commit it was written on."
+    },
+    "office-xlsx": {
+      "repository": "https://github.com/KhaiBoiPho/Khai-agents",
+      "revision": "1960c203c26be2cc4c130fe9635cacce25c09f85",
+      "path": "core/skills/builtin/office-xlsx",
+      "modified": "Original Khai-Agents skill (not adapted from an upstream source); revision is the base commit it was written on."
     },
     "review-agent": {
       "repository": "https://github.com/openai/codex",
@@ -39,9 +110,17 @@
       "path": "skills/.curated/security-threat-model"
     },
     "skill-creator": {
-      "repository": "https://github.com/openai/skills",
-      "revision": "49f948faa9258a0c61caceaf225e179651397431",
-      "path": "skills/.system/skill-creator"
+      "repository": "https://github.com/KhaiBoiPho/Khai-agents",
+      "revision": "1960c203c26be2cc4c130fe9635cacce25c09f85",
+      "path": "core/skills/builtin/skill-creator",
+      "modified": "Original Khai-Agents skill (not adapted from an upstream source); revision is the base commit it was written on."
+    },
+    "web-artifacts-builder": {
+      "repository": "https://github.com/anthropics/skills",
+      "revision": "dbd4588f9e1033efb41dad4bef2f7947c8993d44",
+      "path": "skills/web-artifacts-builder",
+      "license": "Apache-2.0",
+      "modified": "Adapted for Khai: SKILL.md rewritten to drop claude.ai-only artifact assumptions (bundle.html is a workspace file shown as a Khai file card), add Node/npm preconditions and fallback, and point to frontend-design / webapp-testing. scripts/ unchanged."
     },
     "webapp-testing": {
       "repository": "https://github.com/anthropics/skills",

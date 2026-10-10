@@ -1,6 +1,5 @@
 import {
   KeyRound,
-  Plus,
   Save,
   Server,
   SlidersHorizontal,
@@ -25,6 +24,7 @@ import { type Draft, emptyDraft, connectionMutation } from "./connectionDraft";
 import { ProtocolSettings } from "./ProtocolSettings";
 import { ConnectionProbe } from "./ConnectionProbe";
 import { ProviderLogin } from "./ProviderLogin";
+import { WebSearchSettings } from "./WebSearchSettings";
 import styles from "./ConnectionSettings.module.css";
 import { Select } from "../../components/Select";
 
@@ -294,12 +294,10 @@ export function ConnectionSettings({
     <section className={styles.section} aria-labelledby="connections-title">
       <header className={styles.heading}>
         <div>
-          <p>Step 1 · Connect a provider</p>
           <h2 id="connections-title">AI providers</h2>
           <span>
-            Add the service that supplies your models. Khai-Agents keeps API keys
-            in user-private storage and shares the connection with CLI and
-            Desktop.
+            Connect the service that runs your models. API keys stay private to
+            your account.
           </span>
           {scope === "project" ? (
             <span className={styles.scopeNote} role="note">
@@ -327,24 +325,14 @@ export function ConnectionSettings({
                 .filter((template) => template.name !== "custom")
                 .map((template) => (
                   <option key={template.name} value={template.name}>
-                    {template.label} · {template.local ? "local" : "cloud"}
+                    {template.label}
+                    {template.local ? " (local)" : ""}
                   </option>
                 ))}
+              {/* Any OpenAI-compatible or Anthropic endpoint not listed. */}
+              <option value="custom">Custom endpoint…</option>
             </Select>
           </label>
-          <button
-            type="button"
-            className={styles.addButton}
-            onClick={() => {
-              setEditing({ ...emptyDraft });
-              chooseTemplate("custom");
-            }}
-            disabled={busy || saving}
-            title="Declare an OpenAI-compatible or Anthropic endpoint Khai-Agents does not ship"
-          >
-            <Plus size={14} />
-            Add a custom provider
-          </button>
         </div>
       </header>
 
@@ -424,17 +412,18 @@ export function ConnectionSettings({
         {!controller.loading && !connections.some(isManagedConnection) ? (
           <div className={styles.emptyState}>
             <Server size={18} />
-            <strong>No provider connected</strong>
-            <span>
-              Pick a provider from “Add provider…” above, or declare a custom
-              endpoint, to begin.
-            </span>
+            <strong>No provider yet</strong>
+            <span>Choose one from “Add provider…” to get started.</span>
           </div>
         ) : null}
         {controller.loading ? (
           <p className={styles.loading}>Loading connections…</p>
         ) : null}
       </div>
+
+      {controller.webSearch ? (
+        <WebSearchSettings controller={controller.webSearch} busy={busy} />
+      ) : null}
 
       {editing ? (
         <div className={styles.editorBackdrop} role="presentation">
@@ -480,16 +469,6 @@ export function ConnectionSettings({
                     </small>
                   </span>
                 </div>
-                <label className={styles.wide}>
-                  Display name
-                  <input
-                    value={editing.label}
-                    onChange={(event) =>
-                      setEditing({ ...editing, label: event.target.value })
-                    }
-                    placeholder={selectedTemplate?.label ?? "My provider"}
-                  />
-                </label>
                 {endpointRequired ? (
                   <label className={styles.wide}>
                     API endpoint
@@ -510,10 +489,9 @@ export function ConnectionSettings({
                     </small>
                   </label>
                 ) : null}
-                <ProtocolSettings draft={editing} onChange={setEditing} />
                 {editing.auth === "api_key" ? (
                   <fieldset className={`${styles.credentials} ${styles.wide}`}>
-                    <legend>Credential</legend>
+                    <legend>API key</legend>
                     {editing.environmentShadows ? (
                       <p className={styles.credentialShadowNote} role="note">
                         {editing.shadowingEnvName
@@ -546,13 +524,27 @@ export function ConnectionSettings({
                       }
                       aria-label="API key"
                     />
-                    <small>
-                      Write-only: stored keys are private and never returned to
-                      the app UI. Referencing an environment variable instead
-                      is available under Advanced.
-                    </small>
+                    <small>Stored privately for your account and never shown again.</small>
                   </fieldset>
                 ) : null}
+                <details className={`${styles.advanced} ${styles.wide}`}>
+                  <summary>
+                    <SlidersHorizontal size={14} /> Advanced
+                  </summary>
+                  {/* Defaults suit almost everyone: name, protocol, model list
+                      and the connection test live here, out of the way. */}
+                  <div className={styles.advancedStack}>
+                <label className={styles.wide}>
+                  Display name
+                  <input
+                    value={editing.label}
+                    onChange={(event) =>
+                      setEditing({ ...editing, label: event.target.value })
+                    }
+                    placeholder={selectedTemplate?.label ?? "My provider"}
+                  />
+                </label>
+                <ProtocolSettings draft={editing} onChange={setEditing} />
                 {editing.template ? (
                   <fieldset className={`${styles.modelsField} ${styles.wide}`}>
                     <legend>Models</legend>
@@ -643,10 +635,7 @@ export function ConnectionSettings({
                   </fieldset>
                 ) : null}
                 <ConnectionProbe key={editing.id} connection={connectionMutation(editing)} controller={controller} />
-                <details className={`${styles.advanced} ${styles.wide}`}>
-                  <summary>
-                    <SlidersHorizontal size={14} /> Advanced connection settings
-                  </summary>
+                  </div>
                   <div>
                     <label>
                       Connection ID
@@ -761,10 +750,6 @@ export function ConnectionSettings({
               </div>
             ) : null}
             <footer>
-              <span>
-                Saving checks credentials and model discovery. It does not send
-                project content.
-              </span>
               <button
                 type="button"
                 onClick={() => setEditing(null)}

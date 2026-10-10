@@ -59,12 +59,18 @@ class Candidate:
     text: str
     cosine: float
     score: float = 0.0
+    # Contextual-retrieval context: matched like the text, never displayed.
+    context: str = ""
+    visual: bool = False
 
 
 def _document_terms(candidate: Candidate) -> set[str]:
     stem = candidate.path.rsplit("/", 1)[-1].rsplit(".", 1)[0]
-    return set(tokenize(candidate.text)) | set(tokenize(candidate.heading)) | set(
-        tokenize(stem.replace("_", " ").replace("-", " "))
+    return (
+        set(tokenize(candidate.text))
+        | set(tokenize(candidate.heading))
+        | set(tokenize(candidate.context))
+        | set(tokenize(stem.replace("_", " ").replace("-", " ")))
     )
 
 

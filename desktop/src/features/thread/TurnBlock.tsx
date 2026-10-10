@@ -21,7 +21,7 @@ import {
   TerminalSquare,
   Wrench,
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { memo, useEffect, useState } from "react";
 import { formatDistanceStrict } from "date-fns";
 
 import type {
@@ -47,6 +47,8 @@ import { MarkdownContent } from "./MarkdownContent";
 import { RunErrorCard } from "./RunErrorCard";
 import { describeRunError, isGenericRunError, isProviderErrorText } from "./runErrors";
 import { ReasoningBlock } from "./ReasoningBlock";
+import { DeepThinkProgress } from "./DeepThinkProgress";
+import { isDeepThinkItem } from "./deepThinkModel";
 import type { TranscriptMode } from "./transcriptMode";
 import styles from "./ThreadConversation.module.css";
 
@@ -224,7 +226,7 @@ function shouldShowRunStatus(group: ConversationTurn, now: number): boolean {
   return (turnDurationSeconds(group.turn, now) ?? 0) > 0;
 }
 
-function ActivityItem({
+const ActivityItem = memo(function ActivityItem({
   item,
   approval,
   active,
@@ -363,7 +365,7 @@ function ActivityItem({
       </div>
     </details>
   );
-}
+});
 
 function RunStatus({
   group,
@@ -412,7 +414,7 @@ function RunStatus({
   );
 }
 
-function ExplorationGroup({
+const ExplorationGroup = memo(function ExplorationGroup({
   group,
   approvalsByItem,
   selectedItemId,
@@ -482,7 +484,7 @@ function ExplorationGroup({
       </div>
     </details>
   );
-}
+});
 
 /** "Ran 5 commands", "Read 2 files · ran 3 commands", and so on. */
 function activityTitle(items: readonly Item[]): string {
@@ -509,7 +511,7 @@ function activityTitle(items: readonly Item[]): string {
   return text.charAt(0).toUpperCase() + text.slice(1);
 }
 
-function AssistantMessage({ item }: { item: Item }) {
+const AssistantMessage = memo(function AssistantMessage({ item }: { item: Item }) {
   const presentation = presentItem(item);
   const phase =
     item.payload.phase === "commentary" ? "commentary" : "final_answer";
@@ -536,7 +538,7 @@ function AssistantMessage({ item }: { item: Item }) {
       </div>
     </article>
   );
-}
+});
 
 function timelineItems(group: ConversationTurn): Item[] {
   return group.timeline.flatMap((entry) =>
@@ -544,7 +546,11 @@ function timelineItems(group: ConversationTurn): Item[] {
   );
 }
 
-export function TurnBlock({
+/**
+ * Memoized so a streaming delta re-renders only the Turn it belongs to; the
+ * conversation keeps unchanged Turn groups referentially stable for this.
+ */
+export const TurnBlock = memo(function TurnBlock({
   group,
   approvalsByItem,
   selectedItemId,
@@ -575,7 +581,9 @@ export function TurnBlock({
   const lastExecutionItem =
     [...orderedItems]
       .reverse()
-      .find((item) => item.kind !== "assistant_message") ?? null;
+      .find(
+        (item) => item.kind !== "assistant_message" && !isDeepThinkItem(item),
+      ) ?? null;
   const failed =
     group.turn?.status === "failed" ||
     group.turn?.status === "interrupted" ||
@@ -718,6 +726,14 @@ export function TurnBlock({
             );
           }
           if (isErrorEcho(entry.item)) return null;
+          if (isDeepThinkItem(entry.item)) {
+            // The research pipeline's own compact block, in every mode.
+            return (
+              <div className={styles.activityEntry} key={entry.id}>
+                <DeepThinkProgress item={entry.item} />
+              </div>
+            );
+          }
           if (entry.item.kind === "assistant_message") {
             if (
               transcriptMode === "summary" &&
@@ -799,7 +815,7 @@ export function TurnBlock({
       ) : null}
     </section>
   );
-}
+});
 
 const ATTACHED_HEADING = "\n\nAttached workspace context:\n";
 

@@ -3,6 +3,11 @@
 #   cd docker/deploy && ./setup.sh     # once: secrets, data directory, image
 #   docker compose up -d
 #
+# setup.sh builds the image with the GenOffice document engine from a
+# GenOffice source checkout (GENOFFICE_SRC, default ../genoffice next to this
+# repository); rerun it, or the `docker build --build-context ...` command at
+# the top of ../../Dockerfile, to rebuild. Workers use the same image.
+#
 # Networks keep each piece to what it needs:
 #   edge     caddy <-> gateway                    (the only published ports)
 #   core     gateway <-> postgres, redis, qdrant, docmost   (internal)
@@ -21,6 +26,8 @@ services:
     ports:
       - "${KHAI_HTTP_PORT:-80}:80"
       - "${KHAI_HTTPS_PORT:-443}:443"
+      # HTTP/3 (QUIC) runs over UDP.
+      - "${KHAI_HTTPS_PORT:-443}:443/udp"
     environment:
       KHAI_DOMAIN: ${KHAI_DOMAIN:?set KHAI_DOMAIN in .env}
     volumes:
@@ -61,6 +68,9 @@ services:
       KHAI_DEFAULT_CONNECTION: ${KHAI_DEFAULT_CONNECTION:-}
       KHAI_DEFAULT_MODEL: ${KHAI_DEFAULT_MODEL:-}
       KHAI_RAG_EMBEDDING_MODEL: ${KHAI_RAG_EMBEDDING_MODEL:-}
+      # Spend limits in USD for every user (empty = off).
+      KHAI_MAX_TURN_COST_USD: ${KHAI_MAX_TURN_COST_USD:-}
+      KHAI_MAX_SESSION_COST_USD: ${KHAI_MAX_SESSION_COST_USD:-}
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
       OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
       NVIDIA_API_KEY: ${NVIDIA_API_KEY:-}
@@ -83,7 +93,26 @@ services:
       POSTGRES_DB: postgres
       KHAI_PG_APP_PASSWORD: ${KHAI_PG_APP_PASSWORD:?run ./setup.sh}
       KHAI_PG_DOCMOST_PASSWORD: ${KHAI_PG_DOCMOST_PASSWORD:?run ./setup.sh}
-    command: ["postgres", "-c", "password_encryption=scram-sha-256"]
+    # Tuned for a small host; KHAI_PG_SHARED_BUFFERS etc. override.
+    command:
+      - postgres
+      - -c
+      - password_encryption=scram-sha-256
+      - -c
+      - shared_buffers=${KHAI_PG_SHARED_BUFFERS:-512MB}
+      - -c
+      - effective_cache_size=${KHAI_PG_EFFECTIVE_CACHE_SIZE:-2GB}
+      - -c
+      - work_mem=${KHAI_PG_WORK_MEM:-16MB}
+      - -c
+      - maintenance_work_mem=128MB
+      - -c
+      - max_connections=${KHAI_PG_MAX_CONNECTIONS:-200}
+      - -c
+      - random_page_cost=1.1
+      - -c
+      - wal_compression=on
+    shm_size: 256mb
     volumes:
       - pg-data:/var/lib/postgresql/data
       - ../stack/initdb:/docker-entrypoint-initdb.d:ro
@@ -100,7 +129,8 @@ services:
     command:
       - sh
       - -c
-      - exec redis-server --appendonly yes --requirepass "$$KHAI_REDIS_PASSWORD"
+      # Sessions must never be evicted to make room.
+      - exec redis-server --appendonly yes --maxmemory-policy noeviction --requirepass "$$KHAI_REDIS_PASSWORD"
     environment:
       KHAI_REDIS_PASSWORD: ${KHAI_REDIS_PASSWORD:?run ./setup.sh}
     volumes:

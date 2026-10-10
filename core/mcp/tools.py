@@ -11,6 +11,7 @@ from loguru import logger
 
 from core.agent_runtime.tools.base import Tool, ToolResult, sanitize_description
 from core.mcp.connection import McpConnection
+from core.mcp.firecrawl import redact_secrets
 from core.mcp.models import (
     McpToolAnnotations,
     McpToolIdentity,
@@ -19,6 +20,9 @@ from core.mcp.schema import normalize_schema_for_openai
 from core.observability import log_mcp_call
 
 _MCP_DESCRIPTION_MAX_CHARS = 8_000
+# ToolResult metadata key carrying raw MCP image content to the agent runner,
+# which decides per model whether to inline it or save it to a file.
+MCP_IMAGES_METADATA_KEY = "images"  # read by AgentRunner (TOOL_RESULT_IMAGES_KEY)
 
 
 class _HtmlMarkdownFallback(HTMLParser):
@@ -148,7 +152,12 @@ class McpToolAdapter(Tool):
 
     @property
     def concurrency_safe(self) -> bool:
-        return self.connection.server.definition.supports_parallel_tool_calls
+        # Parallel execution needs both: the server says it tolerates
+        # concurrent calls, and the tool itself is annotated read-only.
+        return (
+            self.annotations.read_only
+            and self.connection.server.definition.supports_parallel_tool_calls
+        )
 
     def presentation_detail(self, arguments: dict[str, Any]) -> str | None:
         # Arbitrary remote tools may accept credentials or signed URLs under
@@ -185,10 +194,11 @@ class McpToolAdapter(Tool):
                 arguments,
                 started,
                 status="error",
-                error=f"{type(exc).__name__}: {exc}",
+                error=redact_secrets(f"{type(exc).__name__}: {exc}"),
             )
             raise
-        text = _result_text(result)
+        images: list[dict[str, str]] = []
+        text = _result_text(result, images=images)
         is_error = bool(getattr(result, "isError", False))
         _log_call(
             self.identity,
@@ -209,6 +219,7 @@ class McpToolAdapter(Tool):
                 "source": self.identity.source.value,
                 "readOnly": self.annotations.read_only,
                 "approvalMode": self.approval_mode.value,
+                **({MCP_IMAGES_METADATA_KEY: images} if images else {}),
             },
         )
 
@@ -229,12 +240,31 @@ def _normalize_tool_arguments(
     return normalized
 
 
-def _result_text(result: Any) -> str:
+def _result_text(result: Any, *, images: list[dict[str, str]] | None = None) -> str:
+    """Render an MCP result as model text.
+
+    Base64 media never enters the text. When ``images`` is given, image
+    blocks are collected into it (``{"mimeType", "data"}``) and the text names
+    each one by number so the runner can attach or save it afterwards.
+    """
     parts: list[str] = []
     for block in getattr(result, "content", ()):
         text = getattr(block, "text", None)
         if isinstance(text, str):
             parts.append(text)
+            continue
+        data = getattr(block, "data", None)
+        if (
+            images is not None
+            and getattr(block, "type", None) == "image"
+            and isinstance(data, str)
+            and data
+        ):
+            mime = str(getattr(block, "mimeType", None) or "application/octet-stream")
+            images.append({"mimeType": mime, "data": data})
+            parts.append(
+                f"[image {len(images)}: {mime}, ~{len(data) * 3 // 4} bytes]"
+            )
             continue
         if getattr(block, "type", None) in {"image", "audio"}:
             # Binary content is not model-readable as text; base64 would only
@@ -283,4 +313,4 @@ def _log_call(
         logger.debug("Unable to record MCP call telemetry: {}", type(exc).__name__)
 
 
-__all__ = ["McpToolAdapter"]
+__all__ = ["MCP_IMAGES_METADATA_KEY", "McpToolAdapter"]

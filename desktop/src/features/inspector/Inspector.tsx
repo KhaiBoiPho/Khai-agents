@@ -134,6 +134,13 @@ export function Inspector({
         : Promise.reject(new Error("Document previews need the web client.")),
     [runtime, threadId],
   );
+  const readPreviewPdf = useMemo(
+    () =>
+      runtime.readPreviewPdf && threadId
+        ? (path: string) => runtime.readPreviewPdf!(threadId, path)
+        : undefined,
+    [runtime, threadId],
+  );
   // A notice, not a modal state: it fades out on its own after a while.
   const { error: workbenchError, clearError } = workbench;
   useEffect(() => {
@@ -222,6 +229,7 @@ export function Inspector({
           <FilesPanel
             onDownload={runtime.downloadFile && thread ? (path) => runtime.downloadFile!(thread.id, path) : undefined}
             readBytes={readBytes}
+            readPreviewPdf={readPreviewPdf}
             trusted={trusted}
             hasActiveTurn={hasActiveTurn}
             workbench={workbench}

@@ -7,7 +7,7 @@ import math
 import threading
 import uuid
 from collections import deque
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 
 from core.domain.event import DomainEvent
@@ -21,6 +21,11 @@ logger = logging.getLogger(__name__)
 #: ``poll_interval`` as soon as one succeeds.
 _RELAY_BACKOFF_CAP_SECONDS = 30.0
 DEFAULT_RELAY_POLL_INTERVAL = 0.1
+#: Ceiling for the relay's idle backoff, as a multiple of ``poll_interval``
+#: (0.1s -> 1.6s). Polls double while nothing new is read and drop back as
+#: soon as events flow, either from another process (read by a poll) or from
+#: this one (a local publish).
+RELAY_IDLE_BACKOFF_FACTOR = 16
 DEFAULT_RELAY_BATCH_SIZE = 500
 
 
@@ -82,6 +87,7 @@ class EventBroker:
         self._condition = threading.Condition()
         self._subscribers: dict[str, _Subscriber] = {}
         self._watermarks: dict[str, _SequenceWatermark] = {}
+        self._publish_listeners: list[Callable[[], None]] = []
 
     def subscribe(self, *, capacity: int | None = None) -> str:
         size = capacity or self.default_capacity
@@ -96,6 +102,17 @@ class EventBroker:
         with self._condition:
             self._subscribers.pop(token, None)
             self._condition.notify_all()
+
+    def add_publish_listener(self, listener: Callable[[], None]) -> None:
+        """Call ``listener`` (cheaply, under the broker lock) on each delivery."""
+
+        with self._condition:
+            self._publish_listeners.append(listener)
+
+    def remove_publish_listener(self, listener: Callable[[], None]) -> None:
+        with self._condition:
+            if listener in self._publish_listeners:
+                self._publish_listeners.remove(listener)
 
     def seed_sequences(self, heads: Mapping[str, int]) -> None:
         """Mark pre-existing durable history without delivering it live."""
@@ -124,6 +141,8 @@ class EventBroker:
                 if len(subscriber.queue) == subscriber.queue.maxlen:
                     subscriber.dropped += 1
                 subscriber.queue.append(event)
+            for listener in self._publish_listeners:
+                listener()
             self._condition.notify_all()
             return True
 
@@ -208,12 +227,30 @@ class EventService:
         )
 
 
+def _is_positive_number(value: object) -> bool:
+    return (
+        not isinstance(value, bool)
+        and isinstance(value, (int, float))
+        and math.isfinite(value)
+        and value > 0
+    )
+
+
 class DurableEventRelay:
     """Relay committed events from other processes into one local broker.
 
     Per-thread relay cursors advance only from rows actually read from
     ``event_log``. Broker delivery watermarks are deliberately separate so a
     newer local publication cannot make the relay skip an older external row.
+
+    A poll reads only Threads with rows committed since the previous poll:
+    before reading, it records the oldest transaction still running, and any
+    row that becomes visible later belongs to a transaction at or above that
+    id (``event_log.tx_id``). Threads left with more rows than one page are
+    remembered and paged on the following polls. While no new rows appear the
+    poll interval backs off to ``idle_poll_interval`` (by default
+    ``RELAY_IDLE_BACKOFF_FACTOR`` times ``poll_interval``); a publish made by this
+    process resets it, so active turns keep the fast cadence.
     """
 
     def __init__(
@@ -223,14 +260,16 @@ class DurableEventRelay:
         *,
         poll_interval: float = DEFAULT_RELAY_POLL_INTERVAL,
         batch_size: int = DEFAULT_RELAY_BATCH_SIZE,
+        idle_poll_interval: float | None = None,
     ) -> None:
-        if (
-            isinstance(poll_interval, bool)
-            or not isinstance(poll_interval, (int, float))
-            or not math.isfinite(poll_interval)
-            or poll_interval <= 0
+        if idle_poll_interval is None and _is_positive_number(poll_interval):
+            idle_poll_interval = poll_interval * RELAY_IDLE_BACKOFF_FACTOR
+        for name, value in (
+            ("poll_interval", poll_interval),
+            ("idle_poll_interval", idle_poll_interval),
         ):
-            raise ValueError("poll_interval must be a finite positive number")
+            if not _is_positive_number(value):
+                raise ValueError(f"{name} must be a finite positive number")
         if isinstance(batch_size, bool) or not isinstance(batch_size, int):
             raise ValueError("batch_size must be a positive integer")
         if batch_size < 1:
@@ -238,14 +277,23 @@ class DurableEventRelay:
         self.database = database
         self.broker = broker
         self.poll_interval = float(poll_interval)
+        self.idle_poll_interval = max(float(idle_poll_interval), self.poll_interval)
         self.batch_size = batch_size
         self._cursors: dict[str, int] = {}
+        # Heads read but not yet fully paged (more than batch_size behind).
+        self._backlog: dict[str, int] = {}
+        # Oldest transaction running at the previous poll; see the class doc.
+        self._tx_floor = 0
+        self._last_observed = 0
         self._lifecycle_lock = threading.Lock()
         self._poll_lock = threading.Lock()
         self._stop = threading.Event()
+        self._local_activity = threading.Event()
+        self._relaying = threading.local()
         self._thread: threading.Thread | None = None
         self._initialized = False
         self._closed = False
+        broker.add_publish_listener(self._on_publish)
 
     @property
     def active(self) -> bool:
@@ -281,24 +329,50 @@ class DurableEventRelay:
                 return 0
             self._initialize_locked()
         delivered = 0
+        observed = 0
         with self._poll_lock:
             with self.database.read() as connection:
                 repository = EventRepository(connection)
-                heads = repository.sequence_heads()
-                for thread_id in sorted(heads):
-                    after = self._cursors.get(thread_id, 0)
-                    if heads[thread_id] <= after:
-                        continue
-                    events = repository.replay(
-                        thread_id,
-                        after=after,
-                        limit=self.batch_size,
-                    )
-                    for event in events:
-                        if self.broker.publish(event):
-                            delivered += 1
-                    if events:
-                        self._cursors[thread_id] = events[-1].sequence
+                # Reads run in autocommit, one snapshot per statement: the
+                # floor must be taken before the heads it will cover next time.
+                next_floor = repository.snapshot_xmin()
+                heads = dict(self._backlog)
+                for thread_id, head in repository.sequence_heads_since(
+                    self._tx_floor
+                ).items():
+                    heads[thread_id] = max(head, heads.get(thread_id, 0))
+                self._relaying.active = True
+                try:
+                    for thread_id in sorted(heads):
+                        after = self._cursors.get(thread_id, 0)
+                        if heads[thread_id] <= after:
+                            self._backlog.pop(thread_id, None)
+                            continue
+                        events = repository.replay(
+                            thread_id,
+                            after=after,
+                            limit=self.batch_size,
+                        )
+                        observed += len(events)
+                        for event in events:
+                            if self.broker.publish(event):
+                                delivered += 1
+                        if events:
+                            self._cursors[thread_id] = events[-1].sequence
+                        if (
+                            len(events) >= self.batch_size
+                            and self._cursors[thread_id] < heads[thread_id]
+                        ):
+                            self._backlog[thread_id] = heads[thread_id]
+                        else:
+                            self._backlog.pop(thread_id, None)
+                finally:
+                    self._relaying.active = False
+                # Advance only after every changed stream was read, so a
+                # failed poll re-reads the same window next time.
+                self._tx_floor = next_floor
+            # Rows read, delivered or not (the loop's idle signal).
+            self._last_observed = observed
         return delivered
 
     def close(self) -> None:
@@ -307,29 +381,39 @@ class DurableEventRelay:
                 return
             self._closed = True
             self._stop.set()
+            self._local_activity.set()
             thread = self._thread
             self._thread = None
+        self.broker.remove_publish_listener(self._on_publish)
         if thread is not None and thread is not threading.current_thread():
             thread.join()
+
+    def _on_publish(self) -> None:
+        if not getattr(self._relaying, "active", False):
+            self._local_activity.set()
 
     def _initialize_locked(self) -> None:
         if self._initialized:
             return
         with self.database.read() as connection:
-            heads = EventRepository(connection).sequence_heads()
+            repository = EventRepository(connection)
+            floor = repository.snapshot_xmin()
+            heads = repository.sequence_heads()
         self._cursors = dict(heads)
+        self._tx_floor = floor
         self.broker.seed_sequences(heads)
         self._initialized = True
 
     def _run(self) -> None:
-        # Exponential backoff on persistent failure (each poll opens a fresh
-        # SQLite connection, so retrying is also how the relay heals from a
-        # transient "disk I/O error"). Only the FIRST failure of a streak
-        # carries the traceback; repeats are one-line warnings, and recovery
-        # is announced — a struggling disk must not flood the logs.
+        # Exponential backoff on persistent failure (each poll borrows a fresh
+        # connection, so retrying is also how the relay heals from a transient
+        # database error). Only the FIRST failure of a streak carries the
+        # traceback; repeats are one-line warnings, and recovery is
+        # announced — a struggling database must not flood the logs.
         delay = self.poll_interval
         failures = 0
         while not self._stop.is_set():
+            self._last_observed = 0
             try:
                 self.poll_once()
             except Exception:  # noqa: BLE001 - a transient read must not kill relay
@@ -344,12 +428,25 @@ class DurableEventRelay:
                         delay,
                     )
                 delay = min(delay * 2, _RELAY_BACKOFF_CAP_SECONDS)
-            else:
-                if failures:
-                    logger.info(
-                        "durable event relay recovered after %d failed polls",
-                        failures,
-                    )
+                self._stop.wait(delay)
+                continue
+            local = self._local_activity.is_set()
+            self._local_activity.clear()
+            if failures:
+                logger.info(
+                    "durable event relay recovered after %d failed polls",
+                    failures,
+                )
                 failures = 0
                 delay = self.poll_interval
-            self._stop.wait(delay)
+            elif self._last_observed or local:
+                delay = self.poll_interval
+            else:
+                delay = min(delay * 2, self.idle_poll_interval)
+            if delay > self.poll_interval:
+                # Idle: sleep long, but a local publish (a turn starting in
+                # this process) cuts the sleep short. close() sets it too.
+                if self._local_activity.wait(delay):
+                    delay = self.poll_interval
+            else:
+                self._stop.wait(delay)

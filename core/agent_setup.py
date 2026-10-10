@@ -198,10 +198,13 @@ def _compose_tool_filters(*filters: Any) -> Any:
 
 def _document_search_tool(workspace: Any, runtime: Any) -> Any:
     """``search_documents`` over this workspace, embedding through the
-    OpenRouter connection (key from Settings or ``OPENROUTER_API_KEY``)."""
+    OpenRouter connection (key from Settings or ``OPENROUTER_API_KEY``).
+
+    Plain chats search every document in their workspace; a code project
+    searches only the files the user uploaded (its code is read directly)."""
 
     from core.harness.tools.documents import SearchDocumentsTool
-    from core.rag.service import openrouter_embedder_factory
+    from core.rag.service import is_document_workspace, openrouter_embedder_factory
 
     def resolve_key() -> str | None:
         resolver = getattr(runtime, "connection_resolver", None)
@@ -209,7 +212,11 @@ def _document_search_tool(workspace: Any, runtime: Any) -> Any:
             return None
         return resolver.resolve_connection("openrouter").api_key
 
-    return SearchDocumentsTool(workspace, openrouter_embedder_factory(resolve_key))
+    return SearchDocumentsTool(
+        workspace,
+        openrouter_embedder_factory(resolve_key),
+        uploads_only=not is_document_workspace(workspace),
+    )
 
 
 def _wire_tool_permissions(tool_registry: Any, engine: Any) -> None:
@@ -422,14 +429,27 @@ def build_agent_session(
 
     if skill_runtime is None:
         skill_runtime = SkillRuntime(workspace)
-    from core.harness.tools.documents import DOCUMENT_SEARCH_PREAMBLE
+    from core.harness.tools.documents import (
+        DOCUMENT_SEARCH_PREAMBLE,
+        UPLOADS_SEARCH_PREAMBLE,
+    )
+    from core.rag.service import is_document_workspace, uploaded_documents
+
+    # Document search is for documents: all of them in a plain chat, only
+    # the user's uploads in a code project (no guidance at all without any).
+    if is_document_workspace(workspace):
+        document_preamble = DOCUMENT_SEARCH_PREAMBLE
+    elif uploaded_documents(workspace):
+        document_preamble = UPLOADS_SEARCH_PREAMBLE
+    else:
+        document_preamble = ""
 
     from core.codemap import repo_map_section
 
     addenda = [
         collaboration_preamble(engine.mode),
         system_preamble(workspace),
-        DOCUMENT_SEARCH_PREAMBLE,
+        document_preamble,
         # Orientation before the first tool call (Aider-style repo map).
         repo_map_section(workspace),
     ]

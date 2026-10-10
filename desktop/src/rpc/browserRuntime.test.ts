@@ -255,3 +255,28 @@ describe("BrowserRuntime connection and retry contract", () => {
     ).toHaveLength(1);
   });
 });
+
+describe("BrowserRuntime document PDF renditions", () => {
+  it("returns the server PDF, and stops asking once the server has no converter", async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(new Response("%PDF-1.7", { status: 200 }));
+    const pdf = await runtime.readPreviewPdf("t1", "deck.pptx");
+    expect(new TextDecoder().decode(pdf!)).toBe("%PDF-1.7");
+    expect(vi.mocked(fetch).mock.calls.at(-1)?.[0]).toBe(
+      "/api/preview-pdf?threadId=t1&path=deck.pptx",
+    );
+    vi.mocked(fetch).mockResolvedValueOnce(
+      new Response("converter_unavailable", { status: 404 }),
+    );
+    expect(await runtime.readPreviewPdf("t1", "deck.pptx")).toBeNull();
+    const calls = vi.mocked(fetch).mock.calls.length;
+    expect(await runtime.readPreviewPdf("t1", "report.docx")).toBeNull();
+    expect(vi.mocked(fetch).mock.calls.length).toBe(calls);
+  });
+
+  it("falls back (null) on a failed conversion but keeps trying later files", async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(new Response("conversion_failed", { status: 422 }));
+    expect(await runtime.readPreviewPdf("t1", "broken.docx")).toBeNull();
+    vi.mocked(fetch).mockResolvedValueOnce(new Response("%PDF", { status: 200 }));
+    expect(await runtime.readPreviewPdf("t1", "ok.docx")).not.toBeNull();
+  });
+});

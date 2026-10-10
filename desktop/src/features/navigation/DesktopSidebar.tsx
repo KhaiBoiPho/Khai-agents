@@ -7,6 +7,7 @@ import {
   ListTodo,
   SquarePen,
   Trash2,
+  ChevronDown,
   ChevronRight,
   ChevronsUpDown,
   CircleGauge,
@@ -42,6 +43,16 @@ import { useTranslation } from "react-i18next";
 import { ConfirmDialog } from "../../components/ConfirmDialog";
 import { useAccount } from "../account/AccountContext";
 import styles from "./DesktopSidebar.module.css";
+
+const PROJECTS_OPEN_KEY = "deepcode.desktop.projectsOpen";
+
+function readProjectsOpen(): boolean {
+  try {
+    return localStorage.getItem(PROJECTS_OPEN_KEY) !== "0";
+  } catch {
+    return true;
+  }
+}
 
 export type SidebarPage =
   | "calendar"
@@ -243,6 +254,16 @@ export function DesktopSidebar({
   const activeGroupKey =
     projectGroups.find((group) => group.active)?.key ?? null;
   const disclosure = useProjectDisclosure(activeGroupKey);
+  const [projectsOpen, setProjectsOpen] = useState(readProjectsOpen);
+  const toggleProjects = () =>
+    setProjectsOpen((open) => {
+      try {
+        localStorage.setItem(PROJECTS_OPEN_KEY, open ? "0" : "1");
+      } catch {
+        // A convenience only.
+      }
+      return !open;
+    });
 
   useEffect(() => {
     const handleShortcut = (event: KeyboardEvent) => {
@@ -366,7 +387,15 @@ export function DesktopSidebar({
 
         <section className={styles.chatSection}>
           <div className={styles.sectionRow}>
-            <p className={styles.chatHeading}>Projects</p>
+            <button
+              type="button"
+              className={styles.sectionToggle}
+              aria-expanded={projectsOpen}
+              onClick={toggleProjects}
+            >
+              Projects
+              <ChevronDown size={13} data-collapsed={projectsOpen ? undefined : true} />
+            </button>
             <button
               type="button"
               onClick={onOpenProject}
@@ -377,7 +406,7 @@ export function DesktopSidebar({
               <Plus size={14} />
             </button>
           </div>
-          {projectGroups.length === 0 ? (
+          {!projectsOpen && !normalizedQuery ? null : projectGroups.length === 0 ? (
             <p className={styles.emptyLine}>
               {normalizedQuery ? "No matching projects" : "No projects"}
             </p>
@@ -389,6 +418,27 @@ export function DesktopSidebar({
               return (
                 <section className={styles.projectGroup} key={group.key}>
                   <div className={styles.groupHeader}>
+                    {/* Collapses or expands only; the name also selects. */}
+                    <button
+                      type="button"
+                      className={styles.groupToggle}
+                      aria-expanded={expanded}
+                      aria-controls={`project-sessions-${group.key}`}
+                      aria-label={`${expanded ? "Collapse" : "Expand"} ${group.displayName}`}
+                      onClick={() => disclosure.toggle(group.key)}
+                    >
+                      {/* A folder, turning into a chevron on hover (ChatGPT style). */}
+                      <span className={styles.groupFolder} aria-hidden="true">
+                        {expanded ? <FolderOpen size={15} /> : <FolderClosed size={15} />}
+                      </span>
+                      <ChevronRight
+                        size={14}
+                        strokeWidth={2}
+                        className={styles.groupChevron}
+                        data-expanded={expanded || undefined}
+                        aria-hidden="true"
+                      />
+                    </button>
                     <button
                       type="button"
                       className={styles.groupName}
@@ -405,7 +455,6 @@ export function DesktopSidebar({
                       }}
                       title={project?.canonicalPath ?? group.description}
                     >
-                      {expanded ? <FolderOpen size={15} /> : <FolderClosed size={15} />}
                       <span>{group.displayName}</span>
                       {project?.trustState === "untrusted" ? (
                         <ShieldAlert

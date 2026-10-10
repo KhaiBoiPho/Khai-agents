@@ -145,26 +145,35 @@ export function AgentModelCard({
     }
   };
 
+  // Nothing to choose from until a provider is connected: show only that.
+  if (!selectableConnections.length) {
+    return (
+      <section className={`${styles.formCard} ${styles.fullWidthCard}`}>
+        <header>
+          <div>
+            <h2>Default model</h2>
+            <p className={styles.cardDescription}>
+              Connect a provider above, then pick the model new chats use.
+            </p>
+          </div>
+        </header>
+      </section>
+    );
+  }
+
   return (
     <section className={`${styles.formCard} ${styles.fullWidthCard}`}>
       <header>
         <div>
-          <p className={styles.eyebrow}>Default route</p>
-          <h2>Agent model</h2>
+          <h2>Default model</h2>
           <p className={styles.cardDescription}>
-            New Sessions inherit this model. A Session can switch models later
-            without losing its conversation history.
+            Used by new chats. Each chat can switch models later.
           </p>
         </div>
       </header>
-      {!selectableConnections.length ? (
-        <p className={styles.warningBlock}>
-          Connect a provider above before choosing an Agent model.
-        </p>
-      ) : null}
       <div className={styles.formGrid}>
         <label>
-          Provider connection
+          Provider
           <Select
             value={agents.defaultConnection}
             onChange={(event) =>
@@ -203,16 +212,11 @@ export function AgentModelCard({
         />
       </div>
       <details className={styles.advancedSettings}>
-        <summary>Advanced phase routing</summary>
-        <p>
-          Optional phase models inherit the Agent model when left empty.
-          Paper2Code uses Planning first, then Coding & implementation.
-          Ordinary Code Sessions without a Session override use Coding &
-          implementation.
-        </p>
+        <summary>Advanced: separate planning and coding models</summary>
+        <p>Leave empty to use the default model.</p>
         <div className={styles.formGrid}>
           <label>
-            Planning connection
+            Planning provider
             <Select
               value={agents.planningConnection}
               onChange={(event) =>
@@ -222,7 +226,7 @@ export function AgentModelCard({
                 })
               }
             >
-              <option value="">Use Agent default</option>
+              <option value="">Same as default</option>
               {selectableConnections.map((connection) => (
                 <option value={connection.id} key={connection.id}>
                   {connection.label}
@@ -242,7 +246,7 @@ export function AgentModelCard({
             onChange={(planningModel) => updateAgents({ planningModel })}
           />
           <label>
-            Coding & implementation connection
+            Coding provider
             <Select
               value={agents.implementationConnection}
               onChange={(event) =>
@@ -252,7 +256,7 @@ export function AgentModelCard({
                 })
               }
             >
-              <option value="">Use Agent default</option>
+              <option value="">Same as default</option>
               {selectableConnections.map((connection) => (
                 <option value={connection.id} key={connection.id}>
                   {connection.label}
@@ -261,7 +265,7 @@ export function AgentModelCard({
             </Select>
           </label>
           <ModelField
-            label="Coding & implementation model"
+            label="Coding model"
             connectionId={
               agents.implementationConnection ||
               verificationConnection?.id ||
@@ -283,21 +287,18 @@ export function AgentModelCard({
         </div>
       ) : null}
       <footer className={styles.formActions}>
-        <span>
-          Verification sends only a tiny “reply OK” request. No repository or
-          Session content is included.
-        </span>
         <button
           className={styles.secondaryButton}
           type="button"
           disabled={busy || !agents.defaultModel}
           onClick={() => void saveAgents()}
         >
-          Save defaults
+          Save
         </button>
         <button
           className={styles.primaryButton}
           type="button"
+          title="Saves, then sends a tiny “reply OK” request to check the model. No chat or repository content is sent."
           disabled={
             busy ||
             verifyingModel ||
@@ -307,7 +308,7 @@ export function AgentModelCard({
           onClick={() => void verifyDefaultModel()}
         >
           <FlaskConical size={14} />
-          {verifyingModel ? "Verifying…" : "Save and verify model"}
+          {verifyingModel ? "Testing…" : "Save and test"}
         </button>
       </footer>
     </section>

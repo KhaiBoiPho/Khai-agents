@@ -28,6 +28,8 @@ from core.providers.reasoning import (
 # Offered for an OpenRouter connection until its live ``/models`` listing has
 # been fetched (ids verified against openrouter.ai/api/v1/models, 2026-10).
 OPENROUTER_DEFAULT_MODELS: tuple[str, ...] = (
+    # The system default model (core/config.py AgentDefaults).
+    "openai/gpt-6-luna",
     "google/gemini-3.6-flash",
     "anthropic/claude-sonnet-5.5",
     "openai/gpt-5.5",

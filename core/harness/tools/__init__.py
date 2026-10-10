@@ -121,6 +121,13 @@ def default_coding_tools(
         UpdatePlanTool(),  # the agent's self-driven TODO plan
         WebFetchTool(),
     ]
+    from core.documents.convert import converter_available
+
+    if converter_available():
+        # Only where LibreOffice is installed: no prompt tokens elsewhere.
+        from core.harness.tools.document_export import DocumentExportTool
+
+        tools.append(DocumentExportTool(workspace))
     if commands_allowed():
         # Hosted accounts run commands only once an administrator allows it.
         tools.insert(4, BashTool(workspace, sandbox_enabled=command_sandbox))

@@ -86,6 +86,12 @@ class RequestUserInputTool(Tool):
         # No workspace / security side effects — just an interaction.
         return True
 
+    @property
+    def exclusive(self) -> bool:
+        # Read-only for permission purposes, but never run in parallel:
+        # it prompts the user; two prompts must never race.
+        return True
+
     async def execute(self, **kwargs: Any) -> Any:
         raw = kwargs.get("questions")
         if not isinstance(raw, list) or not raw:

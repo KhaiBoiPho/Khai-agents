@@ -137,7 +137,14 @@ export function SettingsDialog({
         <nav className={styles.rail} aria-label="Settings sections">
           <label className={styles.railSearch}>
             <Search size={15} />
+            {/* Not a login field: keep the browser from autofilling the
+                username here (it filters the sections). */}
             <input
+              type="search"
+              name="settings-filter"
+              autoComplete="off"
+              data-1p-ignore
+              data-lpignore="true"
               value={filter}
               onChange={(event) => setFilter(event.target.value)}
               placeholder={t("settings.search", "Search")}

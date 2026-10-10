@@ -572,6 +572,23 @@ export class BrowserRuntime implements ClientRuntime {
     );
     return response.arrayBuffer();
   }
+  async readPreviewPdf(threadId: string, path: string): Promise<ArrayBuffer | null> {
+    // A server without LibreOffice answers 404 once; stop asking after that.
+    if (this.previewPdfUnavailable) return null;
+    try {
+      const response = await this.http(
+        `/api/preview-pdf?${new URLSearchParams({ threadId, path })}`,
+        {},
+        90000,
+      );
+      return await response.arrayBuffer();
+    } catch (error) {
+      if (error instanceof BrowserRuntimeError && error.message === "converter_unavailable")
+        this.previewPdfUnavailable = true;
+      return null;
+    }
+  }
+  private previewPdfUnavailable = false;
   private download(blob: Blob, name: string): void {
     const url = URL.createObjectURL(blob),
       link = document.createElement("a");

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import hashlib
+from collections.abc import Callable
 from dataclasses import replace
 from pathlib import Path
 from time import monotonic
@@ -26,6 +28,7 @@ from core.events import (
     AgentReasoningDelta,
     AgentReasoningStarted,
     AgentReasoningSummary,
+    DeepThinkProgress,
     ErrorEvent,
     Event,
     ModelUsageRecorded,
@@ -37,14 +40,15 @@ from core.events import (
     ToolStarted,
     TurnStarted,
 )
-from core.persistence.database import Database
+from core.persistence.database import Connection, Database
 from core.persistence.event_repository import EventRepository
 from core.persistence.execution_repository import ItemRepository
+from core.persistence.serde import dump_datetime, dump_json
 from core.persistence.thread_repository import ThreadRepository
 from core.persistence.usage_repository import UsageRepository
 from core.reasoning import ReasoningChannel, ReasoningPayload
 
-_STREAM_FLUSH_INTERVAL_S = 0.05
+_STREAM_FLUSH_INTERVAL_S = 0.15
 _STREAM_FLUSH_MIN_CHARS = 256
 
 
@@ -82,6 +86,11 @@ class TurnEventProjector:
         self._skill_invocations: dict[str, dict[str, str]] = {}
         self._usage: dict[str, int] = {}
         self._usage_ordinals: set[int] = set()
+        # Each streaming Item as this projector last wrote it. Only a hint:
+        # a delta flush writes from it when the row is provably unchanged
+        # (_update_if_unchanged), and otherwise re-reads the row as before.
+        self._written_items: dict[str, Item] = {}
+        self._deepthink_item_id: str | None = None
 
     @property
     def usage(self) -> dict[str, int]:
@@ -141,6 +150,8 @@ class TurnEventProjector:
             )
         elif isinstance(message, PlanUpdated):
             self._persist_plan_update(message)
+        elif isinstance(message, DeepThinkProgress):
+            self._persist_deepthink_progress(message)
         elif isinstance(message, ToolStarted):
             if (
                 message.name.lower() in {"update_plan", "plan"}
@@ -327,6 +338,51 @@ class TurnEventProjector:
                 payload=payload,
             )
         self.broker.publish(event)
+
+    def _persist_deepthink_progress(self, update: DeepThinkProgress) -> None:
+        """Keep one ``workflow_stage`` Item per DeepThink run, updated in place.
+
+        ``workflow_stage`` is an existing kind, so older clients render it as
+        a generic stage row; current clients read ``payload.deepthink``.
+        """
+
+        document = dict(update.payload)
+        run_status = document.get("status")
+        status = (
+            ItemStatus.COMPLETED
+            if run_status == "completed"
+            else ItemStatus.FAILED
+            if run_status in {"failed", "interrupted"}
+            else ItemStatus.IN_PROGRESS
+        )
+        running = next(
+            (
+                step
+                for step in document.get("steps") or ()
+                if isinstance(step, dict) and step.get("status") == "running"
+            ),
+            None,
+        )
+        summary = (
+            f"DeepThink · {running.get('label')}"
+            if running is not None
+            else "DeepThink"
+        )
+        if self._deepthink_item_id is None:
+            item = self._add_item(
+                kind=ItemKind.WORKFLOW_STAGE,
+                status=status,
+                summary=summary,
+                payload={"name": "deepthink", "deepthink": document},
+            )
+            self._deepthink_item_id = item.id
+            return
+        self._update_item(
+            self._deepthink_item_id,
+            status=status,
+            summary=summary,
+            payload_update={"deepthink": document},
+        )
 
     def close_open_items(self, *, interrupted: bool) -> None:
         """Ensure an interrupted/failed turn leaves no misleading live cards."""
@@ -580,6 +636,7 @@ class TurnEventProjector:
                 type="item.created",
                 payload={"item": item_view(item)},
             )
+        self._written_items[item.id] = item
         self.broker.publish(event)
         return item
 
@@ -611,6 +668,7 @@ class TurnEventProjector:
                 type="item.updated",
                 payload={"item": item_view(updated)},
             )
+        self._written_items[updated.id] = updated
         self.broker.publish(event)
         return updated
 
@@ -625,14 +683,11 @@ class TurnEventProjector:
 
         if not delta:
             return None
-        with self.database.transaction() as connection:
-            repository = ItemRepository(connection)
-            item = repository.get(item_id)
-            if item is None:
-                return None
+
+        def apply(item: Item) -> Item:
             text = item.payload.get("text")
             current_text = text if isinstance(text, str) else ""
-            updated = replace(
+            return replace(
                 item,
                 status=ItemStatus.IN_PROGRESS,
                 summary=summary,
@@ -643,7 +698,11 @@ class TurnEventProjector:
                 },
                 updated_at=utc_now(),
             )
-            repository.update(updated)
+
+        with self.database.transaction() as connection:
+            updated = self._write_delta(connection, item_id, apply)
+            if updated is None:
+                return None
             event = EventRepository(connection).append(
                 thread_id=self.thread_id,
                 turn_id=self.turn_id,
@@ -656,6 +715,7 @@ class TurnEventProjector:
                     "updatedAt": timestamp(updated.updated_at),
                 },
             )
+        self._written_items[updated.id] = updated
         self.broker.publish(event)
         return updated
 
@@ -670,22 +730,23 @@ class TurnEventProjector:
 
         if not delta:
             return None
-        with self.database.transaction() as connection:
-            repository = ItemRepository(connection)
-            item = repository.get(item_id)
-            if item is None:
-                return None
+
+        def apply(item: Item) -> Item:
             payload = ReasoningPayload.from_dict(item.payload).with_delta(
                 channel,
                 delta,
             )
-            updated = replace(
+            return replace(
                 item,
                 status=ItemStatus.IN_PROGRESS,
                 payload=payload.to_dict(),
                 updated_at=utc_now(),
             )
-            repository.update(updated)
+
+        with self.database.transaction() as connection:
+            updated = self._write_delta(connection, item_id, apply)
+            if updated is None:
+                return None
             event = EventRepository(connection).append(
                 thread_id=self.thread_id,
                 turn_id=self.turn_id,
@@ -698,7 +759,35 @@ class TurnEventProjector:
                     "updatedAt": timestamp(updated.updated_at),
                 },
             )
+        self._written_items[updated.id] = updated
         self.broker.publish(event)
+        return updated
+
+    def _write_delta(
+        self,
+        connection: Connection,
+        item_id: str,
+        apply: Callable[[Item], Item],
+    ) -> Item | None:
+        """Write ``apply(current item)``, skipping the read when it is known.
+
+        The result is the same as reading the row and updating it: the
+        remembered copy is used only when the row still matches it exactly,
+        otherwise (another writer, a deleted row) the row is re-read.
+        """
+
+        written = self._written_items.get(item_id)
+        if written is not None:
+            updated = apply(written)
+            if _update_if_unchanged(connection, written, updated):
+                return updated
+        repository = ItemRepository(connection)
+        item = repository.get(item_id)
+        if item is None:
+            self._written_items.pop(item_id, None)
+            return None
+        updated = apply(item)
+        repository.update(updated)
         return updated
 
     def _publish(self, events: list[DomainEvent]) -> None:
@@ -715,3 +804,31 @@ class TurnEventProjector:
         if any(token in lowered for token in ("write", "edit", "apply_patch")):
             return ItemKind.FILE_CHANGE
         return ItemKind.TOOL_CALL
+
+
+def _update_if_unchanged(connection: Connection, expected: Item, updated: Item) -> bool:
+    """Compare-and-set one Item row against every column an update can change.
+
+    The payload is matched by digest so its text is not sent twice.
+    """
+
+    cursor = connection.execute(
+        "UPDATE items SET status = ?, summary = ?, payload_json = ?, "
+        "updated_at = ? WHERE id = ? AND status = ? AND summary = ? "
+        "AND updated_at = ? AND md5(payload_json) = ?",
+        (
+            updated.status.value,
+            updated.summary,
+            dump_json(updated.payload),
+            dump_datetime(updated.updated_at),
+            expected.id,
+            expected.status.value,
+            expected.summary,
+            dump_datetime(expected.updated_at),
+            hashlib.md5(
+                dump_json(expected.payload).encode("utf-8"),
+                usedforsecurity=False,
+            ).hexdigest(),
+        ),
+    )
+    return cursor.rowcount == 1

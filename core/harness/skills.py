@@ -140,6 +140,12 @@ class SkillTool(Tool):
     def read_only(self) -> bool:
         return True
 
+    @property
+    def exclusive(self) -> bool:
+        # Read-only for permission purposes, but never run in parallel:
+        # loading a Skill changes session state such as visible tools.
+        return True
+
     async def execute(self, **kwargs):
         name = str(kwargs.get("name") or "").strip()
         resource = str(kwargs.get("resource") or "").strip()

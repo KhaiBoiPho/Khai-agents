@@ -3,6 +3,7 @@
 # never committed), the data directory, and the application image.
 #
 #   KHAI_DOMAIN=khai.example.com KHAI_DATA_DIR=/srv/khai/data ./setup.sh
+#   GENOFFICE_SRC=/path/to/genoffice ./setup.sh   # GenOffice checkout elsewhere
 set -eu
 cd "$(dirname "$0")"
 if [ ! -f .env ]; then
@@ -27,5 +28,17 @@ fi
 . ./.env
 mkdir -p "$KHAI_DATA_DIR/users"
 chmod 711 "$KHAI_DATA_DIR" "$KHAI_DATA_DIR/users"
-docker build -t "${KHAI_IMAGE:-khai-agents:latest}" ../..
+# GenOffice (the built-in document engine) is built from a source checkout
+# passed as a BuildKit named context; GENOFFICE_SRC overrides the default
+# location (a sibling of this repository). Without it the image still builds,
+# minus document creation.
+genoffice_src="${GENOFFICE_SRC:-../../../genoffice}"
+if [ -f "$genoffice_src/packages/cli/package.json" ]; then
+  docker build --build-context "genoffice-src=$genoffice_src" \
+    -t "${KHAI_IMAGE:-khai-agents:latest}" ../..
+else
+  echo "warning: no GenOffice checkout at $genoffice_src (set GENOFFICE_SRC);" \
+    "building without document creation" >&2
+  docker build -t "${KHAI_IMAGE:-khai-agents:latest}" ../..
+fi
 echo "Ready: docker compose up -d, then open https://$KHAI_DOMAIN and register the first (administrator) account."

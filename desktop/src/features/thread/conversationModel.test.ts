@@ -4,6 +4,7 @@ import type { Item, Turn } from "../../generated/app-server";
 import {
   buildConversationTurns,
   formatTurnDuration,
+  reuseUnchangedTurns,
   turnDurationSeconds,
 } from "./conversationModel";
 
@@ -166,5 +167,33 @@ describe("conversationModel", () => {
     expect(turnDurationSeconds(turn)).toBe(65);
     expect(formatTurnDuration(65)).toBe("1m 05s");
     expect(formatTurnDuration(3661)).toBe("1h 01m");
+  });
+
+  it("reuses unchanged Turn groups and entries when another Turn streams", () => {
+    const second: Turn = { ...turn, id: "turn-2", ordinal: 2, status: "running", completedAt: null };
+    const activity = (kind: string, subject: string) => ({
+      activity: { kind, label: kind, subject },
+      text: subject,
+    });
+    const settled = [
+      item("user", 1, "user_message", "Inspect"),
+      item("answer", 2, "assistant_message", "Done"),
+    ];
+    const read = { ...item("read", 1, "command_execution", "Read", activity("read", "a")), turnId: "turn-2" };
+    const search = { ...item("search", 2, "command_execution", "Search", activity("search", "b")), turnId: "turn-2" };
+    const streaming = { ...item("reply", 3, "assistant_message", "Wor"), turnId: "turn-2" };
+    const before = buildConversationTurns([turn, second], [...settled, read, search, streaming]);
+
+    const grown = { ...streaming, summary: "Working", payload: { text: "Working" } };
+    const after = reuseUnchangedTurns(
+      before,
+      buildConversationTurns([turn, second], [...settled, read, search, grown]),
+    );
+
+    expect(after[0]).toBe(before[0]);
+    expect(after[1]).not.toBe(before[1]);
+    expect(after[1].timeline[0]).toBe(before[1].timeline[0]);
+    expect(after[1].timeline[1]).not.toBe(before[1].timeline[1]);
+    expect(after[1].timeline[1]).toMatchObject({ item: { summary: "Working" } });
   });
 });

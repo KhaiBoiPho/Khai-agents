@@ -1,0 +1,14 @@
+document-design — Khai-Agents original skill.
+
+references/styles.md, section "Theme-factory styles", contains ten colour and
+font themes (Ocean Depths, Sunset Boulevard, Forest Canopy, Modern Minimalist,
+Golden Hour, Arctic Frost, Desert Rose, Tech Innovation, Botanical Garden,
+Midnight Galaxy) adapted from the "theme-factory" skill of
+https://github.com/anthropics/skills
+(revision dbd4588f9e1033efb41dad4bef2f7947c8993d44, path skills/theme-factory),
+licensed under the Apache License, Version 2.0 (copy in
+LICENSE-theme-factory.txt).
+
+Changes: the themes were condensed into one table, mapped to primary / accent
+/ dark / mid / light roles (some mid, dark and light values added), and given
+Office-safe font substitutes. All other content in this folder is original.

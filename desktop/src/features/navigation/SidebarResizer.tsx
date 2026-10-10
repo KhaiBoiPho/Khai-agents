@@ -12,6 +12,16 @@ function clamp(width: number): number {
   );
 }
 
+const WIDTH_PROPERTY = "--sidebar-width";
+
+/** The nearest ancestor that sets the sidebar width inline (the app shell). */
+function widthHost(handle: HTMLElement): HTMLElement | null {
+  for (let element = handle.parentElement; element; element = element.parentElement) {
+    if (element.style.getPropertyValue(WIDTH_PROPERTY)) return element;
+  }
+  return null;
+}
+
 interface SidebarResizerProps {
   width: number;
   onResize(width: number): void;
@@ -23,11 +33,27 @@ export function SidebarResizer({ width, onResize }: SidebarResizerProps) {
   const start = (event: ReactPointerEvent<HTMLDivElement>) => {
     event.preventDefault();
     setDragging(true);
-    const move = (moveEvent: PointerEvent) => onResize(clamp(moveEvent.clientX));
+    // Like ReviewResizer: paint the width onto the shell's custom property
+    // while dragging and commit it to state (and storage) once, on release,
+    // instead of re-rendering the app on every pointermove.
+    const handle = event.currentTarget;
+    const host = widthHost(handle);
+    let pending: number | null = null;
+    const move = (moveEvent: PointerEvent) => {
+      const next = clamp(moveEvent.clientX);
+      if (!host) {
+        onResize(next);
+        return;
+      }
+      pending = next;
+      host.style.setProperty(WIDTH_PROPERTY, `${next}px`);
+      handle.setAttribute("aria-valuenow", String(next));
+    };
     const stop = () => {
       setDragging(false);
       window.removeEventListener("pointermove", move);
       window.removeEventListener("pointerup", stop);
+      if (pending !== null) onResize(pending);
     };
     window.addEventListener("pointermove", move);
     window.addEventListener("pointerup", stop);

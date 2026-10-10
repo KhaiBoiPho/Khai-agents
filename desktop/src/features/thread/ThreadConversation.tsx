@@ -3,6 +3,7 @@ import {
   Fragment,
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -22,7 +23,11 @@ import {
   requestFilePreview,
   type LineRange,
 } from "../inspector/filePreviewRequests";
-import { buildConversationTurns } from "./conversationModel";
+import {
+  buildConversationTurns,
+  reuseUnchangedTurns,
+  type ConversationTurn,
+} from "./conversationModel";
 import styles from "./ThreadConversation.module.css";
 import { TurnBlock } from "./TurnBlock";
 import type { TranscriptMode } from "./transcriptMode";
@@ -47,6 +52,21 @@ interface ThreadConversationProps {
 
 const FOLLOW_THRESHOLD = 120;
 
+/**
+ * A callback whose identity never changes but which always calls the latest
+ * `handler`, so memoized Turns are not re-rendered by a parent that passes
+ * inline arrows.
+ */
+function useStableHandler<Args extends unknown[], Result>(
+  handler: (...args: Args) => Result,
+): (...args: Args) => Result {
+  const latest = useRef(handler);
+  useLayoutEffect(() => {
+    latest.current = handler;
+  });
+  return useCallback((...args: Args) => latest.current(...args), []);
+}
+
 export function ThreadConversation({
   turns,
   items,
@@ -68,9 +88,22 @@ export function ThreadConversation({
   const followingRef = useRef(true);
   const [showJumpToLatest, setShowJumpToLatest] = useState(false);
   const [thinkingDisclosure, setThinkingDisclosure] = useState<"default" | "collapsed" | "expanded">("default");
+  const previousTurnsRef = useRef<ConversationTurn[]>([]);
   const groupedTurns = useMemo(
-    () => buildConversationTurns(turns, items),
+    () => reuseUnchangedTurns(previousTurnsRef.current, buildConversationTurns(turns, items)),
     [items, turns],
+  );
+  useEffect(() => {
+    previousTurnsRef.current = groupedTurns;
+  }, [groupedTurns]);
+  const handleSelectItem = useStableHandler(onSelectItem);
+  const handleOpenInspector = useStableHandler(onOpenInspector);
+  const handleRespondToApproval = useStableHandler(onRespondToApproval);
+  const handleRetryTurn = useStableHandler(onRetryTurn);
+  const handleCancelQueuedTurn = useStableHandler(onCancelQueuedTurn);
+  const toggleActivity = useCallback(
+    () => setThinkingDisclosure((mode) => mode === "collapsed" ? "expanded" : "collapsed"),
+    [],
   );
   const compactionsAfter = useMemo(() => {
     const known = new Set(groupedTurns.map((group) => group.id));
@@ -107,11 +140,15 @@ export function ThreadConversation({
   );
   const activePlan = activeTurn ? plansByTurnId[activeTurn.id] ?? null : null;
   const latestItem = items.at(-1);
+  // An Item is replaced, never mutated, when it changes, so its identity (and
+  // its payload's) stands in for serializing the payload on every render.
   const itemUpdate = latestItem
-    ? `${latestItem.id}:${latestItem.status}:${latestItem.updatedAt}:${JSON.stringify(latestItem.payload).length}`
+    ? `${latestItem.id}:${latestItem.status}:${latestItem.updatedAt}`
     : `${turns.at(-1)?.id ?? "empty"}:${turns.at(-1)?.status ?? "idle"}`;
+  const latestPayload = latestItem?.payload;
   const latestCompaction = compactions.at(-1);
   const latestUpdate = `${itemUpdate}:${activePlan?.updatedAt ?? "no-plan"}:${latestCompaction ? `${latestCompaction.id}:${latestCompaction.status}` : "no-compaction"}`;
+  const followFrameRef = useRef<number | null>(null);
   const scrollToLatest = useCallback((behavior: ScrollBehavior) => {
     const viewport = scrollViewportRef.current;
     if (typeof viewport?.scrollTo === "function") {
@@ -140,10 +177,30 @@ export function ThreadConversation({
     return () => viewport.removeEventListener("scroll", handleScroll);
   }, []);
 
+  // Following a stream: jump (not smooth-scroll) to the end, at most once per
+  // frame. A smooth scroll restarted on every token never settles.
   useEffect(() => {
     if (!followingRef.current) return;
-    scrollToLatest(latestItem?.status === "in_progress" ? "smooth" : "auto");
-  }, [latestItem?.status, latestUpdate, scrollToLatest]);
+    if (typeof window.requestAnimationFrame !== "function") {
+      scrollToLatest("auto");
+      return;
+    }
+    if (followFrameRef.current !== null) return;
+    followFrameRef.current = window.requestAnimationFrame(() => {
+      followFrameRef.current = null;
+      if (followingRef.current) scrollToLatest("auto");
+    });
+  }, [latestItem?.status, latestPayload, latestUpdate, scrollToLatest]);
+
+  useEffect(
+    () => () => {
+      if (followFrameRef.current !== null) {
+        window.cancelAnimationFrame(followFrameRef.current);
+        followFrameRef.current = null;
+      }
+    },
+    [],
+  );
 
   useEffect(() => {
     if (planProgressExpanded && followingRef.current) {
@@ -161,9 +218,9 @@ export function ThreadConversation({
   const openCitation = useCallback(
     (path: string, lines: LineRange) => {
       requestFilePreview(path, lines);
-      onOpenInspector("files");
+      handleOpenInspector("files");
     },
-    [onOpenInspector],
+    [handleOpenInspector],
   );
 
   if (groupedTurns.length === 0) {
@@ -198,13 +255,13 @@ export function ThreadConversation({
                   transcriptMode={transcriptMode}
                   thinkingCollapsed={thinkingDisclosure === "collapsed"}
                   thinkingExpanded={thinkingDisclosure === "expanded"}
-                  onToggleActivity={() => setThinkingDisclosure((mode) => mode === "collapsed" ? "expanded" : "collapsed")}
+                  onToggleActivity={toggleActivity}
                   busy={busy}
-                  onSelectItem={onSelectItem}
-                  onOpenInspector={onOpenInspector}
-                  onRespondToApproval={onRespondToApproval}
-                  onRetryTurn={onRetryTurn}
-                  onCancelQueuedTurn={onCancelQueuedTurn}
+                  onSelectItem={handleSelectItem}
+                  onOpenInspector={handleOpenInspector}
+                  onRespondToApproval={handleRespondToApproval}
+                  onRetryTurn={handleRetryTurn}
+                  onCancelQueuedTurn={handleCancelQueuedTurn}
                 />
                 {compactionsAfter.placed.get(group.id)?.map((entry) => (
                   <CompactionNotice key={entry.id} entry={entry} />

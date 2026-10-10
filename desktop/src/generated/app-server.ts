@@ -206,6 +206,8 @@ export interface MethodParams {
   "documents/list": DocumentListParams;
   "thread/usage": ThreadUsageParams;
   "provider/balance": ProviderBalanceParams;
+  "websearch/status": WebSearchStatusParams;
+  "websearch/update": WebSearchUpdateParams;
 }
 export interface InitializeParams {
   protocolVersion: "1.0";
@@ -531,6 +533,10 @@ export interface TurnStartParams {
   connectionId?: string;
   model?: string;
   reasoningEffort?: string;
+  /**
+   * Turn execution mode. `deepthink` runs the multi-step research pipeline (plan, web search, check, summarize) instead of the normal agent loop. Omitted means `normal`.
+   */
+  mode?: "normal" | "deepthink";
 }
 export interface TurnSteerParams {
   threadId: string;
@@ -726,6 +732,17 @@ export interface ThreadUsageParams {
 export interface ProviderBalanceParams {
   connectionId: string;
   projectId?: string;
+}
+export interface WebSearchStatusParams {}
+export interface WebSearchUpdateParams {
+  /**
+   * New Firecrawl API key; null removes the saved key; an empty string keeps it. Write-only: never returned.
+   */
+  apiKey?: string | null;
+  /**
+   * Turn the built-in web search server on or off.
+   */
+  enabled?: boolean;
 }
 export interface MethodResults {
   initialize: InitializeResult;
@@ -986,6 +1003,8 @@ export interface MethodResults {
   "documents/list": DocumentListResult;
   "thread/usage": ThreadUsageResult;
   "provider/balance": ProviderBalanceResult;
+  "websearch/status": WebSearchStatus;
+  "websearch/update": WebSearchStatus;
 }
 export interface InitializeResult {
   protocolVersion: "1.0";
@@ -2057,6 +2076,21 @@ export interface ProviderBalanceResult {
    */
   baselineUsd?: number | null;
   error?: string | null;
+}
+export interface WebSearchStatus {
+  provider: "firecrawl";
+  /**
+   * Whether the user saved their own API key.
+   */
+  configured: boolean;
+  /**
+   * True when no key (user or server) is available: the rate-limited keyless endpoint is used.
+   */
+  keyless: boolean;
+  /**
+   * Whether the built-in web search server is enabled.
+   */
+  enabled: boolean;
 }
 export interface Notifications {
   "thread.updated": Event;

@@ -117,6 +117,11 @@ class DeepCodeApplication:
             plugin_servers=self.plugins.host.mcp_servers,
             credential_resolver=self.llm.resolve_api_credential,
         )
+        from core.application.websearch_service import WebSearchService
+
+        self.websearch = WebSearchService(
+            credentials=self.credentials, mcp=self.mcp
+        )
         if isinstance(effective_session_factory, ConfiguredAgentSessionFactory):
             effective_session_factory.configure_mcp_status_observer(
                 self.mcp.publish_runtime_status

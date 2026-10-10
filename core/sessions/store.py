@@ -64,12 +64,12 @@ class SessionStore:
         harden_private_tree(self.root)
         self._lock = threading.RLock()
         self._cache: dict[str, Session] = {}
-        self._cache_signatures: dict[str, tuple[int, int, int, int]] = {}
+        self._cache_signatures: dict[str, tuple[int, ...]] = {}
         # The derived SQLite index is gone with SQLite; listings scan JSONL
         # until transcripts move into PostgreSQL. ``use_index`` is accepted
         # and ignored for existing callers.
         self._index = None
-        self._disk_signatures: dict[str, tuple[int, int, int, int]] | None = None
+        self._disk_signatures: dict[str, tuple[int, ...]] | None = None
         self._deletions = SessionDeletionJournal(self.root)
 
     def close(self) -> None:
@@ -386,23 +386,64 @@ class SessionStore:
 
         Returns ``None`` when the session does not exist.
         """
+        stored = self.append_messages(
+            session_id,
+            [
+                {
+                    "role": role,
+                    "content": content,
+                    "task_id_ref": task_id_ref,
+                    "metadata": metadata,
+                }
+            ],
+        )
+        return stored[0] if stored else None
+
+    def append_messages(
+        self,
+        session_id: str,
+        messages: Iterable[dict],
+    ) -> list[SessionMessage] | None:
+        """Append several transcript messages with one file rewrite.
+
+        Each entry carries ``role`` and ``content`` plus optional
+        ``task_id_ref`` / ``metadata``, exactly as :meth:`append_message`
+        takes them. The header and the new lines land in one atomic replace,
+        so a batch costs one read and one write of the file instead of one
+        per message. Returns ``None`` when the session does not exist.
+        """
+        pending = list(messages)
         with self._lock, exclusive_file_lock(self._session_lock(session_id)):
-            self._cache.pop(session_id, None)
-            self._cache_signatures.pop(session_id, None)
+            # ``get_session`` re-reads the file only when its signature moved
+            # (another process wrote it); otherwise the cached copy is current.
             session = self.get_session(session_id)
             if session is None:
                 return None
-            msg = session.add_message(
-                role,
-                content,
-                task_id_ref=task_id_ref,
-                metadata=metadata,
-            )
-            self._append_jsonl(self._session_jsonl(session_id), msg.to_dict())
-            self._rewrite_metadata(session)
+            if not pending:
+                return []
+            try:
+                added = [
+                    session.add_message(
+                        entry["role"],
+                        entry["content"],
+                        task_id_ref=entry.get("task_id_ref"),
+                        metadata=entry.get("metadata"),
+                    )
+                    for entry in pending
+                ]
+                self._rewrite_metadata(
+                    session,
+                    appended=[message.to_dict() for message in added],
+                )
+            except BaseException:
+                # The cached copy already holds the new messages; drop it so
+                # the next read follows whatever actually reached the disk.
+                self._cache.pop(session_id, None)
+                self._cache_signatures.pop(session_id, None)
+                raise
             self._remember_signature(session_id)
             self._index_session(session)
-            return msg
+            return added
 
     def attach_task(
         self,
@@ -502,14 +543,18 @@ class SessionStore:
                     "branched_at_message": cutoff,
                 },
             )
-            for msg in source.messages[:cutoff]:
-                self.append_message(
-                    forked.session_id,
-                    msg.role,
-                    msg.content,
-                    task_id_ref=None,  # don't carry task refs across branches
-                    metadata=msg.metadata,
-                )
+            self.append_messages(
+                forked.session_id,
+                [
+                    {
+                        "role": msg.role,
+                        "content": msg.content,
+                        "task_id_ref": None,  # don't carry task refs across branches
+                        "metadata": msg.metadata,
+                    }
+                    for msg in source.messages[:cutoff]
+                ],
+            )
             return self.get_session(forked.session_id)
 
     def delete_session(self, session_id: str) -> bool:
@@ -750,14 +795,54 @@ class SessionStore:
             and not self._deletions.pending(entry.name)
         ]
 
-    def _all_disk_signatures(self) -> dict[str, tuple[int, int, int, int]]:
+    def _all_disk_signatures(self) -> dict[str, tuple[int, ...]]:
         return {
             sid: signature
             for sid in self._disk_session_ids()
             if (signature := self._disk_signature(sid)) is not None
         }
 
-    def _disk_signature(self, session_id: str) -> tuple[int, int, int, int] | None:
+    def disk_signature(self, session_id: str) -> tuple[int, ...] | None:
+        """Cheap change marker for one Session: two ``stat`` calls, no reads.
+
+        ``None`` when the transcript is missing. The value changes whenever
+        ``session.jsonl`` or ``tasks.jsonl`` is rewritten or appended.
+        """
+        return self._disk_signature(self._validated_session_id(session_id))
+
+    def disk_signatures(self) -> dict[str, tuple[int, ...]]:
+        """``disk_signature`` for every live Session, from one directory scan.
+
+        Callers compare successive results to learn whether anything on disk
+        changed (a Session added, removed, or written by another process)
+        without opening a single transcript.
+        """
+        signatures: dict[str, tuple[int, ...]] = {}
+        try:
+            entries = os.scandir(self.root)
+        except OSError:
+            return signatures
+        with entries:
+            for entry in entries:
+                # Dot entries are internal: locks, sessions still being
+                # created or deleted.
+                if entry.name.startswith("."):
+                    continue
+                try:
+                    if not entry.is_dir():
+                        continue
+                except OSError:
+                    continue
+                try:
+                    signature = self._disk_signature(entry.name)
+                    if signature is None or self._deletions.pending(entry.name):
+                        continue
+                except ValueError:  # not a valid Session id
+                    continue
+                signatures[entry.name] = signature
+        return signatures
+
+    def _disk_signature(self, session_id: str) -> tuple[int, ...] | None:
         try:
             session_stat = self._session_jsonl(session_id).stat()
         except OSError:
@@ -767,11 +852,14 @@ class SessionStore:
             task_mtime, task_size = task_stat.st_mtime_ns, task_stat.st_size
         except OSError:
             task_mtime = task_size = 0
+        # Every transcript rewrite is an ``os.replace``, so the inode moves
+        # even when a same-size rewrite lands within the mtime resolution.
         return (
             session_stat.st_mtime_ns,
             session_stat.st_size,
             task_mtime,
             task_size,
+            session_stat.st_ino,
         )
 
     def _remember_signature(self, session_id: str) -> None:
@@ -819,13 +907,18 @@ class SessionStore:
         except (OSError, json.JSONDecodeError):
             return None
 
-    def _rewrite_metadata(self, session: Session) -> None:
+    def _rewrite_metadata(
+        self,
+        session: Session,
+        *,
+        appended: Iterable[dict] = (),
+    ) -> None:
         """Rewrite the metadata header without touching the message tail.
 
         Strategy: read all message lines, then rewrite the whole file
-        with the fresh metadata as line one. This is acceptable because
-        sessions are small (~hundreds of lines max) and metadata updates
-        are rare compared to message appends.
+        with the fresh metadata as line one. ``appended`` rows are written
+        after the existing tail in the same replace, so a batch of message
+        appends costs one rewrite rather than an append plus a rewrite each.
         """
         path = self._session_jsonl(session.session_id)
         ensure_private_directory(path.parent)
@@ -853,6 +946,9 @@ class SessionStore:
             fh.write("\n")
             for line in message_lines:
                 fh.write(line)
+                fh.write("\n")
+            for payload in appended:
+                fh.write(json.dumps(payload, ensure_ascii=False, default=str))
                 fh.write("\n")
         os.replace(tmp, path)
 

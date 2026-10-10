@@ -103,6 +103,10 @@ def _isolate_session_store(tmp_path, monkeypatch):
     # Keep the built-in GenOffice MCP server out of MCP plans unless a test
     # opts in (an empty GENOFFICE_BIN disables binary resolution).
     monkeypatch.setenv("GENOFFICE_BIN", "")
+    # Likewise the built-in Firecrawl web search server (and its env key):
+    # tests never reach the network unless they opt in.
+    monkeypatch.setenv("KHAI_BUILTIN_WEBSEARCH", "0")
+    monkeypatch.delenv("FIRECRAWL_API_KEY", raising=False)
     from core.providers.registry import PROVIDERS
 
     credential_environment_names = {

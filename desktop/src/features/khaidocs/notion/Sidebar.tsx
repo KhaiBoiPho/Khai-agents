@@ -1,9 +1,10 @@
 /*
  * Original KhaiDocs code, MIT.
  *
- * The single-user, Notion-style sidebar: workspace row, Search and Home,
- * then Recents, Favorites and "Private" (the default space's page tree, with
- * folders), and Templates / Trash at the bottom. Replaces Docmost's space
+ * The single-user sidebar, laid out like AFFiNE's: workspace row, a search
+ * field beside the new-page button, Home, then Recents, Favorites, "Private"
+ * (the default space's page tree, with folders) and Others (Templates,
+ * Trash). Replaces Docmost's space
  * sidebar in single-user mode (see space-sidebar.tsx).
  */
 
@@ -14,7 +15,7 @@ import { Menu, Tooltip } from "@mantine/core";
 import { useDisclosure } from "@mantine/hooks";
 import {
   IconArrowDown,
-  IconChevronsLeft,
+  IconChevronsRight,
   IconFileExport,
   IconFilePlus,
   IconFolderPlus,
@@ -121,15 +122,24 @@ export function KhaiDocsSidebar({
             }}
             aria-label={t("Close sidebar")}
           >
-            <IconChevronsLeft size={18} stroke={1.75} />
+            {/* The sidebar sits on the right and closes toward that edge. */}
+            <IconChevronsRight size={18} stroke={1.75} />
           </button>
         </Tooltip>
+      </div>
+
+      {/* AFFiNE-style: a search field beside the new-page button. */}
+      <div className={classes.quickRow}>
+        <button type="button" className={classes.quickSearch} onClick={searchSpotlight.open}>
+          <IconSearch size={16} stroke={1.75} className={classes.quickSearchIcon} />
+          <span className={classes.quickSearchLabel}>{t("Search")}</span>
+          <kbd className={classes.quickSearchKey}>⌘K</kbd>
+        </button>
         {canManagePages && (
           <Tooltip label={t("New page")} openDelay={400}>
             <button
               type="button"
-              className={classes.collapseButton}
-              data-always
+              className={classes.newPageButton}
               onClick={() => {
                 createNode(null, "page");
                 closeMobile();
@@ -143,29 +153,11 @@ export function KhaiDocsSidebar({
       </div>
 
       <nav className={classes.navRows}>
-        <NavRow icon={<IconSearch size={18} stroke={1.75} />} label={t("Search")} onClick={searchSpotlight.open} />
         <NavRow
           icon={<IconHome size={18} stroke={1.75} />}
           label={t("Home")}
           to={homeUrl}
           active={path === homeUrl.toLowerCase()}
-          onClick={closeMobile}
-        />
-        {canManagePages && (
-          <NavRow
-            icon={<IconTemplate size={18} stroke={1.75} />}
-            label={t("Templates")}
-            onClick={() => {
-              templates.open();
-              closeMobile();
-            }}
-          />
-        )}
-        <NavRow
-          icon={<IconTrash size={18} stroke={1.75} />}
-          label={t("Trash")}
-          to={`/s/${space.slug}/trash`}
-          active={path === `/s/${space.slug}/trash`.toLowerCase()}
           onClick={closeMobile}
         />
       </nav>
@@ -256,6 +248,26 @@ export function KhaiDocsSidebar({
           <div className={classes.treeHost}>
             <SpaceTree spaceId={space.id} readOnly={!canManagePages} />
           </div>
+        </Section>
+
+        <Section id="others" title={t("Others")} collapsed={collapsed} onToggle={toggle}>
+          {canManagePages && (
+            <NavRow
+              icon={<IconTemplate size={18} stroke={1.75} />}
+              label={t("Templates")}
+              onClick={() => {
+                templates.open();
+                closeMobile();
+              }}
+            />
+          )}
+          <NavRow
+            icon={<IconTrash size={18} stroke={1.75} />}
+            label={t("Trash")}
+            to={`/s/${space.slug}/trash`}
+            active={path === `/s/${space.slug}/trash`.toLowerCase()}
+            onClick={closeMobile}
+          />
         </Section>
 
       </div>

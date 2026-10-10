@@ -12,6 +12,7 @@ import type {
 } from "../../generated/app-server";
 import type { ClientRuntime } from "../../rpc/contracts";
 import { useConnectionCatalog } from "../settings/useConnectionCatalog";
+import { EffortSlider, toEffortLevel } from "./EffortSlider";
 import styles from "./ModelPicker.module.css";
 
 interface ModelPickerProps {
@@ -144,7 +145,6 @@ export function ModelPicker({
       ) ?? null
     );
   }, [catalogs, effectiveConnection, effectiveModel]);
-  const effortOptions = reasoningOptions(currentModel);
 
   const normalized = query.trim().toLocaleLowerCase();
   const groups = usableConnections.map((connection) => {
@@ -186,7 +186,8 @@ export function ModelPicker({
   });
 
   const pick = (connectionId: string, modelId: string) => {
-    onChange(connectionId, modelId, "auto", null);
+    // Every model starts at the Low (faster) effort; see EffortSlider.
+    onChange(connectionId, modelId, "low", null);
     setOpen(false);
     setQuery("");
   };
@@ -218,7 +219,7 @@ export function ModelPicker({
         }
       >
         <strong>{shortModelName(currentModel?.name ?? effectiveModel)}</strong>
-        <span>{effortLabel(effectiveEffort)}</span>
+        <span>{toEffortLevel(effectiveEffort) === "medium" ? "Smart" : "Fast"}</span>
       </button>
 
       {open ? (
@@ -293,23 +294,11 @@ export function ModelPicker({
             ) : null}
           </div>
 
-          <div className={styles.effort} role="radiogroup" aria-label="Effort">
-            <span>Effort</span>
-            <div>
-              {effortOptions.map((option) => (
-                <button
-                  type="button"
-                  role="radio"
-                  aria-checked={effectiveEffort === option.value}
-                  key={option.value}
-                  disabled={!effectiveModel || !effectiveConnection}
-                  onClick={() => pickEffort(option.value)}
-                >
-                  {option.label}
-                </button>
-              ))}
-            </div>
-          </div>
+          <EffortSlider
+            value={toEffortLevel(effectiveEffort)}
+            disabled={!effectiveModel || !effectiveConnection}
+            onChange={pickEffort}
+          />
 
           {onManageProviders ? (
             <button
@@ -358,26 +347,6 @@ function agentDefaults(
   return { connection, model, reasoningEffort };
 }
 
-function reasoningOptions(
-  model: CatalogModel | null,
-): Array<{ value: string; label: string }> {
-  const capabilities = model?.reasoning;
-  const options = [{ value: "auto", label: "Auto" }];
-  if (!capabilities) return options;
-  if (!capabilities.mandatory) options.push({ value: "none", label: "Off" });
-  for (const effort of capabilities.supportedEfforts) {
-    options.push({ value: effort, label: effortLabel(effort) });
-  }
-  return options;
-}
-
-function effortLabel(value: string): string {
-  if (value === "auto") return "Auto";
-  if (value === "none") return "Off";
-  if (value === "medium") return "Med";
-  if (value === "xhigh") return "XHigh";
-  return value.charAt(0).toLocaleUpperCase() + value.slice(1);
-}
 
 /** `models/gemini-3.6-flash` and `nvidia/nemotron-…` read as their last part. */
 function shortModelName(value: string | null | undefined): string {

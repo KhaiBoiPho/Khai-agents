@@ -1,5 +1,5 @@
 import { BrainCircuit, ChevronRight } from "lucide-react";
-import { useEffect, useState } from "react";
+import { memo, useEffect, useState } from "react";
 
 import { LoadingDots, ShimmerText } from "../../components/Motion";
 import { decodeReasoningPayload } from "../../app/reasoningPayload";
@@ -28,8 +28,12 @@ function formatDuration(milliseconds: number): string {
   return `${minutes} ${minutes === 1 ? "minute" : "minutes"}${remainder ? ` ${remainder} ${remainder === 1 ? "second" : "seconds"}` : ""}`;
 }
 
-function useReasoningDuration(item: Item, active: boolean): number | null {
-  const stored = decodeReasoningPayload(item.payload).durationMs;
+function useReasoningDuration(
+  stored: number | null,
+  createdAt: string,
+  updatedAt: string,
+  active: boolean,
+): number | null {
   const [now, setNow] = useState(Date.now);
 
   useEffect(() => {
@@ -39,12 +43,43 @@ function useReasoningDuration(item: Item, active: boolean): number | null {
   }, [active]);
 
   if (stored !== null) return stored;
-  const start = new Date(item.createdAt).getTime();
-  const end = active ? now : new Date(item.updatedAt).getTime();
+  const start = new Date(createdAt).getTime();
+  const end = active ? now : new Date(updatedAt).getTime();
   return Number.isFinite(start) && Number.isFinite(end)
     ? Math.max(0, end - start)
     : null;
 }
+
+interface ReasoningTitleProps {
+  active: boolean;
+  effort: string;
+  storedDurationMs: number | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/**
+ * The "Thinking · 12 seconds" label. It owns the one-second ticker so only
+ * this label re-renders while reasoning streams, not the block's Markdown.
+ */
+const ReasoningTitle = memo(function ReasoningTitle({
+  active,
+  effort,
+  storedDurationMs,
+  createdAt,
+  updatedAt,
+}: ReasoningTitleProps) {
+  const duration = useReasoningDuration(storedDurationMs, createdAt, updatedAt, active);
+  const durationLabel = duration === null ? null : formatDuration(duration);
+  const title = active
+    ? ["Thinking", effort !== "auto" ? effort : null, durationLabel]
+        .filter(Boolean)
+        .join(" · ")
+      : durationLabel
+      ? `Thought for ${durationLabel}`
+      : "Thinking completed";
+  return <ShimmerText active={active}>{title}</ShimmerText>;
+});
 
 export function ReasoningBlock({ item, mode, forceCollapsed = false, forceOpen = false }: ReasoningBlockProps) {
   const active = item.status === "in_progress";
@@ -53,7 +88,6 @@ export function ReasoningBlock({ item, mode, forceCollapsed = false, forceOpen =
   const summary = payload.summaryText;
   const trace = payload.traceText;
   const opaque = payload.availability === "opaque";
-  const duration = useReasoningDuration(item, active);
   const disclosureKey = `${item.id}:${item.status}:${mode}`;
   const [manualOverride, setManualOverride] =
     useState<DisclosureOverride | null>(null);
@@ -64,15 +98,6 @@ export function ReasoningBlock({ item, mode, forceCollapsed = false, forceOpen =
       : manualOverride?.key === disclosureKey
       ? manualOverride.open
       : active || mode === "verbose";
-
-  const durationLabel = duration === null ? null : formatDuration(duration);
-  const title = active
-    ? ["Thinking", effort !== "auto" ? effort : null, durationLabel]
-        .filter(Boolean)
-        .join(" · ")
-      : durationLabel
-      ? `Thought for ${durationLabel}`
-      : "Thinking completed";
 
   return (
     <details
@@ -94,7 +119,13 @@ export function ReasoningBlock({ item, mode, forceCollapsed = false, forceOpen =
         )}
         <span>
           <strong>
-            <ShimmerText active={active}>{title}</ShimmerText>
+            <ReasoningTitle
+              active={active}
+              effort={effort}
+              storedDurationMs={payload.durationMs}
+              createdAt={item.createdAt}
+              updatedAt={item.updatedAt}
+            />
           </strong>
         </span>
         <ChevronRight className={styles.chevron} size={14} aria-hidden="true" />

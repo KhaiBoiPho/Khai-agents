@@ -374,3 +374,37 @@ def test_recovery_query_returns_only_stale_or_stopped_resource_owners(
             lease.resource_key
             for lease in coordination.list_held_resources_for_worker(stale.id)
         ] == [f"worker-liveness:{stale.id}"]
+
+
+def test_a_removed_threads_leases_are_released_even_from_a_dead_worker(
+    tmp_path: Path,
+) -> None:
+    database = Database(tmp_path / "state.sqlite3")
+    database.initialize()
+    now = utc_now()
+    turn = _seed_turn(database, tmp_path, suffix="orphan")
+    dead = _worker("dead", heartbeat_at=now)
+    with database.transaction() as connection:
+        coordination = RuntimeCoordinationRepository(connection)
+        coordination.register_worker(dead)
+        claim = coordination.claim_turn_resources(
+            dead.id,
+            turn.id,
+            ("thread:" + turn.thread_id, "capacity:turn:0"),
+            acquired_at=now,
+        )
+        assert claim is not None
+
+    # The worker dies holding the claim; the Thread is then removed.
+    with database.transaction() as connection:
+        coordination = RuntimeCoordinationRepository(connection)
+        assert coordination.release_thread_leases(
+            turn.thread_id, now + timedelta(seconds=1), "thread removed"
+        ) == 2
+        assert ThreadRepository(connection).remove(turn.thread_id)
+
+    with database.read() as connection:
+        coordination = RuntimeCoordinationRepository(connection)
+        lease = coordination.get_resource_lease("capacity:turn:0")
+        assert lease is not None and lease.holder_worker_id is None
+        assert TurnRepository(connection).get(turn.id) is None

@@ -723,6 +723,75 @@
   padding: 0 2px 2px 0;
 }
 
+.groupToggle {
+  position: relative;
+  flex-shrink: 0;
+  width: 24px;
+  height: 26px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-right: -8px;
+  border-radius: var(--radius-sm);
+  color: var(--text-tertiary);
+}
+
+.groupToggle:hover {
+  color: var(--text-primary);
+}
+
+.groupChevron {
+  position: absolute;
+  opacity: 0;
+  transition: transform 120ms ease, opacity 80ms ease;
+}
+
+.groupChevron[data-expanded] {
+  transform: rotate(90deg);
+}
+
+.groupFolder {
+  display: inline-flex;
+  transition: opacity 80ms ease;
+}
+
+/* Hovering the project row swaps the folder for the chevron. */
+.groupHeader:hover .groupFolder,
+.groupToggle:focus-visible .groupFolder {
+  opacity: 0;
+}
+
+.groupHeader:hover .groupChevron,
+.groupToggle:focus-visible .groupChevron {
+  opacity: 1;
+}
+
+.sectionToggle {
+  display: inline-flex !important;
+  width: auto !important;
+  height: auto !important;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  border-radius: var(--radius-sm);
+  color: var(--text-tertiary) !important;
+  font-size: var(--text-xs);
+  opacity: 1 !important;
+}
+
+.sectionToggle:hover {
+  background: var(--surface-hover);
+  color: var(--text-primary) !important;
+}
+
+.sectionToggle svg {
+  transition: transform 120ms ease;
+}
+
+.sectionToggle svg[data-collapsed] {
+  transform: rotate(-90deg);
+}
+
 .groupName {
   display: inline-flex;
   min-width: 0;

@@ -59,7 +59,7 @@ def test_stale_configured_effort_falls_back_without_breaking_model_switch() -> N
 
     assert (
         resolve_reasoning_effort(
-            requested=None, configured="medium", capabilities=capabilities
+            requested=None, configured="xhigh", capabilities=capabilities
         )
         == "max"
     )
@@ -70,7 +70,7 @@ def test_explicit_unsupported_effort_fails_with_supported_values() -> None:
 
     with pytest.raises(ValueError, match="choose: low, high"):
         resolve_reasoning_effort(
-            requested="medium", configured=None, capabilities=capabilities
+            requested="xhigh", configured=None, capabilities=capabilities
         )
 
 
@@ -92,3 +92,42 @@ def test_claude_46_aliases_use_adaptive_effort_capabilities(model_id: str) -> No
     assert capabilities is not None
     assert capabilities.supported_efforts == ("low", "medium", "high", "max")
     assert capabilities.supports_summary is True
+
+
+@pytest.mark.parametrize(
+    ("supported", "requested", "expected"),
+    [
+        (("low", "medium", "high"), "low", "low"),
+        (("low", "medium", "high"), "medium", "medium"),
+        # Anthropic-style levels without "medium": Medium rounds up.
+        (("low", "high", "max"), "medium", "high"),
+        # No "low": Low takes the nearest level, rounding down on a tie.
+        (("minimal", "medium", "high"), "low", "minimal"),
+        (("high", "max"), "low", "high"),
+    ],
+)
+def test_app_effort_levels_map_to_the_nearest_supported_level(
+    supported: tuple[str, ...], requested: str, expected: str
+) -> None:
+    capabilities = ModelReasoningCapabilities(supported_efforts=supported)
+
+    assert (
+        resolve_reasoning_effort(
+            requested=requested, configured=None, capabilities=capabilities
+        )
+        == expected
+    )
+
+
+def test_app_effort_levels_pass_through_on_models_without_named_levels() -> None:
+    # e.g. Gemini or Kimi: reasoning is available but no levels are published;
+    # the adapter decides how the level reaches (or is dropped for) the wire.
+    capabilities = ModelReasoningCapabilities(default_enabled=True)
+
+    for requested in ("low", "medium"):
+        assert (
+            resolve_reasoning_effort(
+                requested=requested, configured=None, capabilities=capabilities
+            )
+            == requested
+        )

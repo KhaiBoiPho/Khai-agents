@@ -4657,6 +4657,14 @@
         "reasoningEffort": {
           "type": "string",
           "minLength": 1
+        },
+        "mode": {
+          "type": "string",
+          "enum": [
+            "normal",
+            "deepthink"
+          ],
+          "description": "Turn execution mode. `deepthink` runs the multi-step research pipeline (plan, web search, check, summarize) instead of the normal agent loop. Omitted means `normal`."
         }
       },
       "required": [
@@ -6306,6 +6314,12 @@
         },
         "provider/balance": {
           "$ref": "#/$defs/ProviderBalanceParams"
+        },
+        "websearch/status": {
+          "$ref": "#/$defs/WebSearchStatusParams"
+        },
+        "websearch/update": {
+          "$ref": "#/$defs/WebSearchUpdateParams"
         }
       },
       "required": [
@@ -6423,7 +6437,9 @@
         "rag/index",
         "documents/list",
         "thread/usage",
-        "provider/balance"
+        "provider/balance",
+        "websearch/status",
+        "websearch/update"
       ]
     },
     "MethodResults": {
@@ -7477,6 +7493,12 @@
         },
         "provider/balance": {
           "$ref": "#/$defs/ProviderBalanceResult"
+        },
+        "websearch/status": {
+          "$ref": "#/$defs/WebSearchStatus"
+        },
+        "websearch/update": {
+          "$ref": "#/$defs/WebSearchStatus"
         }
       },
       "required": [
@@ -7594,7 +7616,9 @@
         "rag/index",
         "documents/list",
         "thread/usage",
-        "provider/balance"
+        "provider/balance",
+        "websearch/status",
+        "websearch/update"
       ]
     },
     "Notifications": {
@@ -9101,6 +9125,55 @@
       },
       "required": [
         "supported"
+      ]
+    },
+    "WebSearchStatusParams": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {}
+    },
+    "WebSearchUpdateParams": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "apiKey": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "New Firecrawl API key; null removes the saved key; an empty string keeps it. Write-only: never returned."
+        },
+        "enabled": {
+          "type": "boolean",
+          "description": "Turn the built-in web search server on or off."
+        }
+      }
+    },
+    "WebSearchStatus": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "provider": {
+          "const": "firecrawl"
+        },
+        "configured": {
+          "type": "boolean",
+          "description": "Whether the user saved their own API key."
+        },
+        "keyless": {
+          "type": "boolean",
+          "description": "True when no key (user or server) is available: the rate-limited keyless endpoint is used."
+        },
+        "enabled": {
+          "type": "boolean",
+          "description": "Whether the built-in web search server is enabled."
+        }
+      },
+      "required": [
+        "provider",
+        "configured",
+        "keyless",
+        "enabled"
       ]
     }
   }

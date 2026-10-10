@@ -55,6 +55,10 @@ _PROJECT_ROOT_MARKERS = (".git",)
 # precedence). Native first, then Claude Code interop.
 _USER_GLOBAL_FILES = ((".deepcode", "AGENTS.md"), (".claude", "CLAUDE.md"))
 _MAX_INJECT_CHARS = 8000  # keep the preamble bounded; the tool reads the rest
+# The MEMORY.md index rides in every request's system prompt. It is meant to
+# hold one ~150-char pointer per topic, so ~6 KB is room for ~40 pointers;
+# anything past that is still reachable through the memory tool.
+_MAX_INDEX_INJECT_CHARS = 6000
 # Marker for every clipped read/write in this module, so a truncated value is
 # always visibly truncated rather than silently short.
 _TRUNCATION_MARK = "…[truncated]"
@@ -374,7 +378,7 @@ def memory_index(workspace: str | Path) -> str:
     """
     index = memory_dir(workspace) / _INDEX_FILE
     if index.is_file():
-        body = _read_capped(index, _MAX_INJECT_CHARS)
+        body = _read_capped(index, _MAX_INDEX_INJECT_CHARS)
         if body.strip():
             body = body.strip()
             if is_pointer_index(body):

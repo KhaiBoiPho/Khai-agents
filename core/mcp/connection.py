@@ -15,6 +15,12 @@ from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 import httpx
 from loguru import logger
 
+from core.mcp.firecrawl import (
+    connection_url as _builtin_connection_url,
+    install_log_redaction,
+    redact_secrets,
+    sanitized_exception,
+)
 from core.mcp.models import (
     McpConfigurationError,
     McpServerSource,
@@ -28,6 +34,9 @@ MAX_DISCOVERED_TOOLS = 256
 MAX_DISCOVERED_RESOURCES = 256
 MAX_DISCOVERED_PROMPTS = 256
 _PLACEHOLDER = re.compile(r"\$\{([A-Za-z_][A-Za-z0-9_]*)\}")
+
+# httpx logs every request URL at INFO; a keyed Firecrawl URL must not.
+install_log_redaction()
 
 
 class McpConnection:
@@ -110,6 +119,11 @@ class McpConnection:
             raise TimeoutError(
                 f"MCP tool {self.server.name}.{name} timed out after {timeout:g}s"
             ) from exc
+        except Exception as exc:
+            clean = sanitized_exception(exc)
+            if clean is exc:
+                raise
+            raise clean from None
         finally:
             self._active_calls.discard(call)
 
@@ -191,9 +205,9 @@ class McpConnection:
                 self._ready.cancel()
             raise
         except BaseException as exc:  # noqa: BLE001 - publish startup/runtime failure
-            self.last_error = f"{type(exc).__name__}: {exc}"
+            self.last_error = redact_secrets(f"{type(exc).__name__}: {exc}")
             if not self._ready.done():
-                self._ready.set_exception(exc)
+                self._ready.set_exception(sanitized_exception(exc))
             else:
                 logger.warning(
                     "MCP server '{}' disconnected: {}",
@@ -324,7 +338,9 @@ class McpConnection:
 
     def _http_url(self) -> str:
         definition = self.server.definition
-        url = definition.url or ""
+        # A built-in keyed endpoint (Firecrawl) gets its key only here, at
+        # connect time; definitions and inventories keep the keyless URL.
+        url = _builtin_connection_url(self.server, definition.url or "")
         if not definition.env_url_params:
             return url
         parsed = urlsplit(url)

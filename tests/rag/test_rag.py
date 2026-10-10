@@ -638,13 +638,62 @@ def test_upload_hook_starts_background_indexing(tmp_path: Path, monkeypatch) -> 
         surface = WebSurface(application, auth=None, phase=lambda: "ready")
         asyncio.run(surface._index_upload(context, "deepcode-upload-1-code.py"))
         assert not get_rag_service().running(root)  # not a document: no job
+        make_pdf(root / "deepcode-upload-1-guide.pdf")
         asyncio.run(surface._index_upload(context, "deepcode-upload-1-guide.pdf"))
         assert get_rag_service().wait(root, 30)
         status = get_rag_service().status(root, configured=True, model="stub/bow-64")
-        assert status["counts"]["indexed"] == 5
+        # A code project indexes just the upload, not the repo's own documents.
+        indexed = [d["path"] for d in status["documents"] if d["status"] == "indexed"]
+        assert indexed == ["deepcode-upload-1-guide.pdf"]
     finally:
         reset_rag_service(None)
         application.close()
+
+
+def test_document_search_covers_only_uploads_in_a_code_project(
+    tmp_path: Path, monkeypatch
+) -> None:
+    import core.config as config_module
+    from core.harness.tools.documents import SearchDocumentsTool
+    from core.rag.service import is_document_workspace, uploaded_documents
+
+    monkeypatch.setattr(config_module, "deepcode_home", lambda: tmp_path / "home")
+    root = _workspace(tmp_path)
+    assert not is_document_workspace(root)
+    assert uploaded_documents(root) == set()
+    service = RagService(store_factory=lambda _key: MemoryStore())
+    try:
+        tool = SearchDocumentsTool(root, StubEmbedder, service=service, uploads_only=True)
+        empty = asyncio.run(tool.execute(query="soil acidity range"))
+        assert not empty.is_error and "No uploaded documents" in empty
+        assert service.index_for(root).store.documents() == {}  # nothing indexed
+
+        make_pdf(root / "deepcode-upload-7-guide.pdf")
+        (root / "deepcode-upload-8-script.py").write_text("x = 1\n", encoding="utf-8")
+        assert uploaded_documents(root) == {"deepcode-upload-7-guide.pdf"}
+        result = asyncio.run(tool.execute(query="soil acidity range"))
+        assert "[1] deepcode-upload-7-guide.pdf · page 1" in result
+        assert "Index: 1 document indexed." in result
+        # The repo's own documents stay out of the index.
+        assert set(service.index_for(root).store.documents()) == {
+            "deepcode-upload-7-guide.pdf"
+        }
+    finally:
+        service.close()
+
+
+def test_the_plain_chat_workspace_searches_every_document(
+    tmp_path: Path, monkeypatch
+) -> None:
+    import core.config as config_module
+    from core.rag.service import is_document_workspace
+
+    home = tmp_path / "home"
+    monkeypatch.setattr(config_module, "deepcode_home", lambda: home)
+    (home / "chats" / "sub").mkdir(parents=True)
+    assert is_document_workspace(home / "chats")
+    assert is_document_workspace(home / "chats" / "sub")
+    assert not is_document_workspace(home)
 
 
 # ---------------------------------------------------------------------------

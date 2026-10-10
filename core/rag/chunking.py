@@ -27,6 +27,11 @@ class Chunk:
     text: str
     locator: str = ""
     heading: str = ""
+    # Contextual retrieval: a short text situating the chunk in its document.
+    # Embedded and keyword-searched with the chunk, never shown as its text.
+    context: str = ""
+    # Transcribed from a PDF page image by the vision model.
+    visual: bool = False
 
 
 def estimate_tokens(text: str) -> int:
@@ -103,7 +108,13 @@ def chunk_sections(
         def emit(text: str) -> None:
             nonlocal emitted_here
             chunks.append(
-                Chunk(len(chunks), text.strip(), section.locator, section.heading)
+                Chunk(
+                    len(chunks),
+                    text.strip(),
+                    section.locator,
+                    section.heading,
+                    visual=section.visual,
+                )
             )
             emitted_here = True
 

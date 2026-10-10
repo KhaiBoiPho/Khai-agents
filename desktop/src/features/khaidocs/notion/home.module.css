@@ -12,10 +12,10 @@
 }
 
 .greeting {
-  font-size: 30px;
+  font-size: 32px;
   font-weight: 700;
-  letter-spacing: -0.01em;
-  text-align: center;
+  letter-spacing: -0.02em;
+  text-align: left;
   margin: 8px 0 40px;
 }
 
@@ -57,9 +57,10 @@
   display: flex;
   flex-direction: column;
   height: 136px;
-  border-radius: 14px;
+  border-radius: 8px;
   background: var(--kd-card);
-  box-shadow: var(--kd-shadow-card);
+  border: 1px solid var(--kd-card-border);
+  box-shadow: none;
   overflow: hidden;
   text-decoration: none;
   color: inherit;
@@ -67,7 +68,7 @@
 }
 
 .card:hover {
-  box-shadow: var(--kd-shadow-card), 0 4px 12px rgba(15, 15, 15, 0.06);
+  box-shadow: var(--kd-shadow-sm);
 }
 
 .cardTop {
@@ -125,9 +126,10 @@
   align-items: center;
   gap: 10px;
   padding: 12px 14px;
-  border-radius: 10px;
+  border-radius: 8px;
   background: var(--kd-card);
-  box-shadow: var(--kd-shadow-card);
+  border: 1px solid var(--kd-card-border);
+  box-shadow: none;
   color: var(--kd-text);
   font-size: 14px;
   font-weight: 500;

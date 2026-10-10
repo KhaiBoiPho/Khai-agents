@@ -80,21 +80,15 @@ class OpenRouterEmbedder:
         self._sleep = sleep
 
     def _check_egress(self) -> None:
-        from core.providers.egress import (
-            WARN,
-            evaluate_provider_egress,
-            resolve_egress_policy,
-        )
+        reason = egress_block_reason(self.api_base)
+        if reason is not None:
+            raise EmbeddingError(f"Embedding egress blocked: {reason}")
 
-        policy = resolve_egress_policy(None)
-        decision = evaluate_provider_egress(
-            self.api_base,
-            endpoint_class="gateway",
-            allowed_domains=policy.allowed_domains,
-            blocked_domains=policy.blocked_domains,
-        )
-        if not decision.allowed and policy.mode != WARN:
-            raise EmbeddingError(f"Embedding egress blocked: {decision.reason}")
+    @property
+    def api_key(self) -> str:
+        """The credential, so index-time enrichment (contextual retrieval,
+        page vision) can reuse the same OpenRouter connection."""
+        return self._api_key
 
     def embed(self, texts: Sequence[str]) -> list[list[float]]:
         vectors: list[list[float]] = []
@@ -171,6 +165,27 @@ class OpenRouterEmbedder:
         )
 
 
+def egress_block_reason(api_base: str) -> str | None:
+    """Why the egress policy blocks ``api_base``, or ``None`` when allowed."""
+
+    from core.providers.egress import (
+        WARN,
+        evaluate_provider_egress,
+        resolve_egress_policy,
+    )
+
+    policy = resolve_egress_policy(None)
+    decision = evaluate_provider_egress(
+        api_base,
+        endpoint_class="gateway",
+        allowed_domains=policy.allowed_domains,
+        blocked_domains=policy.blocked_domains,
+    )
+    if not decision.allowed and policy.mode != WARN:
+        return str(decision.reason)
+    return None
+
+
 def _error_message(response: httpx.Response) -> str:
     try:
         payload = response.json()
@@ -192,5 +207,6 @@ __all__ = [
     "EmbeddingNotConfigured",
     "OpenRouterEmbedder",
     "configured_embedding_model",
+    "egress_block_reason",
     "not_configured_message",
 ]

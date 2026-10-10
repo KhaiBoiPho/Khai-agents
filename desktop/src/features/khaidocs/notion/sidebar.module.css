@@ -1,4 +1,6 @@
-/* Original KhaiDocs code, MIT. Notion-style sidebar, tree rows, folders. */
+/* Original KhaiDocs code, MIT. Sidebar, tree rows and folders, styled after
+   AFFiNE's (30px rows, 4px radius, soft hover overlay, small muted section
+   headers). */
 
 .sidebar {
   height: 100%;
@@ -78,10 +80,83 @@
   color: var(--kd-text);
 }
 
-/* ---------- Plain rows (Search, Home, Recents, Templates…) ---------- */
+/* ---------- Search field and new-page button ---------- */
+
+.quickRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 12px 8px;
+  flex-shrink: 0;
+}
+
+.quickSearch {
+  appearance: none;
+  flex: 1;
+  min-width: 0;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 8px;
+  border: 1px solid var(--kd-divider);
+  border-radius: 8px;
+  background: var(--kd-search-bg);
+  color: var(--kd-text-secondary);
+  font: inherit;
+  font-size: 14px;
+  cursor: pointer;
+  text-align: left;
+  transition: background 120ms ease, border-color 120ms ease;
+}
+
+.quickSearch:hover {
+  background: var(--kd-hover);
+}
+
+.quickSearchIcon {
+  flex-shrink: 0;
+  color: var(--kd-icon-muted);
+}
+
+.quickSearchLabel {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.quickSearchKey {
+  font: inherit;
+  font-size: 12px;
+  color: var(--kd-text-tertiary);
+}
+
+.newPageButton {
+  appearance: none;
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--kd-divider);
+  border-radius: 8px;
+  background: var(--kd-search-bg);
+  color: var(--kd-text);
+  cursor: pointer;
+  transition: background 120ms ease;
+}
+
+.newPageButton:hover {
+  background: var(--kd-hover);
+}
+
+/* ---------- Plain rows (Home, Templates, Trash…) ---------- */
 
 .navRows {
-  padding: 0 4px 6px;
+  padding: 0 8px 6px;
   flex-shrink: 0;
 }
 
@@ -96,10 +171,11 @@
   align-items: center;
   gap: 8px;
   padding: 0 8px;
-  border-radius: 6px;
+  margin-top: 2px;
+  border-radius: 4px;
   color: var(--kd-sidebar-text);
   text-decoration: none;
-  font-weight: 500;
+  font-weight: 400;
   cursor: pointer;
   text-align: left;
 }
@@ -114,8 +190,8 @@
 }
 
 .navIcon {
-  width: 22px;
-  height: 22px;
+  width: 20px;
+  height: 20px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -138,19 +214,19 @@
   min-height: 0;
   overflow-y: auto;
   overflow-x: hidden;
-  padding: 0 4px 16px;
+  padding: 0 8px 16px;
 }
 
 .section {
-  margin-top: 10px;
+  margin-top: 16px;
 }
 
 .sectionHeader {
   display: flex;
   align-items: center;
-  height: 30px;
+  height: 28px;
   padding: 0 4px 0 8px;
-  border-radius: 6px;
+  border-radius: 4px;
 }
 
 .sectionHeader:hover {
@@ -164,7 +240,8 @@
   font: inherit;
   font-size: 12px;
   font-weight: 500;
-  color: var(--kd-text-secondary);
+  letter-spacing: 0.01em;
+  color: var(--kd-text-tertiary);
   padding: 0;
   cursor: pointer;
   flex: 1;
@@ -205,8 +282,8 @@
 }
 
 .treeHost .treeNode {
-  height: 28px;
-  border-radius: 6px;
+  height: 30px;
+  border-radius: 4px;
   color: var(--kd-sidebar-text);
   background: transparent;
 }
@@ -235,7 +312,7 @@
   width: 100%;
   height: 28px;
   padding: 0 4px 0 8px;
-  border-radius: 6px;
+  border-radius: 4px;
   text-decoration: none;
   color: inherit;
   outline: none;

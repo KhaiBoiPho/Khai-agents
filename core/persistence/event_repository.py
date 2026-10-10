@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
+
 from core.persistence.database import Connection, Row
 
 from core.domain.common import JsonObject
@@ -27,33 +29,34 @@ class EventRepository:
         turn_id: str | None = None,
         item_id: str | None = None,
     ) -> DomainEvent:
-        row = self.connection.execute(
-            "SELECT COALESCE(MAX(sequence), 0) + 1 FROM event_log WHERE thread_id = ?",
-            (thread_id,),
-        ).fetchone()
-        event = DomainEvent(
-            sequence=int(row[0]),
+        # Validate before writing; the real sequence is assigned in the INSERT
+        # itself, saving the separate MAX(sequence) round trip.
+        provisional = DomainEvent(
+            sequence=1,
             type=type,
             thread_id=thread_id,
             turn_id=turn_id,
             item_id=item_id,
             payload=payload,
         )
-        self.connection.execute(
+        row = self.connection.execute(
             "INSERT INTO event_log (id, thread_id, sequence, type, turn_id, item_id, "
-            "timestamp, payload_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            "timestamp, payload_json) "
+            "SELECT ?, ?, COALESCE(MAX(sequence), 0) + 1, ?, ?, ?, ?, ? "
+            "FROM event_log WHERE thread_id = ? "
+            "RETURNING sequence",
             (
-                event.id,
-                event.thread_id,
-                event.sequence,
-                event.type,
-                event.turn_id,
-                event.item_id,
-                dump_datetime(event.timestamp),
-                dump_json(event.payload),
+                provisional.id,
+                provisional.thread_id,
+                provisional.type,
+                provisional.turn_id,
+                provisional.item_id,
+                dump_datetime(provisional.timestamp),
+                dump_json(provisional.payload),
+                provisional.thread_id,
             ),
-        )
-        return event
+        ).fetchone()
+        return replace(provisional, sequence=int(row[0]))
 
     def replay(
         self,
@@ -83,6 +86,33 @@ class EventRepository:
         rows = self.connection.execute(
             "SELECT thread_id, MAX(sequence) AS sequence "
             "FROM event_log GROUP BY thread_id"
+        ).fetchall()
+        return {str(row["thread_id"]): int(row["sequence"]) for row in rows}
+
+    def snapshot_xmin(self) -> int:
+        """Return the oldest transaction id still running right now.
+
+        Every event committed after this call carries ``tx_id`` at or above
+        the returned value (see schema 0005), whatever order its transaction
+        commits in.
+        """
+
+        row = self.connection.execute(
+            "SELECT pg_snapshot_xmin(pg_current_snapshot())::text AS xmin"
+        ).fetchone()
+        return int(row["xmin"])
+
+    def sequence_heads_since(self, tx_floor: int) -> dict[str, int]:
+        """Return stream heads of Threads with events from ``tx_floor`` on.
+
+        Uses the ``tx_id`` index, so an idle log costs one index probe instead
+        of grouping every row as :meth:`sequence_heads` does.
+        """
+
+        rows = self.connection.execute(
+            "SELECT thread_id, MAX(sequence) AS sequence FROM event_log "
+            "WHERE tx_id >= CAST(? AS xid8) GROUP BY thread_id",
+            (str(tx_floor),),
         ).fetchall()
         return {str(row["thread_id"]): int(row["sequence"]) for row in rows}
 

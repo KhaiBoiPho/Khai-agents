@@ -1,3 +1,4 @@
+import { ProviderKeyNotice } from "./ProviderKeyNotice";
 import {
   Atom,
   Check,
@@ -22,7 +23,6 @@ import {
   Paperclip,
   Plug,
   Plus,
-  Telescope,
   Puzzle,
   ScrollText,
   ShieldAlert,
@@ -44,7 +44,11 @@ import type {
   Turn,
 } from "../../generated/app-server";
 import type { GoalDefinitionInput } from "../../app/useWorkspaceController";
-import type { InteractiveDelivery } from "../../app/interactiveTurnRouter";
+import type {
+  InteractiveDelivery,
+  TurnMode,
+  TurnSendOptions,
+} from "../../app/interactiveTurnRouter";
 import { useComposerBehavior } from "../../app/composerBehavior";
 import { useTranslation } from "react-i18next";
 import {
@@ -73,11 +77,9 @@ import { isChatsProject } from "../../app/chats";
 import mascotUrl from "../../assets/khai-mascot.png";
 import { MOCK_ACCOUNT } from "../../mocks/preview";
 import {
-  DEEP_EFFORTS,
-  executionTarget,
   isInsideWorkspace,
   withContextFiles,
-  withDeepResearch,
+  executionTarget,
   withSearch,
 } from "./promptModes";
 import { ModelPicker } from "./ModelPicker";
@@ -126,8 +128,13 @@ interface ComposerProps {
   onSend(
     prompt: string,
     skillIds?: string[],
+    options?: TurnSendOptions,
   ): Promise<InteractiveDelivery | null>;
-  onQueue(prompt: string, skillIds?: string[]): Promise<boolean>;
+  onQueue(
+    prompt: string,
+    skillIds?: string[],
+    options?: TurnSendOptions,
+  ): Promise<boolean>;
   onInterrupt(): void;
   launchIntent: ComposerLaunchIntent | null;
   onLaunchIntentConsumed(): void;
@@ -153,6 +160,8 @@ export interface ComposerLaunchIntent {
   skillIds: string[];
   /** Send the prompt as soon as the composer mounts (home-screen start). */
   autoSend?: boolean;
+  /** Execution mode chosen on the home screen (DeepThink toggle). */
+  mode?: TurnMode;
 }
 
 export function Composer({
@@ -225,20 +234,13 @@ export function Composer({
   );
   const [deliveryNotice, setDeliveryNotice] = useState<string | null>(null);
   const [searchOn, setSearchOn] = useState(false);
-  const [researchOn, setResearchOn] = useState(false);
-  const executionDefaults = executionTarget(thread, settings);
-  const deepThinkOn = DEEP_EFFORTS.has(
-    (thread?.reasoningEffort ?? executionDefaults.effort ?? "").toLocaleLowerCase(),
+  // DeepThink runs the next message through the multi-step pipeline
+  // (plan, web search, check, summarize) instead of a single agent pass.
+  const [deepThinkOn, setDeepThinkOn] = useState(
+    () => initialLaunch?.mode === "deepthink",
   );
-  const toggleDeepThink = () => {
-    if (!executionDefaults.connection || !executionDefaults.model) return;
-    onModelChange(
-      executionDefaults.connection,
-      executionDefaults.model,
-      deepThinkOn ? "auto" : "high",
-      thread?.contextWindow ?? null,
-    );
-  };
+  const toggleDeepThink = () => setDeepThinkOn((on) => !on);
+  const sendOptions: TurnSendOptions = deepThinkOn ? { mode: "deepthink" } : {};
   const dictation = useDictation({
     runtime,
     onTranscript: insertDictation,
@@ -360,18 +362,15 @@ export function Composer({
       return;
     }
     record(value);
-    const executionPrompt = withDeepResearch(
-      withSearch(
-        withContextFiles(value, attachments, thread?.workspacePath),
-        searchOn && !researchOn,
-      ),
-      researchOn,
+    const executionPrompt = withSearch(
+      withContextFiles(value, attachments, thread?.workspacePath),
+      searchOn && !deepThinkOn,
     );
     const selectable = new Set(skillCatalog.activeSkills.map((skill) => skill.id));
     const selectedIds = selectedSkillIds.filter((skillId) =>
       selectable.has(skillId),
     );
-    const delivery = await onSend(executionPrompt, selectedIds);
+    const delivery = await onSend(executionPrompt, selectedIds, sendOptions);
     if (!delivery) return;
     setDeliveryNotice(
       delivery === "steered"
@@ -393,18 +392,15 @@ export function Composer({
       await submit();
       return;
     }
-    const executionPrompt = withDeepResearch(
-      withSearch(
-        withContextFiles(value, attachments, thread?.workspacePath),
-        searchOn && !researchOn,
-      ),
-      researchOn,
+    const executionPrompt = withSearch(
+      withContextFiles(value, attachments, thread?.workspacePath),
+      searchOn && !deepThinkOn,
     );
     const selectable = new Set(skillCatalog.activeSkills.map((skill) => skill.id));
     const selectedIds = selectedSkillIds.filter((skillId) =>
       selectable.has(skillId),
     );
-    if (!(await onQueue(executionPrompt, selectedIds))) return;
+    if (!(await onQueue(executionPrompt, selectedIds, sendOptions))) return;
     record(value);
     setDeliveryNotice("Queued for the next Turn.");
     setPrompt("");
@@ -654,6 +650,12 @@ export function Composer({
           refreshKey={`${contextUsage?.at ?? ""}|${active}`}
         />
       </div>
+      <ProviderKeyNotice
+        runtime={runtime}
+        projectId={project?.id ?? null}
+        connectionId={executionTarget(thread, settings).connection}
+        onOpenSettings={onOpenSettings}
+      />
       <div className={styles.composer}>
         {planProgress?.steps.length ? (
           <PlanProgress
@@ -909,8 +911,8 @@ export function Composer({
             className={styles.toggle}
             aria-pressed={deepThinkOn}
             onClick={toggleDeepThink}
-            disabled={busy || !executionDefaults.model}
-            title="Think longer before answering (high reasoning effort)"
+            disabled={!editable}
+            title="Plan, search the web, check and summarize before answering"
           >
             <Atom size={14} />
             DeepThink
@@ -925,17 +927,6 @@ export function Composer({
           >
             <Globe size={14} />
             Search
-          </button>
-          <button
-            type="button"
-            className={styles.toggle}
-            aria-pressed={researchOn}
-            onClick={() => setResearchOn((on) => !on)}
-            disabled={!editable}
-            title="Research the web in depth and write a cited report"
-          >
-            <Telescope size={14} />
-            Deep research
           </button>
           {dictation.available ? (
             <button

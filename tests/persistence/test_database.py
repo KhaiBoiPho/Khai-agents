@@ -336,3 +336,59 @@ def test_database_rejects_cross_thread_execution_records(tmp_path: Path) -> None
     with pytest.raises(IntegrityError):
         with database.transaction() as connection:
             ItemRepository(connection).add(cross_thread_item)
+
+
+def test_perf_migration_indexes_hot_lookups_and_stamps_event_transactions(
+    tmp_path: Path,
+) -> None:
+    database = Database(tmp_path / "state")
+    database.initialize()
+    with database.read() as connection:
+        indexes = {
+            row["indexname"]: row["indexdef"]
+            for row in connection.execute(
+                "SELECT indexname, indexdef FROM pg_indexes "
+                "WHERE schemaname = current_schema()"
+            ).fetchall()
+        }
+    assert "(turn_id, sequence)" in indexes["idx_event_log_turn"]
+    assert "(item_id)" in indexes["idx_event_log_item"]
+    assert "(turn_id, thread_id)" in indexes["idx_approvals_turn"]
+    assert "(turn_id, thread_id)" in indexes["idx_workflows_turn"]
+    assert "(tx_id)" in indexes["idx_event_log_tx"]
+
+    project = Project(canonical_path=str(tmp_path), display_name="Perf")
+    thread = Thread(
+        project_id=project.id,
+        title="Events",
+        mode=ThreadMode.CODE,
+        workspace_path=str(tmp_path),
+    )
+    with database.transaction() as connection:
+        ProjectRepository(connection).add(project)
+        ThreadRepository(connection).add(thread)
+        from core.persistence.event_repository import EventRepository
+
+        first = EventRepository(connection).append(
+            thread_id=thread.id, type="thread.started", payload={}
+        )
+        second = EventRepository(connection).append(
+            thread_id=thread.id, type="thread.renamed", payload={}
+        )
+        own_xid = int(
+            connection.execute("SELECT pg_current_xact_id()::text").fetchone()[0]
+        )
+    assert (first.sequence, second.sequence) == (1, 2)
+    with database.read() as connection:
+        stamped = connection.execute(
+            "SELECT DISTINCT tx_id::text FROM event_log WHERE thread_id = ?",
+            (thread.id,),
+        ).fetchall()
+        # The floor never passes a committed-later transaction; with other
+        # sessions running it may lag behind, which only widens the window.
+        assert 0 < EventRepository(connection).snapshot_xmin()
+        assert EventRepository(connection).sequence_heads_since(own_xid) == {
+            thread.id: 2
+        }
+        assert EventRepository(connection).sequence_heads_since(own_xid + 1) == {}
+    assert [int(row[0]) for row in stamped] == [own_xid]

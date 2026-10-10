@@ -27,12 +27,35 @@ export type InteractiveTurnResult =
       snapshot: MethodResults["turn/enqueue"];
     };
 
+export type TurnMode = NonNullable<TurnStartParams["mode"]>;
+
+/** Per-message options a composer passes along with the prompt. */
+export interface TurnSendOptions {
+  mode?: TurnMode;
+}
+
 export interface InteractiveTurnInput {
   threadId: string;
   prompt: string;
   cachedActiveTurnId: string | null;
   skillIds?: string[];
   messageId?: string;
+  /** "deepthink" runs the research pipeline; omitted means a normal Turn. */
+  mode?: TurnMode;
+}
+
+/** Request fields shared by turn/start and turn/enqueue. */
+function turnRequest(input: InteractiveTurnInput, messageId: string) {
+  const skillIds = input.skillIds ?? [];
+  return {
+    threadId: input.threadId,
+    prompt: input.prompt,
+    messageId,
+    ...(skillIds.length
+      ? { skills: skillIds as TurnStartParams["skills"] }
+      : {}),
+    ...(input.mode && input.mode !== "normal" ? { mode: input.mode } : {}),
+  };
 }
 
 /**
@@ -47,6 +70,19 @@ export async function sendInteractiveTurn(
   input: InteractiveTurnInput,
 ): Promise<InteractiveTurnResult> {
   const messageId = input.messageId ?? `desktop-${crypto.randomUUID()}`;
+  if (input.mode === "deepthink") {
+    // A DeepThink request is its own Turn: steering it into a running agent
+    // Turn would silently drop the mode, so it starts or queues instead.
+    if (input.cachedActiveTurnId) return enqueue(runtime, input, messageId);
+    try {
+      return await start(runtime, input, messageId);
+    } catch (error) {
+      if (errorCode(error) === "TURN_ALREADY_ACTIVE") {
+        return enqueue(runtime, input, messageId);
+      }
+      throw error;
+    }
+  }
   if (input.cachedActiveTurnId) {
     try {
       return await steer(runtime, input, input.cachedActiveTurnId, messageId);
@@ -90,15 +126,10 @@ async function start(
   input: InteractiveTurnInput,
   messageId: string,
 ): Promise<InteractiveTurnResult> {
-  const skillIds = input.skillIds ?? [];
-  const snapshot = await runtime.request("turn/start", {
-    threadId: input.threadId,
-    prompt: input.prompt,
-    messageId,
-    ...(skillIds.length
-      ? { skills: skillIds as TurnStartParams["skills"] }
-      : {}),
-  });
+  const snapshot = await runtime.request(
+    "turn/start",
+    turnRequest(input, messageId),
+  );
   return {
     delivery: "started",
     messageId,
@@ -130,15 +161,10 @@ async function enqueue(
   input: InteractiveTurnInput,
   messageId: string,
 ): Promise<InteractiveTurnResult> {
-  const skillIds = input.skillIds ?? [];
-  const snapshot = await runtime.request("turn/enqueue", {
-    threadId: input.threadId,
-    prompt: input.prompt,
-    messageId,
-    ...(skillIds.length
-      ? { skills: skillIds as TurnStartParams["skills"] }
-      : {}),
-  });
+  const snapshot = await runtime.request(
+    "turn/enqueue",
+    turnRequest(input, messageId),
+  );
   return {
     delivery: "queued",
     messageId,

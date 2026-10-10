@@ -74,6 +74,7 @@ from core.domain.execution_security import ExecutionAccessPreset
 from core.domain.message_provenance import ClientSurface
 from core.domain.project import TrustState
 from core.domain.thread import ThreadMode
+from core.domain.turn_mode import TurnMode
 from core.skills.models import MAX_SELECTED_SKILLS, SkillScope
 from core.version import __version__
 
@@ -84,6 +85,19 @@ def rag_embedder_factory(application: Any, project_id: str | None):
     return openrouter_embedder_factory(
         lambda: application.llm.resolve_api_credential("openrouter", project_id)
     )
+
+
+def _turn_mode_param(params: Params) -> TurnMode:
+    """Optional Turn execution mode; omitted means the normal agent loop."""
+
+    value = params.values.get("mode")
+    if value is None:
+        return TurnMode.NORMAL
+    try:
+        return TurnMode(value) if isinstance(value, str) else TurnMode("")
+    except ValueError:
+        allowed = ", ".join(mode.value for mode in TurnMode)
+        raise InvalidParams(f"mode must be one of: {allowed}") from None
 
 
 PROTOCOL_VERSION = "1.0"
@@ -289,6 +303,8 @@ class Dispatcher:
             rpc_methods.USAGE_SUMMARY: self._usage_summary,
             rpc_methods.THREAD_USAGE: self._thread_usage,
             rpc_methods.PROVIDER_BALANCE: self._provider_balance,
+            rpc_methods.WEBSEARCH_STATUS: self._websearch_status,
+            rpc_methods.WEBSEARCH_UPDATE: self._websearch_update,
             rpc_methods.TURN_LIST: self._turn_list,
             rpc_methods.MODEL_REASONING: self._model_reasoning,
             rpc_methods.THREAD_RENAME: self._thread_rename,
@@ -418,7 +434,7 @@ class Dispatcher:
 
     def _project_list(self, params: Params) -> dict[str, Any]:
         params.only("limit", "offset")
-        self.application.threads.reconcile()
+        self.application.threads.reconcile_if_changed()
         projects = self.application.projects.list(
             limit=params.integer("limit", default=100, minimum=1, maximum=500),
             offset=params.integer("offset", default=0, maximum=1_000_000),
@@ -518,6 +534,22 @@ class Dispatcher:
             str(params.string("connectionId")),
             expected_revision=params.string("expectedRevision", required=False),
         )
+
+    def _websearch_status(self, params: Params) -> dict[str, Any]:
+        params.only()
+        return self.application.websearch.status()
+
+    def _websearch_update(self, params: Params) -> dict[str, Any]:
+        params.only("apiKey", "enabled")
+        kwargs: dict[str, Any] = {}
+        if "apiKey" in params.values:
+            value = params.values["apiKey"]
+            if value is not None and not isinstance(value, str):
+                raise InvalidParams("apiKey must be a string or null")
+            kwargs["api_key"] = value
+        if "enabled" in params.values:
+            kwargs["enabled"] = params.boolean("enabled")
+        return self.application.websearch.update(**kwargs)
 
     def _provider_login_start(self, params: Params) -> dict:
         params.only("connectionId", "openBrowser")
@@ -1443,6 +1475,7 @@ class Dispatcher:
             "model",
             "reasoningEffort",
             "messageId",
+            "mode",
         )
         snapshot = self.application.turns.start(
             str(params.string("threadId")),
@@ -1455,6 +1488,7 @@ class Dispatcher:
             connection_id=params.string("connectionId", required=False),
             model=params.string("model", required=False),
             reasoning_effort=params.string("reasoningEffort", required=False),
+            mode=_turn_mode_param(params),
             client_surface=self.client_surface,
         )
         return self._turn_snapshot(snapshot)
@@ -1468,6 +1502,7 @@ class Dispatcher:
             "model",
             "reasoningEffort",
             "messageId",
+            "mode",
         )
         snapshot = self.application.turns.enqueue(
             str(params.string("threadId")),
@@ -1480,6 +1515,7 @@ class Dispatcher:
             connection_id=params.string("connectionId", required=False),
             model=params.string("model", required=False),
             reasoning_effort=params.string("reasoningEffort", required=False),
+            mode=_turn_mode_param(params),
             client_surface=self.client_surface,
         )
         return self._turn_snapshot(snapshot)

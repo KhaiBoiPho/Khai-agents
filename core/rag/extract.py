@@ -7,7 +7,11 @@ so a search hit can always be cited precisely.
 
 Office formats (docx/xlsx/pptx) are ZIP packages of XML and are read with the
 standard library only. PDFs use ``pypdf`` and fall back to the ``genoffice``
-CLI's text-layer reader when it is installed and pypdf fails.
+CLI's text-layer reader when it is installed and pypdf fails. PDF pages
+that carry figures or no text layer at all (scans) can additionally be read
+by a vision model: :func:`extract_document` takes an optional ``visual``
+callback (see :mod:`core.rag.visual`) and adds its transcriptions as
+``visual`` sections of those pages.
 """
 
 from __future__ import annotations
@@ -23,7 +27,7 @@ import zipfile
 from dataclasses import dataclass
 from html.parser import HTMLParser
 from pathlib import Path, PurePosixPath
-from typing import Iterable
+from typing import Callable, Iterable
 from xml.etree import ElementTree
 
 PDF_EXTENSIONS = frozenset({".pdf"})
@@ -70,19 +74,68 @@ class Section:
     text: str
     locator: str = ""
     heading: str = ""
+    # Transcribed from the page image by a vision model, not the text layer.
+    visual: bool = False
+
+
+#: Heading of a section transcribed from a page image.
+VISUAL_HEADING = "[figure]"
+
+
+@dataclass(frozen=True, slots=True)
+class PdfPage:
+    """What pypdf can tell about one page without rendering it."""
+
+    number: int
+    text: str
+    image_count: int = 0  # large image XObjects (logos and icons excluded)
+    image_refs: tuple[int, ...] = ()  # their object numbers
+    full_page_image: bool = False  # an image with the page's aspect ratio
+    content_bytes: int = 0  # size of the content stream(s)
+    width: float = 612.0  # points
+    height: float = 792.0
+
+
+@dataclass(slots=True)
+class VisualResult:
+    """Transcriptions of page images, by page number."""
+
+    texts: dict[int, str]
+    failed: int = 0
+    skipped: int = 0
+
+
+@dataclass(slots=True)
+class ExtractStats:
+    visual_candidates: int = 0
+    visual_pages: int = 0
+    visual_failed: int = 0
+    visual_skipped: int = 0
+
+
+#: ``visual(path, pages) -> VisualResult``: read these pages' images.
+VisualReaderHook = Callable[[Path, list[PdfPage]], VisualResult]
 
 
 def is_supported(path: str | Path) -> bool:
     return Path(path).suffix.lower() in SUPPORTED_EXTENSIONS
 
 
-def extract_document(path: str | Path) -> list[Section]:
-    """Extract the readable text of ``path`` as citation-ready sections."""
+def extract_document(
+    path: str | Path,
+    *,
+    visual: VisualReaderHook | None = None,
+    stats: ExtractStats | None = None,
+) -> list[Section]:
+    """Extract the readable text of ``path`` as citation-ready sections.
+
+    ``visual`` (PDF only) reads the pages that need it (figures, scans) from
+    their rendered image; ``stats`` receives what it did."""
 
     file_path = Path(path)
     suffix = file_path.suffix.lower()
     if suffix in PDF_EXTENSIONS:
-        sections = _extract_pdf(file_path)
+        sections = _extract_pdf(file_path, visual=visual, stats=stats)
     elif suffix in DOCX_EXTENSIONS:
         sections = _extract_docx(file_path)
     elif suffix in XLSX_EXTENSIONS:
@@ -100,7 +153,12 @@ def extract_document(path: str | Path) -> list[Section]:
     else:
         raise ExtractionError(f"unsupported document type: {suffix or 'none'}")
     sections = [
-        Section(_clean(section.text), section.locator, section.heading.strip())
+        Section(
+            _clean(section.text),
+            section.locator,
+            section.heading.strip(),
+            section.visual,
+        )
         for section in sections
     ]
     sections = [section for section in sections if section.text]
@@ -256,36 +314,182 @@ def html_to_markdown(html: str) -> str:
 # ---------------------------------------------------------------------------
 
 
-def _extract_pdf(path: Path) -> list[Section]:
-    error: Exception | None = None
-    try:
-        from pypdf import PdfReader
+# A page with less text than this is probably a figure, a slide or a scan.
+MIN_PAGE_TEXT_CHARS = 200
+# Images smaller than this are logos, icons or decoration.
+_MIN_IMAGE_SIDE = 100
+_MIN_IMAGE_AREA = 40_000
+# The same image object on this many pages is a letterhead or background.
+_REPEATED_IMAGE_PAGES = 3
+# Content-stream bytes beyond what the page's text explains mean drawing
+# operators: a vector chart or diagram.
+_DRAWING_BYTES = 1_500
+_BYTES_PER_TEXT_CHAR = 8
 
-        reader = PdfReader(str(path))
-        if reader.is_encrypted:
-            try:
-                reader.decrypt("")
-            except Exception as exc:  # noqa: BLE001 - pypdf raises many types
-                raise ExtractionError("PDF is password protected") from exc
-        sections = []
-        for number, page in enumerate(reader.pages, start=1):
-            try:
-                text = page.extract_text() or ""
-            except Exception:  # noqa: BLE001 - one bad page must not sink the file
-                text = ""
-            if text.strip():
-                sections.append(Section(text, locator=f"page {number}"))
-        if sections:
-            return sections
+
+def _xobject_images(resources: object, depth: int = 0) -> list[tuple[int, int, int]]:
+    """``(object number, width, height)`` of the image XObjects in
+    ``resources``, looking one level into form XObjects."""
+
+    found: list[tuple[int, int, int]] = []
+    try:
+        resources = resources.get_object() if resources is not None else None  # type: ignore[union-attr]
+        xobjects = resources.get("/XObject") if resources is not None else None  # type: ignore[union-attr]
+        xobjects = xobjects.get_object() if xobjects is not None else None
+        if not xobjects:
+            return found
+        for name in list(xobjects.keys())[:64]:
+            reference = xobjects.raw_get(name) if hasattr(xobjects, "raw_get") else xobjects[name]
+            number = int(getattr(reference, "idnum", 0) or 0)
+            obj = reference.get_object()
+            subtype = obj.get("/Subtype")
+            if subtype == "/Image":
+                found.append((number, int(obj.get("/Width") or 0), int(obj.get("/Height") or 0)))
+            elif subtype == "/Form" and depth == 0:
+                found.extend(_xobject_images(obj.get("/Resources"), depth + 1))
+    except Exception:  # noqa: BLE001 - a malformed resource dict is just "no images"
+        return found
+    return found
+
+
+def _page_info(number: int, page: object, text: str) -> PdfPage:
+    try:
+        box = page.mediabox  # type: ignore[attr-defined]
+        width, height = abs(float(box.width)), abs(float(box.height))
+    except Exception:  # noqa: BLE001
+        width, height = 612.0, 792.0
+    try:
+        contents = page.get_contents()  # type: ignore[attr-defined]
+        content_bytes = len(contents.get_data()) if contents is not None else 0
+    except Exception:  # noqa: BLE001
+        content_bytes = 0
+    images = [
+        (ref, w, h)
+        for ref, w, h in _xobject_images(page.get("/Resources"))  # type: ignore[attr-defined]
+        if min(w, h) >= _MIN_IMAGE_SIDE and w * h >= _MIN_IMAGE_AREA
+    ]
+    page_ratio = width / height if height else 0.0
+    full_page = any(
+        h and page_ratio and abs((w / h) / page_ratio - 1) < 0.05 and max(w, h) >= 1000
+        for _ref, w, h in images
+    )
+    return PdfPage(
+        number=number,
+        text=text,
+        image_count=len(images),
+        image_refs=tuple(ref for ref, _w, _h in images if ref),
+        full_page_image=full_page,
+        content_bytes=content_bytes,
+        width=width or 612.0,
+        height=height or 792.0,
+    )
+
+
+def visual_candidates(pages: list[PdfPage]) -> list[PdfPage]:
+    """Pages worth reading from their image, in page order.
+
+    * a page with large images that are not repeated letterheads, unless it is
+      an already-OCR'd scan (one full-page image under a real text layer);
+    * a page with (almost) no text that still draws something: a scan, a
+      vector chart or a diagram. Blank pages are left alone.
+    """
+
+    usage: dict[int, int] = {}
+    for page in pages:
+        for ref in set(page.image_refs):
+            usage[ref] = usage.get(ref, 0) + 1
+    chosen: list[PdfPage] = []
+    for page in pages:
+        text_chars = len(page.text.strip())
+        has_text = text_chars >= MIN_PAGE_TEXT_CHARS
+        unique_images = page.image_count - sum(
+            1 for ref in page.image_refs if usage.get(ref, 0) >= _REPEATED_IMAGE_PAGES
+        )
+        if has_text:
+            if unique_images > 0 and not page.full_page_image:
+                chosen.append(page)
+            continue
+        drawing = page.content_bytes >= _DRAWING_BYTES + _BYTES_PER_TEXT_CHAR * text_chars
+        if page.image_count > 0 or drawing:
+            chosen.append(page)
+    return chosen
+
+
+def _read_pdf_pages(path: Path) -> list[PdfPage]:
+    from pypdf import PdfReader
+
+    reader = PdfReader(str(path))
+    if reader.is_encrypted:
+        try:
+            reader.decrypt("")
+        except Exception as exc:  # noqa: BLE001 - pypdf raises many types
+            raise ExtractionError("PDF is password protected") from exc
+    pages = []
+    for number, page in enumerate(reader.pages, start=1):
+        try:
+            text = page.extract_text() or ""
+        except Exception:  # noqa: BLE001 - one bad page must not sink the file
+            text = ""
+        pages.append(_page_info(number, page, text))
+    return pages
+
+
+def _extract_pdf(
+    path: Path,
+    *,
+    visual: VisualReaderHook | None = None,
+    stats: ExtractStats | None = None,
+) -> list[Section]:
+    error: Exception | None = None
+    pages: list[PdfPage] = []
+    try:
+        pages = _read_pdf_pages(path)
     except ExtractionError:
         raise
     except Exception as exc:  # noqa: BLE001
         error = exc
-    fallback = _genoffice_pdf(path)
-    if fallback:
-        return fallback
+    text_pages = [page for page in pages if page.text.strip()]
+    candidates = visual_candidates(pages) if pages else []
+    if stats is not None:
+        stats.visual_candidates = len(candidates)
+    if not text_pages:
+        # No text layer at all: the free text reader first, then vision.
+        fallback = _genoffice_pdf(path)
+        if fallback:
+            return fallback
+    transcribed: dict[int, str] = {}
+    if visual is not None and candidates:
+        try:
+            result = visual(path, candidates)
+        except Exception:  # noqa: BLE001 - vision is best-effort, text still indexes
+            result = VisualResult({}, failed=len(candidates))
+        transcribed = {n: t for n, t in result.texts.items() if t and t.strip()}
+        if stats is not None:
+            stats.visual_pages = len(transcribed)
+            stats.visual_failed = result.failed
+            stats.visual_skipped = result.skipped
+    sections: list[Section] = []
+    for page in pages:
+        locator = f"page {page.number}"
+        if page.text.strip():
+            sections.append(Section(page.text, locator=locator))
+        if page.number in transcribed:
+            sections.append(
+                Section(
+                    transcribed[page.number],
+                    locator=locator,
+                    heading=VISUAL_HEADING,
+                    visual=True,
+                )
+            )
+    if sections:
+        return sections
     if error is not None:
         raise ExtractionError(f"could not read PDF: {type(error).__name__}") from error
+    if candidates and visual is not None:
+        raise ExtractionError(
+            "PDF has no text layer and its pages could not be read from their images"
+        )
     raise ExtractionError("PDF has no text layer (scanned document?)")
 
 
@@ -691,9 +895,16 @@ def _extract_pptx(path: Path) -> list[Section]:
 
 
 __all__ = [
+    "MIN_PAGE_TEXT_CHARS",
     "SUPPORTED_EXTENSIONS",
+    "VISUAL_HEADING",
+    "ExtractStats",
     "ExtractionError",
+    "PdfPage",
     "Section",
+    "VisualReaderHook",
+    "VisualResult",
+    "visual_candidates",
     "extract_document",
     "genoffice_binary",
     "html_to_markdown",

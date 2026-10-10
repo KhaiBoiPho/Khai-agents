@@ -11,7 +11,10 @@ Ported from ``nanobot.agent.runner`` and adapted for DeepCode:
 from __future__ import annotations
 
 import asyncio
+import base64
+import binascii
 import inspect
+import json
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -32,12 +35,15 @@ from core.agent_runtime.compaction import (
     CompactionStrategy,
 )
 from core.agent_runtime.helpers import (
+    _TOOL_RESULTS_DIR,
     build_assistant_message,
+    ensure_dir,
+    safe_filename,
     history_signature,
     estimate_message_tokens,
     find_legal_message_start,
     maybe_persist_tool_result,
-    truncate_text,
+    truncate_head_tail,
 )
 from core.agent_runtime.token_meter import (
     DEFAULT_TOKEN_METER_FACTORY,
@@ -48,6 +54,7 @@ from core.agent_runtime.evidence_ledger import (
     EvidenceLedger,
 )
 from core.agent_runtime.hook import AgentHook, AgentHookContext
+from core.agent_runtime.spend import response_cost_usd, spend_limit_message
 from core.agent_runtime.pruner import ToolResultPruner
 from core.agent_runtime.repeat_guard import (
     DEFAULT_THRESHOLDS as DEFAULT_REPEAT_THRESHOLDS,
@@ -94,6 +101,36 @@ _MAX_COMPACT_INSTRUCTIONS_CHARS = 2_000
 # fallback. The compacted history is returned and persisted by the session, so
 # it survives across turns and is not re-summarized every step.
 _BACKFILL_CONTENT = "[Tool result unavailable — call was interrupted or lost]"
+
+# Images a tool attaches to its ``ToolResult.metadata`` (MCP image content,
+# see ``core.mcp.tools.MCP_IMAGES_METADATA_KEY``): a list of
+# ``{"mimeType": str, "data": base64 str}``. Inlined as image blocks when the
+# active model declares image input; otherwise saved beside spilled results.
+TOOL_RESULT_IMAGES_KEY = "images"
+_INLINE_IMAGE_MIME_TYPES = frozenset(
+    {"image/png", "image/jpeg", "image/gif", "image/webp"}
+)
+_MAX_INLINE_IMAGE_BYTES = 5 * 1024 * 1024
+
+# Parallel tool rounds (cost controls). One parallel batch runs at most this
+# many concurrency-safe calls; a later batch picks up the rest, in call order.
+DEFAULT_MAX_PARALLEL_TOOLS = 4
+# Combined size of every tool result from ONE model response, as a multiple of
+# the per-result cap when the spec sets no explicit round budget. Over it, the
+# largest results are spilled to files (head/tail preview stays inline).
+_ROUND_BUDGET_MULTIPLIER = 3
+# A round-level spill never shrinks a result below this many characters.
+_ROUND_SPILL_FLOOR_CHARS = 2_000
+_PERSISTED_RESULT_PREFIX = "[tool output persisted]"
+_IMAGE_EXTENSIONS = {
+    "image/png": "png",
+    "image/jpeg": "jpg",
+    "image/gif": "gif",
+    "image/webp": "webp",
+    "image/svg+xml": "svg",
+    "image/bmp": "bmp",
+    "image/tiff": "tiff",
+}
 
 # PreCompact checkpoint re-injection (bounded, provider-safe). A PreCompact
 # hook may attach ``additional_contexts`` that must survive a successful
@@ -158,6 +195,22 @@ class AgentRunSpec:
     error_message: str | None = _DEFAULT_ERROR_MESSAGE
     max_iterations_message: str | None = None
     concurrent_tools: bool = False
+    # Cost controls for parallel rounds: at most this many concurrency-safe
+    # calls per parallel batch, identical read-only calls in a batch run once
+    # (later copies get a pointer to the first result), and the combined
+    # results of one round are bounded by ``max_round_tool_result_chars``
+    # (``None`` = ``_ROUND_BUDGET_MULTIPLIER`` x ``max_tool_result_chars``).
+    max_parallel_tools: int = DEFAULT_MAX_PARALLEL_TOOLS
+    dedupe_read_only_calls: bool = True
+    max_round_tool_result_chars: int | None = None
+    # Auto-compaction trigger cap in prompt tokens (``None``/0 = only the
+    # window-fraction trigger applies).
+    compact_trigger_tokens: int | None = None
+    # Spend guards (USD, ``None`` = off). ``prior_session_cost_usd`` is what
+    # earlier Turns of the same Session already cost.
+    max_turn_cost_usd: float | None = None
+    max_session_cost_usd: float | None = None
+    prior_session_cost_usd: float = 0.0
     fail_on_tool_error: bool = False
     # Advisory repeat-call reminders (see core.agent_runtime.repeat_guard):
     # run lengths of identical consecutive tool calls that earn an escalating
@@ -331,6 +384,10 @@ class AgentRunResult:
     error: str | None = None
     tool_events: list[dict[str, str]] = field(default_factory=list)
     had_injections: bool = False
+    # Known USD cost of this run's model calls (reported or list price);
+    # ``cost_known`` is False when some response could not be priced.
+    cost_usd: float = 0.0
+    cost_known: bool = True
 
 
 class AgentRunner:
@@ -512,6 +569,7 @@ class AgentRunner:
         stop_hook_active = False  # C3.1: set once a Stop hook has forced a continuation
         skip_stop_check_once = False
         response_ordinal = 0
+        spend = {"usd": 0.0, "known": True}
 
         async def record_response(
             response: LLMResponse,
@@ -523,6 +581,11 @@ class AgentRunner:
             response_ordinal += 1
             raw_usage = self._usage_dict(response.usage)
             self._accumulate_usage(usage, raw_usage)
+            cost = response_cost_usd(spec.model, raw_usage)
+            if cost is None:
+                spend["known"] = False
+            else:
+                spend["usd"] += cost
             # The provider just priced this exact history; that number is a
             # better anchor than any estimate of it (§9.1).
             spec.token_meter.observe(raw_usage, messages)
@@ -568,6 +631,21 @@ class AgentRunner:
             current_iteration = iteration
             iteration += 1
             sampling_limit.consume()
+
+            # Spend guard (host cost control, off by default): checked before
+            # every model call, so a Turn that crossed the limit stops after
+            # the step that crossed it and never starts another.
+            spend_stop = self._spend_limit_reached(spec, spend["usd"])
+            if spend_stop is not None:
+                stop_reason = "spend_limit"
+                final_content = spend_stop
+                logger.info(
+                    "Run stopped by spend guard for {}: {}",
+                    spec.session_key or "default",
+                    spend_stop,
+                )
+                self._append_final_message(messages, final_content)
+                break
 
             check_stop = not skip_stop_check_once
             skip_stop_check_once = False
@@ -672,20 +750,34 @@ class AgentRunner:
                 context.tool_results = list(results)
                 context.tool_events = list(new_events)
                 completed_tool_results: list[dict[str, Any]] = []
-                for tool_call, result in zip(response.tool_calls, results):
-                    tool_message = {
-                        "role": "tool",
-                        "tool_call_id": tool_call.id,
-                        "name": tool_call.name,
-                        "content": self._normalize_tool_result(
+                round_contents = self._bound_round_results(
+                    spec,
+                    response.tool_calls,
+                    [
+                        self._normalize_tool_result(
                             spec,
                             tool_call.id,
                             tool_call.name,
                             result,
-                        ),
-                    }
+                        )
+                        for tool_call, result in zip(response.tool_calls, results)
+                    ],
+                )
+                for tool_call, content in zip(response.tool_calls, round_contents):
+                    tool_message = self._split_tool_images(
+                        {
+                            "role": "tool",
+                            "tool_call_id": tool_call.id,
+                            "name": tool_call.name,
+                            "content": content,
+                        }
+                    )
                     messages.append(tool_message)
-                    completed_tool_results.append(tool_message)
+                    # Checkpoints are persisted; inline image data stays
+                    # resident only (the text still names each image).
+                    completed_tool_results.append(
+                        {k: v for k, v in tool_message.items() if k != "images"}
+                    )
                 if repeat_tracker is not None or evidence_ledger is not None:
                     # Observed at the result boundary so denied and failed
                     # calls count too — a model hammering a rejected call is
@@ -1005,7 +1097,31 @@ class AgentRunner:
             error=error,
             tool_events=tool_events,
             had_injections=had_injections,
+            cost_usd=spend["usd"],
+            cost_known=spend["known"],
         )
+
+    @staticmethod
+    def _spend_limit_reached(spec: AgentRunSpec, turn_cost_usd: float) -> str | None:
+        """The stop message when a configured spend limit is exceeded."""
+        turn_limit = spec.max_turn_cost_usd
+        if turn_limit is not None and turn_limit > 0 and turn_cost_usd > turn_limit:
+            return spend_limit_message(
+                scope="turn",
+                spent_usd=turn_cost_usd,
+                limit_usd=turn_limit,
+                setting="agents.defaults.maxTurnCostUsd",
+            )
+        session_limit = spec.max_session_cost_usd
+        session_cost = max(0.0, spec.prior_session_cost_usd) + turn_cost_usd
+        if session_limit is not None and session_limit > 0 and session_cost > session_limit:
+            return spend_limit_message(
+                scope="session",
+                spent_usd=session_cost,
+                limit_usd=session_limit,
+                setting="agents.defaults.maxSessionCostUsd",
+            )
+        return None
 
     def _build_request_kwargs(
         self,
@@ -1049,6 +1165,7 @@ class AgentRunner:
             view = self._drop_orphan_tool_results(messages)
             view = self._backfill_missing_tool_results(view)
             view = self._apply_tool_result_budget(spec, view)
+            view = self._drop_stale_tool_images(view)
             view = self._with_transient_context(
                 view,
                 spec.transient_context_messages,
@@ -1195,39 +1312,118 @@ class AgentRunner:
         tool_calls: list[ToolCallRequest],
         external_lookup_counts: dict[str, int],
     ) -> tuple[list[Any], list[dict[str, str]], BaseException | None]:
-        batches = self._partition_tool_batches(spec, tool_calls)
-        tool_results: list[tuple[Any, dict[str, str], BaseException | None]] = []
-        for batch in batches:
+        # Identical concurrency-safe calls (same tool + same arguments, no
+        # side-effecting call in between) are side-effect free by
+        # construction: the first runs, each repeat gets a short pointer to
+        # its result instead of a second copy of the same output in the prompt.
+        first_of = self._find_repeated_calls(spec, tool_calls)
+        to_run = [
+            (index, tool_call)
+            for index, tool_call in enumerate(tool_calls)
+            if index not in first_of
+        ]
+        outcomes: dict[int, tuple[Any, dict[str, str], BaseException | None]] = {}
+        for batch in self._partition_tool_batches(
+            spec, [tool_call for _index, tool_call in to_run]
+        ):
+            indexed = [to_run.pop(0) for _ in batch]
             if spec.concurrent_tools and len(batch) > 1:
-                tool_results.extend(
-                    await asyncio.gather(
-                        *(
-                            self._run_tool(spec, tool_call, external_lookup_counts)
-                            for tool_call in batch
+                # Only concurrency-safe (read-only, non-exclusive) calls reach
+                # here, at most ``max_parallel_tools`` at a time. Their
+                # permission gate still runs one at a time so an approval
+                # prompt is never raced by a sibling call; execution overlaps.
+                # ``gather`` returns results in call order.
+                gate = asyncio.Lock()
+                ran = await asyncio.gather(
+                    *(
+                        self._run_tool(
+                            spec,
+                            tool_call,
+                            external_lookup_counts,
+                            permission_gate=gate,
                         )
+                        for _index, tool_call in indexed
                     )
                 )
+                for (index, _tool_call), outcome in zip(indexed, ran):
+                    outcomes[index] = outcome
             else:
-                for tool_call in batch:
-                    tool_results.append(
-                        await self._run_tool(spec, tool_call, external_lookup_counts)
+                for index, tool_call in indexed:
+                    outcomes[index] = await self._run_tool(
+                        spec, tool_call, external_lookup_counts
                     )
 
         results: list[Any] = []
         events: list[dict[str, str]] = []
         fatal_error: BaseException | None = None
-        for result, event, error in tool_results:
+        for index, tool_call in enumerate(tool_calls):
+            original = first_of.get(index)
+            if original is None:
+                result, event, error = outcomes[index]
+            else:
+                _first, first_event, _error = outcomes[original]
+                result = (
+                    f"[Same tool and arguments as call {tool_calls[original].id} "
+                    "in this round; it ran once — see that result above.]"
+                )
+                event = {
+                    "name": tool_call.name,
+                    "status": first_event.get("status", "ok"),
+                    "detail": "duplicate of an identical call; ran once",
+                }
+                error = None
             results.append(result)
             events.append(event)
             if error is not None and fatal_error is None:
                 fatal_error = error
         return results, events, fatal_error
 
+    @staticmethod
+    def _call_key(tool_call: ToolCallRequest) -> str:
+        try:
+            arguments = json.dumps(
+                tool_call.arguments, sort_keys=True, ensure_ascii=False, default=str
+            )
+        except (TypeError, ValueError):
+            arguments = repr(tool_call.arguments)
+        return f"{tool_call.name}\x00{arguments}"
+
+    def _find_repeated_calls(
+        self,
+        spec: AgentRunSpec,
+        tool_calls: list[ToolCallRequest],
+    ) -> dict[int, int]:
+        """Map each repeated call's index to the index of its first identical call.
+
+        Only concurrency-safe calls qualify, and any other call in between
+        starts a fresh window: a write could change what a read returns.
+        """
+        if not (spec.concurrent_tools and spec.dedupe_read_only_calls):
+            return {}
+        get_tool = getattr(spec.tools, "get", None)
+        if not callable(get_tool):
+            return {}
+        seen: dict[str, int] = {}
+        repeats: dict[int, int] = {}
+        for index, tool_call in enumerate(tool_calls):
+            tool = get_tool(tool_call.name)
+            if not (tool and tool.concurrency_safe):
+                seen.clear()
+                continue
+            key = self._call_key(tool_call)
+            if key in seen:
+                repeats[index] = seen[key]
+            else:
+                seen[key] = index
+        return repeats
+
     async def _run_tool(
         self,
         spec: AgentRunSpec,
         tool_call: ToolCallRequest,
         external_lookup_counts: dict[str, int],
+        *,
+        permission_gate: asyncio.Lock | None = None,
     ) -> tuple[Any, dict[str, str], BaseException | None]:
         _HINT = "\n\n[Analyze the error above and try a different approach.]"
         allowed = spec.allowed_tool_names()
@@ -1289,7 +1485,11 @@ class AgentRunner:
         # Permission gate (P1 security base). Denials and unresolved asks
         # become errors-as-data results the model can read and react to,
         # never exceptions — a blocked tool must not abort the run.
-        denial = await self._check_permission(spec, tool_call)
+        if permission_gate is None:
+            denial = await self._check_permission(spec, tool_call)
+        else:
+            async with permission_gate:
+                denial = await self._check_permission(spec, tool_call)
         if denial is not None:
             event = {
                 "name": tool_call.name,
@@ -1615,6 +1815,13 @@ class AgentRunner:
         result: Any,
     ) -> Any:
         result = ensure_nonempty_tool_result(tool_name, result)
+        images = (
+            result.metadata.get(TOOL_RESULT_IMAGES_KEY)
+            if isinstance(result, ToolResult)
+            else None
+        )
+        if isinstance(images, list) and images:
+            result = self._attach_tool_images(spec, tool_call_id, result, images)
         try:
             content = maybe_persist_tool_result(
                 spec.workspace,
@@ -1632,8 +1839,213 @@ class AgentRunner:
             )
             content = result
         if isinstance(content, str) and len(content) > spec.max_tool_result_chars:
-            return truncate_text(content, spec.max_tool_result_chars)
+            return truncate_head_tail(content, spec.max_tool_result_chars)
         return content
+
+    @staticmethod
+    def _drop_stale_tool_images(
+        messages: list[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
+        """Send inline tool images only until the model has answered them.
+
+        A tool image rides the ``images`` key of its tool message. Once a later
+        assistant message exists, the model has already looked at it, and
+        re-sending the base64 payload on every following request is pure
+        cost; the text that names the image stays.
+        """
+        last_assistant = max(
+            (i for i, m in enumerate(messages) if m.get("role") == "assistant"),
+            default=-1,
+        )
+        updated: list[dict[str, Any]] | None = None
+        for index, message in enumerate(messages[:last_assistant]):
+            if message.get("role") != "tool" or not message.get("images"):
+                continue
+            if updated is None:
+                updated = list(messages)
+            stripped = {k: v for k, v in message.items() if k != "images"}
+            content = stripped.get("content")
+            note = "[image(s) shown to the model earlier; not re-sent]"
+            stripped["content"] = f"{content}\n{note}" if content else note
+            updated[index] = stripped
+        return updated if updated is not None else messages
+
+    def _round_budget(self, spec: AgentRunSpec) -> int:
+        if spec.max_round_tool_result_chars is not None:
+            return max(0, spec.max_round_tool_result_chars)
+        return max(0, spec.max_tool_result_chars) * _ROUND_BUDGET_MULTIPLIER
+
+    def _bound_round_results(
+        self,
+        spec: AgentRunSpec,
+        tool_calls: list[ToolCallRequest],
+        contents: list[Any],
+    ) -> list[Any]:
+        """Keep one round's combined tool output within the round budget.
+
+        Each result is already under the per-result cap; several large ones
+        from one parallel round can still add up to a prompt-sized blob that
+        every later request re-sends. Largest first, results are spilled to
+        files (the same spill as an oversized single result) with a smaller
+        inline preview until the round fits. Order is never changed.
+        """
+        budget = self._round_budget(spec)
+        sizes = [len(c) if isinstance(c, str) else 0 for c in contents]
+        total = sum(sizes)
+        if budget <= 0 or total <= budget or len(contents) < 2:
+            return contents
+        bounded = list(contents)
+        share = max(_ROUND_SPILL_FLOOR_CHARS, budget // len(contents))
+        for index in sorted(range(len(contents)), key=lambda i: -sizes[i]):
+            if total <= budget:
+                break
+            content = bounded[index]
+            if (
+                not isinstance(content, str)
+                or len(content) <= share
+                or content.startswith(_PERSISTED_RESULT_PREFIX)
+            ):
+                continue
+            tool_call = tool_calls[index]
+            try:
+                spilled = maybe_persist_tool_result(
+                    spec.workspace,
+                    spec.session_key,
+                    f"{tool_call.id}.round",
+                    content,
+                    max_chars=share,
+                )
+            except Exception as exc:  # noqa: BLE001 - fall back to truncation
+                logger.warning(
+                    "Round result spill failed for {}: {}", tool_call.id, exc
+                )
+                spilled = content
+            if not isinstance(spilled, str) or len(spilled) >= len(content):
+                spilled = truncate_head_tail(content, share)
+            total += len(spilled) - len(content)
+            bounded[index] = spilled
+        return bounded
+
+    @staticmethod
+    def _split_tool_images(message: dict[str, Any]) -> dict[str, Any]:
+        """Keep tool ``content`` textual; move inline images to ``images``.
+
+        Persistence and most history consumers expect text content, so the
+        image blocks ride a separate ``images`` key that the provider adapters
+        serialize (Anthropic: inside the tool_result; OpenAI-compatible: in a
+        following user turn) and that the canonical transcript never stores.
+        """
+        content = message.get("content")
+        if not isinstance(content, list):
+            return message
+        images = [
+            part
+            for part in content
+            if isinstance(part, dict) and part.get("type") == "image_url"
+        ]
+        if not images:
+            return message
+        text = "\n".join(
+            part["text"]
+            for part in content
+            if isinstance(part, dict) and isinstance(part.get("text"), str)
+        )
+        return {**message, "content": text or "(image)", "images": images}
+
+    def _model_accepts_images(self) -> bool:
+        """True only when the active model DECLARES image input.
+
+        Unknown capability (``None``) is treated as text-only: a rejected
+        request costs a whole turn, a saved file costs nothing.
+        """
+        modalities = getattr(self.provider, "input_modalities", None)
+        return isinstance(modalities, (tuple, list, set, frozenset)) and (
+            "image" in modalities
+        )
+
+    def _attach_tool_images(
+        self,
+        spec: AgentRunSpec,
+        tool_call_id: str,
+        result: ToolResult,
+        images: list[Any],
+    ) -> Any:
+        """Inline tool images for image-capable models; otherwise save them.
+
+        The returned value is either a content list (``text`` + ``image_url``
+        blocks, the same shape user attachments use) or text that names where
+        each image was saved.
+        """
+        inline = self._model_accepts_images()
+        blocks: list[dict[str, Any]] = []
+        notes: list[str] = []
+        for index, image in enumerate(images, start=1):
+            if not isinstance(image, dict):
+                continue
+            mime = str(image.get("mimeType") or "application/octet-stream")
+            data = image.get("data")
+            if not isinstance(data, str) or not data:
+                continue
+            size = len(data) * 3 // 4
+            if (
+                inline
+                and mime in _INLINE_IMAGE_MIME_TYPES
+                and size <= _MAX_INLINE_IMAGE_BYTES
+            ):
+                blocks.append(
+                    {
+                        "type": "image_url",
+                        "image_url": {"url": f"data:{mime};base64,{data}"},
+                    }
+                )
+                continue
+            path = self._save_tool_image(spec, tool_call_id, index, mime, data)
+            reason = (
+                "the active model cannot view images"
+                if not inline
+                else "this image cannot be shown to the model inline"
+            )
+            if path is None:
+                notes.append(f"[image {index} not shown: {reason}; it could not be saved]")
+            else:
+                notes.append(f"[image {index} saved to: {path} ({reason})]")
+        text = str(result)
+        if notes:
+            text = text + "\n" + "\n".join(notes)
+        if not blocks:
+            return result.with_content(text) if notes else result
+        return [{"type": "text", "text": text}, *blocks]
+
+    @staticmethod
+    def _save_tool_image(
+        spec: AgentRunSpec,
+        tool_call_id: str,
+        index: int,
+        mime: str,
+        data: str,
+    ) -> Path | None:
+        if spec.workspace is None:
+            return None
+        try:
+            raw = base64.b64decode(data, validate=False)
+        except (binascii.Error, ValueError):
+            return None
+        try:
+            bucket = ensure_dir(
+                Path(spec.workspace)
+                / _TOOL_RESULTS_DIR
+                / safe_filename(spec.session_key or "default")
+            )
+            extension = _IMAGE_EXTENSIONS.get(mime.lower(), "bin")
+            path = bucket / f"{safe_filename(tool_call_id)}-image-{index}.{extension}"
+            if not path.exists():
+                tmp = path.with_name(f".{path.name}.tmp")
+                tmp.write_bytes(raw)
+                tmp.replace(path)
+            return path
+        except OSError as exc:
+            logger.warning("Could not save tool image for {}: {}", tool_call_id, exc)
+            return None
 
     @staticmethod
     def _drop_orphan_tool_results(
@@ -1774,6 +2186,10 @@ class AgentRunner:
         if sum(1 for m in messages if m.get("role") != "system") < 4:
             return messages
         trigger = int(budget * _COMPACT_TRIGGER_FRACTION)
+        if spec.compact_trigger_tokens and spec.compact_trigger_tokens > 0:
+            # Cost cap: a huge-window model would otherwise resend hundreds
+            # of thousands of history tokens on every step before compacting.
+            trigger = min(trigger, int(spec.compact_trigger_tokens))
         estimate = self._estimate_prompt(spec, messages)
         if estimate is None or estimate <= trigger:
             return messages
@@ -2194,6 +2610,7 @@ class AgentRunner:
         if not spec.concurrent_tools:
             return [[tool_call] for tool_call in tool_calls]
 
+        cap = max(1, int(spec.max_parallel_tools or 1))
         batches: list[list[ToolCallRequest]] = []
         current: list[ToolCallRequest] = []
         for tool_call in tool_calls:
@@ -2201,6 +2618,9 @@ class AgentRunner:
             tool = get_tool(tool_call.name) if callable(get_tool) else None
             can_batch = bool(tool and tool.concurrency_safe)
             if can_batch:
+                if len(current) >= cap:
+                    batches.append(current)
+                    current = []
                 current.append(tool_call)
                 continue
             if current:

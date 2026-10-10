@@ -23,8 +23,9 @@ from __future__ import annotations
 
 import os
 import threading
+import time
 import uuid
-from collections.abc import Iterable, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 
 import httpx
 
@@ -40,7 +41,8 @@ def collection_prefix() -> str:
 
 _NAMESPACE = uuid.UUID("6f1b0c2e-3d4a-4b8e-9a51-7c2d9e0f4a10")
 _DOCUMENT_COLUMNS = (
-    "path, size, mtime_ns, sha256, status, error, chunk_count, model, indexed_at"
+    "path, size, mtime_ns, sha256, status, error, chunk_count, model, indexed_at,"
+    " visual_pages, visual_failed, contextualized"
 )
 
 
@@ -258,12 +260,15 @@ class PgQdrantStore:
                 connection.execute(
                     f"""
                     INSERT INTO rag_documents(workspace, {_DOCUMENT_COLUMNS})
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     ON CONFLICT (user_id, workspace, path) DO UPDATE SET
                         size = excluded.size, mtime_ns = excluded.mtime_ns,
                         sha256 = excluded.sha256, status = excluded.status,
                         error = excluded.error, chunk_count = excluded.chunk_count,
-                        model = excluded.model, indexed_at = excluded.indexed_at
+                        model = excluded.model, indexed_at = excluded.indexed_at,
+                        visual_pages = excluded.visual_pages,
+                        visual_failed = excluded.visual_failed,
+                        contextualized = excluded.contextualized
                     """,
                     (
                         self.workspace,
@@ -276,14 +281,18 @@ class PgQdrantStore:
                         record.chunk_count,
                         record.model,
                         record.indexed_at,
+                        record.visual_pages,
+                        record.visual_failed,
+                        record.contextualized,
                     ),
                 )
                 if chunks:
                     connection.executemany(
                         """
                         INSERT INTO rag_chunks(workspace, path, ordinal, locator,
-                                               heading, text, dims, point_id)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                                               heading, text, dims, point_id,
+                                               context, visual)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                         """,
                         [
                             (
@@ -295,6 +304,8 @@ class PgQdrantStore:
                                 chunk.text.replace("\x00", ""),
                                 len(vector),
                                 pid,
+                                chunk.context.replace("\x00", ""),
+                                chunk.visual,
                             )
                             for chunk, vector, pid in zip(
                                 chunks, normalized, ids, strict=True
@@ -354,6 +365,38 @@ class PgQdrantStore:
                 (self.workspace,),
             ).fetchone()
         return int(row["n"])
+
+    # -- enrichment cache -------------------------------------------------
+
+    def cached_values(self, kind: str, keys: Sequence[str]) -> dict[str, str]:
+        keys = list(keys)
+        if not keys:
+            return {}
+        with self.database.read() as connection:
+            rows = connection.execute(
+                "SELECT key, value FROM rag_llm_cache WHERE kind = ? AND key = ANY(?)",
+                (kind, keys),
+            ).fetchall()
+        return {row["key"]: row["value"] for row in rows}
+
+    def cache_values(self, kind: str, model: str, values: Mapping[str, str]) -> None:
+        if not values:
+            return
+        stamp = time.time()
+        with self.database.transaction() as connection:
+            connection.executemany(
+                """
+                INSERT INTO rag_llm_cache(kind, key, model, value, created_at)
+                VALUES (?, ?, ?, ?, ?)
+                ON CONFLICT (user_id, kind, key) DO UPDATE SET
+                    value = excluded.value, model = excluded.model,
+                    created_at = excluded.created_at
+                """,
+                [
+                    (kind, key, model, value.replace("\x00", ""), stamp)
+                    for key, value in values.items()
+                ],
+            )
 
     # -- search -----------------------------------------------------------
 
@@ -424,7 +467,8 @@ class PgQdrantStore:
             with self.database.read() as connection:
                 rows = connection.execute(
                     """
-                    SELECT point_id::text AS id, path, ordinal, locator, heading, text
+                    SELECT point_id::text AS id, path, ordinal, locator, heading,
+                           text, context, visual
                     FROM rag_chunks WHERE workspace = ? AND point_id = ANY(?::uuid[])
                     """,
                     (self.workspace, ids),
@@ -439,6 +483,8 @@ class PgQdrantStore:
                 heading=row["heading"],
                 text=row["text"],
                 cosine=cosines.get(row["id"], 0.0),
+                context=row["context"] or "",
+                visual=bool(row["visual"]),
             )
             for row in rows
         ]
@@ -450,6 +496,7 @@ class PgQdrantStore:
                 text=candidate.text,
                 score=round(candidate.score, 4),
                 ordinal=candidate.ordinal,
+                visual=candidate.visual,
             )
             for candidate in rerank(query, candidates, k)
         ]

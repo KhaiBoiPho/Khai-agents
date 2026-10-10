@@ -24,6 +24,7 @@ def submission_fingerprint(
     execution_class: ExecutionClass,
     security_override: ExecutionSecurityProfile | None,
     permission_override: ExecutionPermissionMode | None,
+    mode: str | None = None,
 ) -> str:
     # Requested fields, not the resolved profile or Goal-inherited skills:
     # a lost response must stay recoverable after those defaults change.
@@ -41,6 +42,10 @@ def submission_fingerprint(
         if permission_override
         else None,
     }
+    if mode and mode != "normal":
+        # Only a non-default mode joins the identity, so receipts written
+        # before modes existed keep their original fingerprints.
+        payload["mode"] = mode
     encoded = json.dumps(
         payload,
         sort_keys=True,

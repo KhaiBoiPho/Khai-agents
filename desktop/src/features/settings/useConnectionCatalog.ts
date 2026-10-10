@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import type {
   ProviderDiscoverParams,
@@ -10,6 +10,8 @@ import type {
   ProviderLoginFlow,
   ProviderLogoutResult,
   ProviderUpsertParams,
+  WebSearchStatus,
+  WebSearchUpdateParams,
 } from "../../generated/app-server";
 import type { ClientRuntime } from "../../rpc/contracts";
 
@@ -34,6 +36,11 @@ export interface ConnectionCatalogController {
   discover(
     params: Omit<ProviderDiscoverParams, "projectId">,
   ): Promise<ProviderDiscoverResult>;
+  /** Built-in web search (Firecrawl): key is write-only, status is not. */
+  webSearch?: {
+    status(): Promise<WebSearchStatus>;
+    update(params: WebSearchUpdateParams): Promise<WebSearchStatus>;
+  };
 }
 
 export function useConnectionCatalog(
@@ -211,8 +218,21 @@ export function useConnectionCatalog(
       runtime.request("provider/logout", { connectionId }),
     [runtime],
   );
+  const webSearchStatus = useCallback(
+    () => runtime.request("websearch/status", {}),
+    [runtime],
+  );
+  const webSearchUpdate = useCallback(
+    (params: WebSearchUpdateParams) => runtime.request("websearch/update", params),
+    [runtime],
+  );
+  const webSearch = useMemo(
+    () => ({ status: webSearchStatus, update: webSearchUpdate }),
+    [webSearchStatus, webSearchUpdate],
+  );
   const currentProject = state.projectId === projectId;
   return {
+    webSearch,
     login,
     pollLogin,
     cancelLogin,

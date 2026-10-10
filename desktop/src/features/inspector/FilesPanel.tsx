@@ -96,6 +96,8 @@ interface FilesPanelProps {
   onDownload?: (path: string) => Promise<void>;
   /** Raw bytes of a workspace file, for document previews (web client). */
   readBytes?: (path: string) => Promise<ArrayBuffer>;
+  /** Server-rendered PDF of a docx/pptx (null: none); preferred when present. */
+  readPreviewPdf?: (path: string) => Promise<ArrayBuffer | null>;
   /** Document-search index of this workspace (Knowledge bar + tree badges). */
   knowledge?: DocumentIndexController;
   /** When set, only these files (and their folders) are listed. */
@@ -124,6 +126,7 @@ export function FilesPanel({
   workbench,
   onDownload,
   readBytes,
+  readPreviewPdf,
   knowledge,
   onlyPaths = null,
 }: FilesPanelProps) {
@@ -142,6 +145,7 @@ export function FilesPanel({
   const highlightRef = useRef<{ clear(): void } | null>(null);
   const revealedRef = useRef<typeof reveal>(null);
   const bodyRef = useRef<HTMLDivElement | null>(null);
+  const tabsRef = useRef<HTMLDivElement | null>(null);
   const darkMode = useThemeIsDark();
   const file = workbench.file;
   const dirty = Boolean(file && workbench.draft !== file.content);
@@ -195,6 +199,14 @@ export function FilesPanel({
     ));
 
   const activePath = activeDoc ?? file?.path ?? null;
+  // Keep the active file's tab in view when it changes.
+  useEffect(() => {
+    if (!activePath) return;
+    const tab = [...(tabsRef.current?.children ?? [])].find(
+      (element) => (element as HTMLElement).dataset.path === activePath,
+    );
+    tab?.scrollIntoView({ block: "nearest", inline: "nearest" });
+  }, [activePath, openPaths]);
 
   const openFile = async (path: string) => {
     if (path === activePath) return;
@@ -266,6 +278,10 @@ export function FilesPanel({
         : Promise.reject(new Error("Previews of this file type need the web client.")),
     [activeDoc, readBytes],
   );
+  const loadDocPdf = useMemo(
+    () => (readPreviewPdf && activeDoc ? () => readPreviewPdf(activeDoc) : undefined),
+    [activeDoc, readPreviewPdf],
+  );
 
   const updateLayout = (next: { visible: boolean; width: number }) => {
     setLayout(next);
@@ -309,11 +325,27 @@ export function FilesPanel({
             <PanelLeftOpen size={15} />
           </button>
         )}
-        <div className={styles.fileTabs} role="tablist" aria-label="Open files">
+        <div
+          className={styles.fileTabs}
+          role="tablist"
+          aria-label="Open files"
+          ref={tabsRef}
+          // A vertical mouse wheel scrolls the tab strip sideways.
+          onWheel={(event) => {
+            if (event.deltaX === 0 && event.deltaY !== 0) {
+              event.currentTarget.scrollLeft += event.deltaY;
+            }
+          }}
+        >
           {openPaths.map((path) => {
             const active = path === activePath;
             return (
-              <div key={path} className={styles.fileTab} data-active={active || undefined}>
+              <div
+                key={path}
+                className={styles.fileTab}
+                data-active={active || undefined}
+                data-path={path}
+              >
                 <button
                   type="button"
                   role="tab"
@@ -453,7 +485,12 @@ export function FilesPanel({
               </header>
               <div className={styles.editorBody}>
                 <Suspense fallback={<div className={styles.loading}>Opening document…</div>}>
-                  <DocumentViewer key={activeDoc} path={activeDoc} load={loadDoc} />
+                  <DocumentViewer
+                    key={activeDoc}
+                    path={activeDoc}
+                    load={loadDoc}
+                    loadPdf={loadDocPdf}
+                  />
                 </Suspense>
               </div>
             </>

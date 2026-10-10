@@ -73,7 +73,11 @@ SUPPORTED_SOURCE_TYPES = frozenset({"local", "url", "repository", "requirement"}
 MAX_SOURCE_LENGTH = 16_384
 MAX_SUMMARY_LENGTH = 4_000
 MAX_PREVIEW_BYTES = 128 * 1024
-DEFAULT_INTERACTION_POLL_SECONDS = 0.2
+# Only the cross-process fallback: a response given in this process wakes the
+# waiter at once.
+DEFAULT_INTERACTION_POLL_SECONDS = 2.0
+#: Returned by the off-loop interaction read when the run was cancelled.
+_INTERACTION_CANCELLED = object()
 
 
 @dataclass(frozen=True, slots=True)
@@ -1278,72 +1282,96 @@ class WorkflowService:
         claim: ResourceClaim,
         local_wake: asyncio.Future[None],
     ) -> JsonObject:
-        """Wait indefinitely while reconciling the response from shared SQLite."""
+        """Wait indefinitely while reconciling the response from the database.
+
+        A response given in this process wakes ``local_wake`` at once; the
+        periodic read (off the event loop) covers other processes.
+        """
 
         while True:
-            with self.database.read() as connection:
-                run = WorkflowRepository(connection).get(run_id)
-                if run is None:
-                    raise WorkflowNotFoundError(f"workflow not found: {run_id}")
-                turn = TurnRepository(connection).get(run.turn_id)
-                if turn is None:
-                    raise ConflictError("workflow turn is missing")
-                last_interaction = run.checkpoint.get("lastInteraction")
-                if (
-                    isinstance(last_interaction, dict)
-                    and last_interaction.get("id") == interaction_id
-                ):
-                    if not _interaction_matches_claim(last_interaction, claim):
-                        raise TurnWriteConflictError(
-                            f"Workflow interaction response fence is stale: {turn.id}"
-                        )
-                    response = last_interaction.get("response")
-                    if not isinstance(response, dict):
-                        raise WorkflowInteractionError(
-                            "workflow interaction response is invalid"
-                        )
-                    return _bounded_json(response, "response")
-
-                if (
-                    turn.cancel_requested_at is not None
-                    or run.status is WorkflowStatus.CANCELLED
-                ):
-                    raise asyncio.CancelledError
-                if run.status.is_terminal or turn.status.is_terminal:
-                    raise WorkflowInteractionError(
-                        "workflow interaction ended without a response",
-                        details={
-                            "reason": "terminal",
-                            "interactionId": interaction_id,
-                        },
-                    )
-                interaction = run.checkpoint.get("interaction")
-                if (
-                    not isinstance(interaction, dict)
-                    or interaction.get("id") != interaction_id
-                ):
-                    raise WorkflowInteractionError(
-                        "workflow interaction was superseded",
-                        details={
-                            "reason": "stale",
-                            "interactionId": interaction_id,
-                        },
-                    )
-                if (
-                    run.status is not WorkflowStatus.WAITING
-                    or turn.status is not TurnStatus.WAITING_APPROVAL
-                    or not _interaction_matches_claim(interaction, claim)
-                    or not RuntimeCoordinationRepository(connection).claim_is_current(
-                        claim
-                    )
-                ):
-                    raise TurnWriteConflictError(
-                        f"Workflow interaction fence is stale: {turn.id}"
-                    )
+            response = await asyncio.to_thread(
+                self._read_interaction_response,
+                run_id,
+                interaction_id,
+                claim,
+            )
+            if response is _INTERACTION_CANCELLED:
+                raise asyncio.CancelledError
+            if response is not None:
+                return response
             await asyncio.wait(
                 (local_wake,),
                 timeout=self.interaction_poll_seconds,
             )
+
+    def _read_interaction_response(
+        self,
+        run_id: str,
+        interaction_id: str,
+        claim: ResourceClaim,
+    ) -> Any:
+        """Return the response, None while still waiting, or the cancel marker."""
+
+        with self.database.read() as connection:
+            run = WorkflowRepository(connection).get(run_id)
+            if run is None:
+                raise WorkflowNotFoundError(f"workflow not found: {run_id}")
+            turn = TurnRepository(connection).get(run.turn_id)
+            if turn is None:
+                raise ConflictError("workflow turn is missing")
+            last_interaction = run.checkpoint.get("lastInteraction")
+            if (
+                isinstance(last_interaction, dict)
+                and last_interaction.get("id") == interaction_id
+            ):
+                if not _interaction_matches_claim(last_interaction, claim):
+                    raise TurnWriteConflictError(
+                        f"Workflow interaction response fence is stale: {turn.id}"
+                    )
+                response = last_interaction.get("response")
+                if not isinstance(response, dict):
+                    raise WorkflowInteractionError(
+                        "workflow interaction response is invalid"
+                    )
+                return _bounded_json(response, "response")
+
+            if (
+                turn.cancel_requested_at is not None
+                or run.status is WorkflowStatus.CANCELLED
+            ):
+                return _INTERACTION_CANCELLED
+            if run.status.is_terminal or turn.status.is_terminal:
+                raise WorkflowInteractionError(
+                    "workflow interaction ended without a response",
+                    details={
+                        "reason": "terminal",
+                        "interactionId": interaction_id,
+                    },
+                )
+            interaction = run.checkpoint.get("interaction")
+            if (
+                not isinstance(interaction, dict)
+                or interaction.get("id") != interaction_id
+            ):
+                raise WorkflowInteractionError(
+                    "workflow interaction was superseded",
+                    details={
+                        "reason": "stale",
+                        "interactionId": interaction_id,
+                    },
+                )
+            if (
+                run.status is not WorkflowStatus.WAITING
+                or turn.status is not TurnStatus.WAITING_APPROVAL
+                or not _interaction_matches_claim(interaction, claim)
+                or not RuntimeCoordinationRepository(connection).claim_is_current(
+                    claim
+                )
+            ):
+                raise TurnWriteConflictError(
+                    f"Workflow interaction fence is stale: {turn.id}"
+                )
+        return None
 
     def _finish(
         self,

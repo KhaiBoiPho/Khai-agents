@@ -50,21 +50,6 @@
       }
     },
     {
-      "id": "firecrawl",
-      "displayName": "Firecrawl",
-      "category": "web",
-      "description": "Scrape, crawl, search, and extract web pages through Firecrawl.",
-      "docsUrl": "https://docs.firecrawl.dev/use-cases/developers-mcp",
-      "requires": "Network access",
-      "note": "The hosted keyless endpoint does not require an API key.",
-      "server": {
-        "type": "streamableHttp",
-        "url": "https://mcp.firecrawl.dev/v2/mcp",
-        "toolTimeoutSeconds": 60,
-        "approvalMode": "writes"
-      }
-    },
-    {
       "id": "parallel-search",
       "displayName": "Parallel Search",
       "category": "web",

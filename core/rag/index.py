@@ -4,6 +4,11 @@ A file is (re)indexed when its size or mtime changed *and* its content hash
 differs from the indexed one, or when the embedding model changed. Files that
 disappeared are removed. Work is bounded by a deadline so a caller (an agent
 Turn) can index "as much as fits" and leave the rest to a background job.
+
+An optional :class:`core.rag.enrich.Enrichment` adds model-written chunk
+contexts (contextual retrieval) and vision transcriptions of PDF figure and
+scanned pages. Both are best-effort: any failure indexes the document as
+before.
 """
 
 from __future__ import annotations
@@ -12,13 +17,19 @@ import hashlib
 import os
 import time
 from collections.abc import Callable
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
+from typing import TYPE_CHECKING
+
+from loguru import logger
 
 from core.rag.chunking import chunk_sections
 from core.rag.embeddings import Embedder, EmbeddingError
-from core.rag.extract import ExtractionError, extract_document, is_supported
+from core.rag.extract import ExtractionError, ExtractStats, extract_document, is_supported
 from core.rag.store import DocumentRecord, DocumentStore, SearchHit
+
+if TYPE_CHECKING:
+    from core.rag.enrich import Enrichment
 
 MAX_DOCUMENTS = 500
 MAX_DOCUMENT_BYTES = 50 * 1024 * 1024
@@ -75,6 +86,10 @@ class IndexReport:
     removed: list[str] = field(default_factory=list)
     remaining: list[str] = field(default_factory=list)
     error: str | None = None
+    # Enrichment totals of this run.
+    visual_pages: int = 0
+    visual_failed: int = 0
+    contextualized: int = 0
 
     @property
     def complete(self) -> bool:
@@ -92,12 +107,16 @@ def _sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
-def embedding_input(path: str, locator: str, heading: str, text: str) -> str:
+def embedding_input(
+    path: str, locator: str, heading: str, text: str, context: str = ""
+) -> str:
     """Text actually embedded: a short provenance header helps retrieval
-    match questions that name a file, sheet or section."""
+    match questions that name a file, sheet or section, and the chunk's
+    contextual-retrieval context (when there is one) situates it."""
 
     label = " · ".join(part for part in (path, locator, heading) if part)
-    return f"{label}\n\n{text}" if label else text
+    body = f"{context}\n\n{text}" if context else text
+    return f"{label}\n\n{body}" if label else body
 
 
 class DocumentIndex:
@@ -177,6 +196,7 @@ class DocumentIndex:
         deadline: float | None = None,
         progress: ProgressCallback | None = None,
         should_stop: Callable[[], bool] | None = None,
+        enrichment: Enrichment | None = None,
     ) -> IndexReport:
         plan = self.plan(embedder.model, force=force)
         report = IndexReport()
@@ -194,7 +214,15 @@ class DocumentIndex:
             if progress is not None:
                 progress(position, total, path)
             try:
-                self._index_one(path, plan.files[path], records.get(path), embedder, force, report)
+                self._index_one(
+                    path,
+                    plan.files[path],
+                    records.get(path),
+                    embedder,
+                    force,
+                    report,
+                    enrichment,
+                )
             except EmbeddingError as exc:
                 # The service, not this file, is the problem: stop and keep the
                 # rest pending so a later run picks them up.
@@ -213,6 +241,7 @@ class DocumentIndex:
         embedder: Embedder,
         force: bool,
         report: IndexReport,
+        enrichment: Enrichment | None = None,
     ) -> None:
         full = self.root / path
         try:
@@ -231,8 +260,16 @@ class DocumentIndex:
             self.store.touch_document(path, size=state.size, mtime_ns=state.mtime_ns)
             report.unchanged_content.append(path)
             return
+        stats = ExtractStats()
+        visual = None
+        if enrichment is not None and enrichment.visual is not None:
+            reader = enrichment.visual
+
+            def visual(file: Path, pages: list) -> object:  # noqa: ANN001
+                return reader.read_pages(file, pages, cache=self.store)
+
         try:
-            sections = extract_document(full)
+            sections = extract_document(full, visual=visual, stats=stats)
         except ExtractionError as exc:
             report.failed[path] = str(exc)
             self._record_failure(path, state, digest, str(exc), embedder.model)
@@ -242,8 +279,27 @@ class DocumentIndex:
             self._record_failure(path, state, digest, report.failed[path], embedder.model)
             return
         chunks = chunk_sections(sections)[:MAX_CHUNKS_PER_DOCUMENT]
+        if enrichment is not None and enrichment.contextualizer is not None and chunks:
+            try:
+                contexts = enrichment.contextualizer.contextualize(
+                    "\n\n".join(section.text for section in sections),
+                    chunks,
+                    cache=self.store,
+                )
+            except Exception:  # noqa: BLE001 - contexts are optional
+                logger.exception("contextual retrieval failed for {}", path)
+                contexts = []
+            if len(contexts) == len(chunks):
+                chunks = [
+                    replace(chunk, context=context) if context else chunk
+                    for chunk, context in zip(chunks, contexts, strict=True)
+                ]
+        contextualized = sum(1 for chunk in chunks if chunk.context)
         vectors = embedder.embed(
-            [embedding_input(path, c.locator, c.heading, c.text) for c in chunks]
+            [
+                embedding_input(path, c.locator, c.heading, c.text, c.context)
+                for c in chunks
+            ]
         )
         if len(vectors) != len(chunks):
             raise EmbeddingError("embedding service returned the wrong number of vectors")
@@ -258,11 +314,17 @@ class DocumentIndex:
                 chunk_count=len(chunks),
                 model=embedder.model,
                 indexed_at=time.time(),
+                visual_pages=stats.visual_pages,
+                visual_failed=stats.visual_failed,
+                contextualized=contextualized,
             ),
             chunks,
             vectors,
         )
         report.indexed.append(path)
+        report.visual_pages += stats.visual_pages
+        report.visual_failed += stats.visual_failed
+        report.contextualized += contextualized
 
     def _record_failure(
         self, path: str, state: FileState, digest: str, error: str, model: str

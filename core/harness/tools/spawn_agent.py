@@ -16,7 +16,11 @@ from __future__ import annotations
 from typing import Any
 
 from core.agent_runtime.tools.base import Tool, tool_parameters
-from core.harness.agents.control import AgentControl, AgentLimitError
+from core.harness.agents.control import (
+    SUBAGENT_EFFORTS,
+    AgentControl,
+    AgentLimitError,
+)
 
 
 def _parse_fork_turns(value: Any) -> str | int:
@@ -93,6 +97,20 @@ def _parse_fork_turns(value: Any) -> str | int:
                 "use this when you need structured data back, not prose. "
                 "Native backend only.",
             },
+            "model": {
+                "type": "string",
+                "description": "Optional model id for this sub-agent (default: "
+                "your own model), e.g. a smaller, faster model for a simple "
+                "lookup. It must be served by the configured connection; an "
+                "unavailable model is refused. Native backend only.",
+            },
+            "effort": {
+                "type": "string",
+                "enum": ["low", "medium"],
+                "description": "Optional reasoning effort for this sub-agent "
+                "(default: your own). 'low' suits quick mechanical subtasks. "
+                "Native backend only.",
+            },
         },
         "required": ["name", "task"],
     }
@@ -154,6 +172,17 @@ class SpawnAgentTool(Tool):
         output_schema = kwargs.get("output_schema")
         if output_schema is not None and not isinstance(output_schema, dict):
             return "Error: 'output_schema' must be a JSON object."
+        model = kwargs.get("model")
+        if model is not None and not isinstance(model, str):
+            return "Error: 'model' must be a model id string."
+        effort = kwargs.get("effort")
+        if effort is not None and (
+            not isinstance(effort, str)
+            or effort.strip().lower() not in SUBAGENT_EFFORTS
+        ):
+            return (
+                f"Error: 'effort' must be one of {', '.join(SUBAGENT_EFFORTS)}."
+            )
         try:
             agent_id = self._control.spawn(
                 task,
@@ -164,6 +193,8 @@ class SpawnAgentTool(Tool):
                 persona=str(persona) if persona is not None else None,
                 tools=tools,
                 output_schema=output_schema,
+                model=model,
+                effort=effort,
             )
         except AgentLimitError as exc:
             return f"Error: {exc}"
@@ -336,6 +367,12 @@ class SendMessageTool(Tool):
 
     @property
     def read_only(self) -> bool:
+        return True
+
+    @property
+    def exclusive(self) -> bool:
+        # Read-only for permission purposes, but never run in parallel:
+        # it changes a running sub-agent's conversation.
         return True
 
     async def execute(self, **kwargs: Any) -> Any:

@@ -41,6 +41,7 @@ from core.domain.thread import Thread, ThreadMode, ThreadStatus
 from core.domain.turn import Turn, TurnExecutor, TurnStatus
 from core.domain.workflow import WorkflowRun, WorkflowStatus
 from core.persistence.automation_repository import AutomationRepository
+from core.persistence.coordination_repository import RuntimeCoordinationRepository
 from core.persistence.database import Database
 from core.persistence.event_repository import EventRepository
 from core.persistence.execution_repository import ItemRepository, TurnRepository
@@ -151,19 +152,182 @@ class ThreadService:
         # App Server exits so list/read reconciliation cannot silently undo the
         # user's explicit choice.
         self._workspace_overrides: dict[str, Path] = {}
+        # Session id -> the projection key (disk signature plus workspace
+        # override) it had when last projected successfully. A Session whose
+        # key is unchanged needs no new projection pass: the canonical files
+        # it was rebuilt from have not been written since.
+        self._projected_keys: dict[str, tuple[object, ...]] = {}
+        # Project rows seen by the last full reconcile. Project changes can
+        # re-home session-discovered Threads, so they force a full pass.
+        self._reconciled_projects: tuple[tuple[str, str, bool], ...] | None = None
 
     def reconcile(self) -> int:
         """Repair both sides without treating established sessions as legacy."""
 
+        with self.database.read() as connection:
+            projects = self._projects_fingerprint(ProjectRepository(connection))
         self._adopt_database_only_threads()
-        repaired = 0
-        for summary in self.session_store.list_sessions(limit=100_000):
-            session = self.session_store.get_session(summary.session_id)
+        repaired = self._project_sessions(self.session_store.disk_signatures())
+        self._reconciled_projects = projects
+        return repaired
+
+    def reconcile_if_changed(self) -> int:
+        """Reconcile only what changed since the previous pass.
+
+        Startup runs the full :meth:`reconcile`; afterwards listings call this
+        and pay one directory scan plus one read transaction when nothing
+        moved, instead of re-projecting every Session.
+        """
+
+        repaired, _disk = self._reconcile_changes()
+        return repaired
+
+    def _reconcile_changes(self) -> tuple[int, dict[str, tuple[int, ...]]]:
+        with self.database.read() as connection:
+            projects = self._projects_fingerprint(ProjectRepository(connection))
+            thread_ids = {
+                thread.id
+                for thread in ThreadRepository(connection).list_all(
+                    include_archived=True,
+                    limit=100_000,
+                )
+            }
+        if projects != self._reconciled_projects:
+            repaired = self.reconcile()
+            return repaired, self.session_store.disk_signatures()
+        disk = self.session_store.disk_signatures()
+        if any(
+            thread_id not in disk
+            and not self.session_store.is_deletion_pending(thread_id)
+            for thread_id in thread_ids
+        ):
+            self._adopt_database_only_threads()
+            disk = self.session_store.disk_signatures()
+        changed = {
+            session_id: signature
+            for session_id, signature in disk.items()
+            if session_id not in thread_ids
+            or self._projected_keys.get(session_id)
+            != self._projection_key(session_id, signature)
+        }
+        return self._project_sessions(changed), disk
+
+    def _project_sessions(self, signatures: dict[str, tuple[int, ...]]) -> int:
+        """Project the given Sessions, most recently updated first."""
+
+        sessions: list[Session] = []
+        for session_id in signatures:
+            session = self.session_store.get_session(session_id)
             if session is None:
+                self._projected_keys.pop(session_id, None)
                 continue
-            _thread, changed = self._ensure_projection(session)
+            sessions.append(session)
+        sessions.sort(key=lambda session: session.updated_at, reverse=True)
+        repaired = 0
+        for session in sessions:
+            thread, changed = self._ensure_projection(session)
+            self._remember_projection(
+                session,
+                thread,
+                self._projection_key(
+                    session.session_id, signatures[session.session_id]
+                ),
+            )
             repaired += int(changed)
         return repaired
+
+    @staticmethod
+    def _projects_fingerprint(
+        projects: ProjectRepository,
+    ) -> tuple[tuple[str, str, bool], ...]:
+        return tuple(
+            sorted(
+                (
+                    project.id,
+                    project.canonical_path,
+                    bool(project.settings.get("sessionDiscovered")),
+                )
+                for project in projects.list(limit=100_000)
+            )
+        )
+
+    def _projection_key(
+        self,
+        session_id: str,
+        signature: tuple[int, ...] | None,
+        workspace_override: Path | None = None,
+    ) -> tuple[object, ...] | None:
+        if signature is None:
+            return None
+        workspace = workspace_override or self._workspace_overrides.get(session_id)
+        return (signature, str(workspace) if workspace is not None else None)
+
+    def _remember_projection(
+        self,
+        session: Session,
+        thread: Thread,
+        key: tuple[object, ...] | None,
+    ) -> None:
+        metadata = session.metadata or {}
+        if key is None or (
+            (metadata.get("parent_session_id") or metadata.get("branched_from"))
+            and thread.parent_thread_id is None
+        ):
+            # The parent Thread was not projected yet; link it on a later pass.
+            self._projected_keys.pop(session.session_id, None)
+            return
+        self._projected_keys[session.session_id] = key
+
+    def _project_if_changed(
+        self,
+        session_id: str,
+        *,
+        workspace_override: Path | None = None,
+        event_type: str | None = None,
+        force: bool = False,
+    ) -> Thread | None:
+        """Project one Session unless it is unchanged since its last projection.
+
+        ``force`` always projects (a mutation just happened and its event must
+        be published). ``None`` means the canonical Session does not exist.
+        """
+
+        # Take the signature before loading: a write that lands in between
+        # then leaves a stale key, which only costs one extra pass later.
+        key = self._projection_key(
+            session_id,
+            self.session_store.disk_signature(session_id),
+            workspace_override,
+        )
+        session = self.session_store.get_session(session_id)
+        if session is None:
+            self._projected_keys.pop(session_id, None)
+            return None
+        if (
+            not force
+            and key is not None
+            and self._projected_keys.get(session_id) == key
+        ):
+            # The canonical side is unchanged; confirm with one read that the
+            # projection still holds its transcript (a row or Items may have
+            # been altered underneath) before skipping the write transaction.
+            with self.database.read() as connection:
+                existing = ThreadRepository(connection).get(session_id)
+                projected = (
+                    self._projected_pairs(ItemRepository(connection), session_id)
+                    if existing is not None
+                    else []
+                )
+            canonical = self._canonical_pairs(session)
+            if existing is not None and canonical == projected[: len(canonical)]:
+                return existing
+        thread, _changed = self._ensure_projection(
+            session,
+            workspace_override=workspace_override,
+            event_type=event_type,
+        )
+        self._remember_projection(session, thread, key)
+        return thread
 
     def start(
         self,
@@ -302,11 +466,13 @@ class ThreadService:
         if workspace_path is not None:
             override = self._existing_directory(workspace_path)
             self._workspace_overrides[session_id] = override
-        thread, _changed = self._ensure_projection(
-            session,
+        thread = self._project_if_changed(
+            session_id,
             workspace_override=override,
             event_type="thread.resumed",
         )
+        if thread is None:
+            raise ThreadNotFoundError(f"session not found: {session_id}")
         return thread
 
     def materialize_session(self, thread_id: str) -> Session:
@@ -426,9 +592,8 @@ class ThreadService:
             return refreshed
 
     def read(self, thread_id: str) -> Thread:
-        session = self.session_store.get_session(thread_id)
-        if session is not None:
-            thread, _changed = self._ensure_projection(session)
+        thread = self._project_if_changed(thread_id)
+        if thread is not None:
             return thread
 
         if self.session_store.is_deletion_pending(thread_id):
@@ -468,7 +633,7 @@ class ThreadService:
                 if ProjectRepository(connection).get(project_id) is None:
                     raise ProjectNotFoundError(f"project not found: {project_id}")
         exact_cwd = str(self._existing_directory(cwd)) if cwd is not None else None
-        self.reconcile()
+        _repaired, disk = self._reconcile_changes()
         with self.database.read() as connection:
             rows = ThreadRepository(connection).list_all(
                 include_archived=include_archived,
@@ -477,11 +642,30 @@ class ThreadService:
         visible = [
             thread
             for thread in rows
-            if self.session_store.get_session(thread.id) is not None
+            if self._session_readable(thread.id, disk)
             and (project_id is None or thread.project_id == project_id)
             and (exact_cwd is None or thread.workspace_path == exact_cwd)
         ]
         return visible[offset : offset + limit]
+
+    def _session_readable(
+        self,
+        session_id: str,
+        disk: dict[str, tuple[int, ...]],
+    ) -> bool:
+        """Whether ``get_session`` would load this Session, without loading it.
+
+        A Session projected at its current disk signature was readable then
+        and has not been written since; anything else falls back to a load.
+        """
+
+        signature = disk.get(session_id)
+        if signature is None:
+            return False
+        key = self._projected_keys.get(session_id)
+        if key is not None and key[0] == signature:
+            return True
+        return self.session_store.get_session(session_id) is not None
 
     def rename(self, thread_id: str, title: str) -> Thread:
         clean_title = title.strip()
@@ -610,6 +794,7 @@ class ThreadService:
         """Drop process-local resume context after permanent deletion."""
 
         self._workspace_overrides.pop(thread_id, None)
+        self._projected_keys.pop(thread_id, None)
 
     def fork(self, thread_id: str, *, title: str | None = None) -> Thread:
         source = self.session_store.get_session(thread_id)
@@ -647,10 +832,13 @@ class ThreadService:
         return thread
 
     def _project_updated_session(self, session_id: str, event_type: str) -> Thread:
-        session = self.session_store.get_session(session_id)
-        if session is None:  # pragma: no cover - guarded by the mutation
+        thread = self._project_if_changed(
+            session_id,
+            event_type=event_type,
+            force=True,
+        )
+        if thread is None:  # pragma: no cover - guarded by the mutation
             raise ThreadNotFoundError(f"thread not found: {session_id}")
-        thread, _changed = self._ensure_projection(session, event_type=event_type)
         return thread
 
     def _ensure_projection(
@@ -781,14 +969,7 @@ class ThreadService:
             self.broker.publish(event)
         return projected, changed
 
-    def _reconcile_transcript(
-        self,
-        connection,
-        thread: Thread,
-        session: Session,
-    ) -> list[DomainEvent]:
-        """Append missing visible JSONL messages into the disposable timeline."""
-
+    def _transcript_timeline(self, session: Session) -> list[SessionMessage]:
         # Two views of the same records. The TRANSCRIPT is what the
         # projected/canonical comparison is defined over — text the user
         # exchanged with the agent, which is what `conversation_for_thread`
@@ -797,7 +978,7 @@ class ThreadService:
         # agent did and not only what it said. A compaction checkpoint is in
         # neither: it rides a user-role record but is bookkeeping, not
         # conversation.
-        timeline = [
+        return [
             message
             for message in session.messages
             if message.role in {"user", "assistant", "tool"}
@@ -806,22 +987,45 @@ class ThreadService:
             and not _is_compaction_checkpoint(message)
             and not self._is_turn_interrupt_marker(message)
         ]
+
+    def _canonical_pairs(self, session: Session) -> list[tuple[str, str]]:
+        return [
+            (message.role, message.content)
+            for message in self._transcript_timeline(session)
+            if message.role in {"user", "assistant"} and message.content
+        ]
+
+    @staticmethod
+    def _projected_pairs(
+        items: ItemRepository,
+        thread_id: str,
+    ) -> list[tuple[str, str]]:
+        return [
+            (
+                "user" if item.kind is ItemKind.USER_MESSAGE else "assistant",
+                str(item.payload.get("text", item.summary)),
+            )
+            for item in _visible_conversation_items(
+                items.conversation_for_thread(thread_id)
+            )
+        ]
+
+    def _reconcile_transcript(
+        self,
+        connection,
+        thread: Thread,
+        session: Session,
+    ) -> list[DomainEvent]:
+        """Append missing visible JSONL messages into the disposable timeline."""
+
+        timeline = self._transcript_timeline(session)
         canonical = [
             message
             for message in timeline
             if message.role in {"user", "assistant"} and message.content
         ]
         items = ItemRepository(connection)
-        projected_items = _visible_conversation_items(
-            items.conversation_for_thread(thread.id)
-        )
-        projected = [
-            (
-                "user" if item.kind is ItemKind.USER_MESSAGE else "assistant",
-                str(item.payload.get("text", item.summary)),
-            )
-            for item in projected_items
-        ]
+        projected = self._projected_pairs(items, thread.id)
         canonical_pairs = [(message.role, message.content) for message in canonical]
 
         if projected == canonical_pairs:
@@ -1207,7 +1411,13 @@ class ThreadService:
 
     def _drop_stale_projection(self, thread: Thread) -> None:
         with self.database.transaction() as connection:
+            # A worker that died mid-Turn leaves that Turn's leases held;
+            # they would block deleting the Turn (and stop startup).
+            RuntimeCoordinationRepository(connection).release_thread_leases(
+                thread.id, utc_now(), "thread removed"
+            )
             removed = ThreadRepository(connection).remove(thread.id)
+        self._projected_keys.pop(thread.id, None)
         if removed:
             logger.warning(
                 "Dropped stale thread projection %s (%r): its canonical Session "

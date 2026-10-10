@@ -10,6 +10,7 @@ from collections.abc import Awaitable, Callable
 from typing import Any
 
 import json_repair
+from loguru import logger
 
 from core.observability import log_llm_call
 from core.providers.base import (
@@ -35,6 +36,34 @@ from core.providers.timeouts import (
 from core.reasoning import ReasoningChannel
 
 _ALNUM = string.ascii_letters + string.digits
+
+# Anthropic stop reasons -> the finish reasons the agent runner understands.
+# ``pause_turn`` means a long server-side turn was paused and should simply be
+# continued, which is what the runner's "length" recovery does.
+_STOP_REASON_MAP = {
+    "tool_use": "tool_calls",
+    "end_turn": "stop",
+    "stop_sequence": "stop",
+    "max_tokens": "length",
+    "pause_turn": "length",
+    "refusal": "refusal",
+}
+_THINKING_TYPES = frozenset({"thinking", "redacted_thinking"})
+_REFUSAL_MESSAGE = (
+    "The model declined to respond to this request (stop reason: refusal). "
+    "Try rephrasing the request or starting a new conversation."
+)
+
+# Legacy extended-thinking budgets: effort -> (floor tokens, share of the
+# max_tokens left after the answer reserve). 1,024 is the API minimum.
+_THINKING_ANSWER_RESERVE = 4096
+_THINKING_BUDGETS: dict[str, tuple[int, float]] = {
+    "low": (1024, 0.0),
+    "medium": (4096, 0.0),
+    "high": (8192, 0.5),
+    "xhigh": (16384, 0.75),
+    "max": (32768, 1.0),
+}
 
 
 def _gen_tool_id() -> str:
@@ -226,6 +255,8 @@ class AnthropicProvider(LLMProvider):
                 continue
 
             if role == "tool":
+                if msg.get("images") and not self._accepts_images():
+                    msg = {k: v for k, v in msg.items() if k != "images"}
                 block = self._tool_result_block(msg)
                 if raw and raw[-1]["role"] == "user":
                     prev_c = raw[-1]["content"]
@@ -257,6 +288,10 @@ class AnthropicProvider(LLMProvider):
 
         return system, self._merge_consecutive(raw)
 
+    def _accepts_images(self) -> bool:
+        modalities = getattr(self, "input_modalities", None)
+        return modalities is None or "image" in modalities
+
     @staticmethod
     def _tool_result_block(msg: dict[str, Any]) -> dict[str, Any]:
         content = msg.get("content")
@@ -264,8 +299,28 @@ class AnthropicProvider(LLMProvider):
             "type": "tool_result",
             "tool_use_id": msg.get("tool_call_id", ""),
         }
-        if isinstance(content, (str, list)):
+        images = msg.get("images")
+        if isinstance(images, list) and images:
+            # The runner keeps tool text in ``content`` and inline images in
+            # ``images``; Anthropic accepts both inside one tool_result.
+            text = content if isinstance(content, str) else str(content or "")
+            content = [*([{"type": "text", "text": text}] if text else []), *images]
+        if isinstance(content, str):
             block["content"] = content
+        elif isinstance(content, list):
+            # Tool results may carry images (e.g. from MCP tools) in the same
+            # OpenAI ``image_url`` shape as user attachments.
+            converted: list[dict[str, Any]] = []
+            for item in content:
+                if isinstance(item, dict) and item.get("type") == "image_url":
+                    image = AnthropicProvider._convert_image_block(item)
+                    if image:
+                        converted.append(image)
+                elif isinstance(item, dict):
+                    converted.append(item)
+                else:
+                    converted.append({"type": "text", "text": str(item)})
+            block["content"] = converted
         else:
             block["content"] = str(content) if content else ""
         return block
@@ -285,7 +340,9 @@ class AnthropicProvider(LLMProvider):
             else msg.get("thinking_blocks")
         )
         for tb in thinking_blocks or []:
-            if isinstance(tb, dict) and tb.get("type") == "thinking":
+            if not isinstance(tb, dict):
+                continue
+            if tb.get("type") == "thinking":
                 blocks.append(
                     {
                         "type": "thinking",
@@ -293,6 +350,10 @@ class AnthropicProvider(LLMProvider):
                         "signature": tb.get("signature", ""),
                     }
                 )
+            elif tb.get("type") == "redacted_thinking" and tb.get("data"):
+                # Encrypted by the provider; it must go back byte-for-byte
+                # and in its original position among the thinking blocks.
+                blocks.append({"type": "redacted_thinking", "data": tb["data"]})
 
         if isinstance(content, str) and content:
             blocks.append({"type": "text", "text": content})
@@ -449,19 +510,32 @@ class AnthropicProvider(LLMProvider):
             system = list(system)
             system[-1] = {**system[-1], "cache_control": marker}
 
+        # The rolling breakpoint sits on the LAST message: the newest tool
+        # results are written to the cache once and read back (lookback of up
+        # to 20 blocks) by the next request. Marking the message before it
+        # billed those results at full price and then again as a cache write.
+        # Order of the prefix is tools → system → messages, so together with
+        # the system marker and at most two tool markers this stays within
+        # Anthropic's four-breakpoint limit.
         new_msgs = list(messages)
-        if len(new_msgs) >= 3:
-            m = new_msgs[-2]
+        if new_msgs:
+            m = new_msgs[-1]
             c = m.get("content")
-            if isinstance(c, str):
-                new_msgs[-2] = {
+            if isinstance(c, str) and c:
+                new_msgs[-1] = {
                     **m,
                     "content": [{"type": "text", "text": c, "cache_control": marker}],
                 }
             elif isinstance(c, list) and c:
                 nc = list(c)
-                nc[-1] = {**nc[-1], "cache_control": marker}
-                new_msgs[-2] = {**m, "content": nc}
+                last = nc[-1]
+                # Thinking blocks cannot carry cache_control.
+                if isinstance(last, dict) and last.get("type") not in {
+                    "thinking",
+                    "redacted_thinking",
+                }:
+                    nc[-1] = {**last, "cache_control": marker}
+                    new_msgs[-1] = {**m, "content": nc}
 
         new_tools = tools
         if tools:
@@ -509,6 +583,10 @@ class AnthropicProvider(LLMProvider):
             and self._uses_summarized_thinking(model_name, effort)
         )
         thinking_enabled = summarized_thinking or effort not in {None, "auto", "none"}
+        if not summarized_thinking and effort == "minimal":
+            # The legacy budget API cannot think for fewer than 1,024 tokens
+            # (which is "low"), so the level below it is thinking off.
+            thinking_enabled = False
 
         kwargs: dict[str, Any] = {
             "model": model_name,
@@ -526,10 +604,9 @@ class AnthropicProvider(LLMProvider):
             if effort not in {None, "auto", "adaptive"}:
                 kwargs["output_config"] = {"effort": effort}
         elif thinking_enabled:
-            budget_map = {"low": 1024, "medium": 4096, "high": max(8192, max_tokens)}
-            budget = budget_map.get(effort or "medium", 4096)
+            budget, request_max_tokens = self._thinking_budget(effort, max_tokens)
             kwargs["thinking"] = {"type": "enabled", "budget_tokens": budget}
-            kwargs["max_tokens"] = max(max_tokens, budget + 4096)
+            kwargs["max_tokens"] = request_max_tokens
             kwargs["temperature"] = 1.0
         else:
             kwargs["temperature"] = temperature
@@ -553,6 +630,26 @@ class AnthropicProvider(LLMProvider):
             kwargs["extra_headers"] = self.extra_headers
 
         return kwargs
+
+    @staticmethod
+    def _thinking_budget(effort: str | None, max_tokens: int) -> tuple[int, int]:
+        """Return ``(budget_tokens, max_tokens)`` for the legacy budget API.
+
+        Budgets rise strictly with effort (low < medium < high < xhigh < max)
+        for every ``max_tokens``. The larger levels claim a growing share of
+        the caller's ``max_tokens`` (normally the model's output cap) while
+        leaving room for the visible answer, so they never push the request
+        past that cap. Only when ``max_tokens`` is too small for a level's
+        floor is it raised to ``budget + reserve``; the budget always stays
+        strictly below the request's ``max_tokens`` as the API requires.
+        """
+
+        floor, share = _THINKING_BUDGETS.get(
+            effort or "medium", _THINKING_BUDGETS["medium"]
+        )
+        available = max(0, max_tokens - _THINKING_ANSWER_RESERVE)
+        budget = max(floor, int(available * share))
+        return budget, max(max_tokens, budget + _THINKING_ANSWER_RESERVE)
 
     @staticmethod
     def _uses_summarized_thinking(model_name: str, effort: str | None) -> bool:
@@ -599,15 +696,17 @@ class AnthropicProvider(LLMProvider):
                         "signature": getattr(block, "signature", ""),
                     }
                 )
+            elif block.type == "redacted_thinking":
+                data = getattr(block, "data", None)
+                if isinstance(data, str) and data:
+                    thinking_blocks.append({"type": "redacted_thinking", "data": data})
 
-        stop_map = {
-            "tool_use": "tool_calls",
-            "end_turn": "stop",
-            "max_tokens": "length",
-        }
-        finish_reason = stop_map.get(
-            response.stop_reason or "", response.stop_reason or "stop"
-        )
+        stop_reason = response.stop_reason or ""
+        finish_reason = _STOP_REASON_MAP.get(stop_reason, stop_reason or "stop")
+        if stop_reason == "refusal" and not "".join(content_parts).strip():
+            # Surface the refusal as the visible answer rather than an empty
+            # completion the runner would keep retrying.
+            content_parts = [_REFUSAL_MESSAGE]
 
         usage: dict[str, int] = {}
         if response.usage:
@@ -640,7 +739,8 @@ class AnthropicProvider(LLMProvider):
                 "\n\n".join(
                     block["thinking"]
                     for block in thinking_blocks
-                    if isinstance(block.get("thinking"), str)
+                    if block.get("type") == "thinking"
+                    and isinstance(block.get("thinking"), str)
                     and block["thinking"].strip()
                 )
                 or None
@@ -685,7 +785,18 @@ class AnthropicProvider(LLMProvider):
                 tool_choice,
             )
 
-            response = await self._client.messages.create(**kwargs)
+            try:
+                response = await self._client.messages.create(**kwargs)
+            except Exception as exc:
+                if not self._thinking_replay_rejected(exc, kwargs):
+                    raise
+                logger.warning(
+                    "Anthropic rejected replayed thinking blocks; retrying once "
+                    "without them"
+                )
+                response = await self._client.messages.create(
+                    **self._without_thinking_history(kwargs)
+                )
             result = self._parse_response(
                 response,
                 expose_reasoning_summary=summarized_thinking,
@@ -735,26 +846,45 @@ class AnthropicProvider(LLMProvider):
                 tool_choice,
             )
 
-            async with self._client.messages.stream(**kwargs) as stream:
-                async for event in iter_with_stream_idle_timeout(
-                    stream, timeout_s=idle_timeout_s
-                ):
-                    text = _stream_text_delta(event)
-                    if text and on_content_delta:
-                        await on_content_delta(text)
-                    reasoning = _stream_reasoning_delta(event)
-                    if reasoning and on_reasoning_delta:
-                        await on_reasoning_delta(
-                            reasoning,
-                            (
-                                ReasoningChannel.SUMMARY
-                                if summarized_thinking
-                                else ReasoningChannel.PROVIDER_TRACE
-                            ),
-                        )
-                response = await wait_for_stream_activity(
-                    stream.get_final_message(), timeout_s=idle_timeout_s
+            emitted = False
+
+            async def consume(request: dict[str, Any]) -> Any:
+                nonlocal emitted
+                async with self._client.messages.stream(**request) as stream:
+                    async for event in iter_with_stream_idle_timeout(
+                        stream, timeout_s=idle_timeout_s
+                    ):
+                        text = _stream_text_delta(event)
+                        if text and on_content_delta:
+                            emitted = True
+                            await on_content_delta(text)
+                        reasoning = _stream_reasoning_delta(event)
+                        if reasoning and on_reasoning_delta:
+                            emitted = True
+                            await on_reasoning_delta(
+                                reasoning,
+                                (
+                                    ReasoningChannel.SUMMARY
+                                    if summarized_thinking
+                                    else ReasoningChannel.PROVIDER_TRACE
+                                ),
+                            )
+                    return await wait_for_stream_activity(
+                        stream.get_final_message(), timeout_s=idle_timeout_s
+                    )
+
+            try:
+                response = await consume(kwargs)
+            except Exception as exc:
+                # Only before anything reached the caller: a retry must never
+                # duplicate streamed text.
+                if emitted or not self._thinking_replay_rejected(exc, kwargs):
+                    raise
+                logger.warning(
+                    "Anthropic rejected replayed thinking blocks; retrying once "
+                    "without them"
                 )
+                response = await consume(self._without_thinking_history(kwargs))
             result = self._parse_response(
                 response,
                 expose_reasoning_summary=summarized_thinking,
@@ -786,6 +916,73 @@ class AnthropicProvider(LLMProvider):
 
     def get_default_model(self) -> str:
         return self.default_model
+
+    # ------------------------------------------------------------------
+    # Recovery from rejected thinking replay
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _has_thinking_history(messages: Any) -> bool:
+        for message in messages or ():
+            content = message.get("content") if isinstance(message, dict) else None
+            if message.get("role") == "assistant" and isinstance(content, list):
+                if any(
+                    isinstance(block, dict) and block.get("type") in _THINKING_TYPES
+                    for block in content
+                ):
+                    return True
+        return False
+
+    @classmethod
+    def _thinking_replay_rejected(cls, exc: Exception, kwargs: dict[str, Any]) -> bool:
+        """True for an HTTP 400 that blames a replayed thinking block.
+
+        Signed thinking blocks can become unusable (for example after a model
+        or credential switch); the API then rejects the whole request. Only
+        requests that actually carry thinking history qualify.
+        """
+
+        status = getattr(exc, "status_code", None)
+        if status is None:
+            status = getattr(getattr(exc, "response", None), "status_code", None)
+        if status != 400 or not cls._has_thinking_history(kwargs.get("messages")):
+            return False
+        text = " ".join(
+            str(part)
+            for part in (exc, getattr(exc, "message", None), getattr(exc, "body", None))
+            if part
+        ).lower()
+        return "thinking" in text and ("block" in text or "signature" in text)
+
+    @staticmethod
+    def _without_thinking_history(kwargs: dict[str, Any]) -> dict[str, Any]:
+        """Copy ``kwargs`` with thinking blocks stripped and thinking disabled.
+
+        Thinking stays off for this one request: with it on, the API requires
+        the latest assistant tool-use turn to start with a thinking block,
+        which is exactly what was just removed.
+        """
+
+        messages: list[dict[str, Any]] = []
+        for message in kwargs.get("messages") or ():
+            content = message.get("content")
+            if message.get("role") == "assistant" and isinstance(content, list):
+                kept = [
+                    block
+                    for block in content
+                    if not (
+                        isinstance(block, dict) and block.get("type") in _THINKING_TYPES
+                    )
+                ]
+                if len(kept) != len(content):
+                    message = {
+                        **message,
+                        "content": kept or [{"type": "text", "text": "(no content)"}],
+                    }
+            messages.append(message)
+        retry = {**kwargs, "messages": messages}
+        retry.pop("thinking", None)
+        return retry
 
     def _emit_observability(
         self,

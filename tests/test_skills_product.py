@@ -687,14 +687,26 @@ def test_bundled_core_skills_load_with_resources_and_fixed_provenance(
     runtime = SkillRuntime(workspace, include_user=False)
     catalog = runtime.catalog()
     expected = {
+        "algorithmic-art",
+        "brand-guidelines",
+        "canvas-design",
+        "claude-api",
+        "doc-coauthoring",
+        "document-design",
         "frontend-design",
         "genoffice",
+        "internal-comms",
         "mcp-builder",
+        "office-docx",
+        "office-pdf",
+        "office-pptx",
+        "office-xlsx",
         "review-agent",
         "security-best-practices",
         "security-ownership-map",
         "security-threat-model",
         "skill-creator",
+        "web-artifacts-builder",
         "webapp-testing",
     }
 

@@ -1,3 +1,5 @@
+import { ProviderKeyNotice } from "../execution/ProviderKeyNotice";
+import type { TurnSendOptions } from "../../app/interactiveTurnRouter";
 import {
   ArrowUp,
   Atom,
@@ -12,7 +14,6 @@ import {
   PenLine,
   Plug,
   Plus,
-  Telescope,
   X,
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
@@ -20,9 +21,7 @@ import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react"
 import type { Project, SettingsSnapshot } from "../../generated/app-server";
 import type { ClientRuntime, PendingFile } from "../../rpc/contracts";
 import {
-  DEEP_EFFORTS,
   executionTarget,
-  withDeepResearch,
   withSearch,
 } from "../execution/promptModes";
 import composerStyles from "../execution/Composer.module.css";
@@ -52,6 +51,7 @@ interface HomeViewProps {
     prompt: string,
     model: ModelSelection | null,
     files: PendingFile[],
+    options?: TurnSendOptions,
   ): void;
   onManageProviders?: () => void;
   onOpenSettings?: (section: string) => void;
@@ -102,22 +102,10 @@ export function HomeView({
   const [files, setFiles] = useState<PendingFile[]>([]);
   const [fileError, setFileError] = useState<string | null>(null);
   const [searchOn, setSearchOn] = useState(false);
-  const [researchOn, setResearchOn] = useState(false);
+  // DeepThink: the multi-step pipeline (plan, search, check, summarize).
+  const [deepThinkOn, setDeepThinkOn] = useState(false);
   const defaults = executionTarget(null, settings);
-  const deepThinkOn = DEEP_EFFORTS.has(
-    (model?.reasoningEffort ?? defaults.effort ?? "").toLocaleLowerCase(),
-  );
-  const toggleDeepThink = () => {
-    const connectionId = model?.connectionId ?? defaults.connection;
-    const modelId = model?.model ?? defaults.model;
-    if (!connectionId || !modelId) return;
-    setModel({
-      connectionId,
-      model: modelId,
-      reasoningEffort: deepThinkOn ? "auto" : "high",
-      contextWindow: model?.contextWindow ?? null,
-    });
-  };
+  const toggleDeepThink = () => setDeepThinkOn((on) => !on);
 
   const addFiles = async () => {
     setFileError(null);
@@ -134,11 +122,14 @@ export function HomeView({
 
   const start = () => {
     if (!canStart) return;
-    const text = withDeepResearch(
-      withSearch(prompt.trim(), searchOn && !researchOn),
-      researchOn,
+    const text = withSearch(prompt.trim(), searchOn && !deepThinkOn);
+    onStart(
+      target?.id ?? null,
+      text,
+      model,
+      files,
+      deepThinkOn ? { mode: "deepthink" } : {},
     );
-    onStart(target?.id ?? null, text, model, files);
     setPrompt("");
     setFiles([]);
   };
@@ -209,6 +200,12 @@ export function HomeView({
             connectionId={model?.connectionId ?? defaults.connection ?? null}
           />
         </div>
+        <ProviderKeyNotice
+          runtime={runtime}
+          projectId={projectId || null}
+          connectionId={model?.connectionId ?? defaults.connection ?? null}
+          onOpenSettings={onOpenSettings}
+        />
         <div className={styles.box}>
           {files.length ? (
             <div className={styles.files} aria-label="Files to attach">
@@ -261,8 +258,8 @@ export function HomeView({
                 className={composerStyles.toggle}
                 aria-pressed={deepThinkOn}
                 onClick={toggleDeepThink}
-                disabled={busy || !(model?.model ?? defaults.model)}
-                title="Think longer before answering (high reasoning effort)"
+                disabled={busy}
+                title="Plan, search the web, check and summarize before answering"
               >
                 <Atom size={14} />
                 DeepThink
@@ -276,16 +273,6 @@ export function HomeView({
               >
                 <Globe size={14} />
                 Search
-              </button>
-              <button
-                type="button"
-                className={composerStyles.toggle}
-                aria-pressed={researchOn}
-                onClick={() => setResearchOn((on) => !on)}
-                title="Research the web in depth and write a cited report"
-              >
-                <Telescope size={14} />
-                Deep research
               </button>
             </div>
             <div className={styles.boxTools}>

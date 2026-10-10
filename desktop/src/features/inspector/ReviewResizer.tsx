@@ -12,6 +12,16 @@ function clamp(width: number, sidebarWidth: number): number {
   return Math.round(Math.min(max, Math.max(MIN_REVIEW_WIDTH, width)));
 }
 
+const WIDTH_PROPERTY = "--review-width";
+
+/** The nearest ancestor that sets the panel width inline (the app shell). */
+function widthHost(handle: HTMLElement): HTMLElement | null {
+  for (let element = handle.parentElement; element; element = element.parentElement) {
+    if (element.style.getPropertyValue(WIDTH_PROPERTY)) return element;
+  }
+  return null;
+}
+
 interface ReviewResizerProps {
   width: number;
   sidebarWidth: number;
@@ -28,12 +38,27 @@ export function ReviewResizer({ width, sidebarWidth, onResize }: ReviewResizerPr
   const start = (event: ReactPointerEvent<HTMLDivElement>) => {
     event.preventDefault();
     setDragging(true);
-    const move = (moveEvent: PointerEvent) =>
-      onResize(clamp(window.innerWidth - moveEvent.clientX, sidebarWidth));
+    // While dragging, paint the width straight onto the shell's custom
+    // property instead of re-rendering the app on every pointermove; the
+    // final width is committed to state (and storage) once, on release.
+    const handle = event.currentTarget;
+    const host = widthHost(handle);
+    let pending: number | null = null;
+    const move = (moveEvent: PointerEvent) => {
+      const next = clamp(window.innerWidth - moveEvent.clientX, sidebarWidth);
+      if (!host) {
+        onResize(next);
+        return;
+      }
+      pending = next;
+      host.style.setProperty(WIDTH_PROPERTY, `${next}px`);
+      handle.setAttribute("aria-valuenow", String(next));
+    };
     const stop = () => {
       setDragging(false);
       window.removeEventListener("pointermove", move);
       window.removeEventListener("pointerup", stop);
+      if (pending !== null) onResize(pending);
     };
     window.addEventListener("pointermove", move);
     window.addEventListener("pointerup", stop);

@@ -42,8 +42,30 @@ def truncate_text(text: str, max_chars: int) -> str:
     return text[:max_chars] + "\n... (truncated)"
 
 
+def truncate_head_tail(text: str, max_chars: int) -> str:
+    """Keep the head and tail of ``text`` within about ``max_chars``.
+
+    The head usually carries a result's shape and the tail its conclusion
+    (exit status, totals, the last error), so both survive; the middle is
+    replaced by a marker naming how much was cut.
+    """
+    if max_chars <= 0 or len(text) <= max_chars:
+        return text
+    head = (max_chars * 3) // 4
+    tail = max_chars - head
+    omitted = len(text) - head - tail
+    return (
+        text[:head]
+        + f"\n... [{omitted} chars omitted] ...\n"
+        + (text[-tail:] if tail else "")
+    )
+
+
 _UNSAFE_CHARS = re.compile(r'[<>:"/\\|?*]')
+# Floor and ceiling of the inline preview kept when an oversized result is
+# spilled to a file; within them it scales with the caller's cap (a third).
 _TOOL_RESULT_PREVIEW_CHARS = 1200
+_TOOL_RESULT_PREVIEW_MAX_CHARS = 4000
 _TOOL_RESULTS_DIR = ".deepcode/tool-results"
 # A spilled result is referenced by the session history that produced it, so
 # its bucket has to outlive anything a user might resume. Deleting by RANK
@@ -116,7 +138,10 @@ def _render_tool_result_reference(
         f"Preview:\n{preview}"
     )
     if truncated_preview:
-        result += "\n...\n(Read the saved file if you need the full output.)"
+        result += (
+            "\n...\n(Preview shows the head and tail. Read the saved file with "
+            "offset/limit, or grep it, if you need the rest.)"
+        )
     return result
 
 
@@ -196,12 +221,16 @@ def maybe_persist_tool_result(
         else:
             _write_text_atomic(path, text_payload)
 
-    preview = text_payload[:_TOOL_RESULT_PREVIEW_CHARS]
+    preview_chars = min(
+        _TOOL_RESULT_PREVIEW_MAX_CHARS,
+        max(_TOOL_RESULT_PREVIEW_CHARS, max_chars // 3),
+    )
+    preview = truncate_head_tail(text_payload, preview_chars)
     return _render_tool_result_reference(
         path,
         original_size=len(text_payload),
         preview=preview,
-        truncated_preview=len(text_payload) > _TOOL_RESULT_PREVIEW_CHARS,
+        truncated_preview=len(text_payload) > preview_chars,
     )
 
 

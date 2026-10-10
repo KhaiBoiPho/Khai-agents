@@ -99,7 +99,7 @@ _PATCH_PATH_PREFIXES = (
 
 # Tool names that read state, or are otherwise side-effect-free w.r.t. the
 # workspace and security posture; safe to auto-allow in default mode and never
-# blocked by plan mode. Bare names + common MCP suffixes are matched.
+# blocked by plan mode. Exact names only; MCP tools never match by suffix.
 _READ_ONLY_TOOLS = frozenset(
     {
         "read_file",
@@ -195,17 +195,15 @@ class PermissionEngine:
     bypass_origin_approval: bool = False
 
     def is_read_only(self, tool_name: str) -> bool:
-        known = _READ_ONLY_TOOLS | self.read_only_tools
-        if tool_name in known:
-            return True
-        # ``mcp_<server>_<tool>`` names embed both a server and a tool name,
-        # each of which may contain underscores/dashes, so a single "bare
-        # name" split is ambiguous. Match by suffix instead (the same way the
-        # alias layer resolves bare names): the wrapped name ends with the
-        # known read-only tool name.
         if tool_name.startswith("mcp_"):
-            return any(tool_name.endswith(f"_{name}") for name in known)
-        return False
+            # A remote server chooses its own tool names, so a name such as
+            # ``mcp_x_rm_grep`` says nothing about what the tool does. MCP
+            # tools are read-only only when that exact name was declared so:
+            # by the server's ``readOnlyHint`` annotation (merged in from the
+            # tool registry, or passed as ``read_only`` to ``evaluate_tool``)
+            # or by explicit configuration. Name suffixes are never trusted.
+            return tool_name in self.read_only_tools
+        return tool_name in _READ_ONLY_TOOLS or tool_name in self.read_only_tools
 
     def _candidate_paths(self, arguments: Mapping[str, object]) -> list[str]:
         paths: list[str] = []

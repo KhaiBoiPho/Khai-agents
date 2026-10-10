@@ -78,12 +78,15 @@ class Backend(Protocol):
     async def alive(self, handle: object) -> bool: ...
 
 
-# Shared with every worker: which connection and model to start with.
+# Shared with every worker: which connection and model to start with, and
+# the server's spend limits (a user's own config cannot loosen them).
 SHARED_VARIABLES = (
     "DEEPCODE_LOG_LEVEL",
     "KHAI_DEFAULT_CONNECTION",
     "KHAI_DEFAULT_MODEL",
     "KHAI_RAG_EMBEDDING_MODEL",
+    "KHAI_MAX_TURN_COST_USD",
+    "KHAI_MAX_SESSION_COST_USD",
 )
 # The server's provider keys, given only to administrators' workers.
 ADMIN_VARIABLES = (
@@ -236,7 +239,7 @@ class WorkerManager:
                 self.settings.database_url, role, password
             ),
             "KHAI_DATABASE_SCHEMA": self.settings.database_schema,
-            "KHAI_DATABASE_POOL_MAX": "6",
+            "KHAI_DATABASE_POOL_MAX": "4",
             "KHAI_ALLOW_COMMANDS": "1" if allow_commands else "0",
         }
         if self._qdrant is not None:
@@ -245,6 +248,8 @@ class WorkerManager:
         url, handle = await self._backend.start(launch)
         worker = Worker(user_id=user_id, url=url, token=token, handle=handle)
         deadline = time.monotonic() + self.settings.start_timeout
+        delay = 0.1
+        next_alive_check = time.monotonic() + 2
         async with aiohttp.ClientSession() as http:
             while True:
                 try:
@@ -255,10 +260,18 @@ class WorkerManager:
                             return worker
                 except (aiohttp.ClientError, TimeoutError):
                     pass
-                if time.monotonic() > deadline or not await self._backend.alive(handle):
+                now = time.monotonic()
+                dead = False
+                if now >= next_alive_check:
+                    # Asking Docker costs a round trip; do it every 2 seconds.
+                    next_alive_check = now + 2
+                    dead = not await self._backend.alive(handle)
+                if now > deadline or dead:
                     await self._backend.stop(handle)
                     raise WorkerUnavailable("Your workspace did not start in time.")
-                await asyncio.sleep(0.5)
+                # Poll quickly while a start is likely imminent, then back off.
+                await asyncio.sleep(delay)
+                delay = min(delay * 1.5, 0.5)
 
     # -- connection accounting and idle shutdown ---------------------------
 
@@ -287,17 +300,26 @@ class WorkerManager:
                 if worker.connections == 0
                 and now - worker.last_used > self.settings.idle_seconds
             ]
-            dead = []
-            for user_id, worker in self._workers.items():
-                if user_id not in idle and not await self._backend.alive(worker.handle):
-                    dead.append(user_id)
+            running = [
+                (user_id, worker)
+                for user_id, worker in self._workers.items()
+                if user_id not in idle
+            ]
+        # Ask the backend outside the lock: acquire() runs on every request.
+        dead = [
+            user_id
+            for user_id, worker in running
+            if not await self._backend.alive(worker.handle)
+        ]
         for user_id in idle:
             logger.info("stopping idle worker %s", user_id)
             await self.stop(user_id)
         for user_id in dead:
             logger.warning("worker %s exited; it starts again on next use", user_id)
             async with self._lock:
-                self._workers.pop(user_id, None)
+                # Unless it was replaced meanwhile.
+                if self._workers.get(user_id) is dict(running).get(user_id):
+                    self._workers.pop(user_id, None)
 
 
 # ---------------------------------------------------------------------------
@@ -337,19 +359,21 @@ class ProcessBackend:
             "KHAI_WORKSPACE_ROOT": str(workspace),
             "KHAI_BIND_HOST": "127.0.0.1",
         }
-        process = await asyncio.create_subprocess_exec(
-            self._python,
-            "-m",
-            "app_server.service",
-            "--port",
-            str(port),
-            "--database",
-            str(home / "state" / "khai"),
-            env=environment,
-            stdin=asyncio.subprocess.DEVNULL,
-            stdout=asyncio.subprocess.DEVNULL,
-            stderr=asyncio.subprocess.DEVNULL,
-        )
+        # The worker's output, for debugging a worker that will not start.
+        with open(launch.data_directory / "worker.log", "ab") as log:
+            process = await asyncio.create_subprocess_exec(
+                self._python,
+                "-m",
+                "app_server.service",
+                "--port",
+                str(port),
+                "--database",
+                str(home / "state" / "khai"),
+                env=environment,
+                stdin=asyncio.subprocess.DEVNULL,
+                stdout=log,
+                stderr=log,
+            )
         return f"http://127.0.0.1:{port}", process
 
     async def stop(self, handle: object) -> None:
@@ -401,13 +425,19 @@ class DockerBackend:
 
     def __init__(self, settings: DockerSettings) -> None:
         self.settings = settings
+        self._docker: aiohttp.ClientSession | None = None
 
-    def _session(self) -> aiohttp.ClientSession:
-        return aiohttp.ClientSession(
-            connector=aiohttp.UnixConnector(path=self.settings.socket),
-            base_url="http://docker",
-            timeout=aiohttp.ClientTimeout(total=60),
-        )
+    @contextlib.asynccontextmanager
+    async def _session(self):
+        """The one Docker Engine API client, kept open across calls."""
+
+        if self._docker is None or self._docker.closed:
+            self._docker = aiohttp.ClientSession(
+                connector=aiohttp.UnixConnector(path=self.settings.socket),
+                base_url="http://docker",
+                timeout=aiohttp.ClientTimeout(total=60),
+            )
+        yield self._docker
 
     def _name(self, user_id: str) -> str:
         return f"khai-worker-{UUID(user_id).hex}"
@@ -452,6 +482,9 @@ class DockerBackend:
                 "CapDrop": ["ALL"],
                 "SecurityOpt": ["no-new-privileges:true"],
                 "ReadonlyRootfs": True,
+                # A tiny init as PID 1 reaps orphaned children (e.g. a
+                # LibreOffice conversion's helpers) and forwards signals.
+                "Init": True,
                 "Tmpfs": {"/tmp": "rw,nosuid,nodev,size=512m"},
                 "RestartPolicy": {"Name": "no"},
                 "AutoRemove": True,

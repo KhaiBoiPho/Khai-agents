@@ -1,6 +1,6 @@
 ---
 name: genoffice
-description: Create, convert, read, edit and render real Office documents with the built-in GenOffice MCP tools (mcp__genoffice__*). Use whenever the user asks for a slide deck or presentation (pptx), a spreadsheet or workbook (xlsx), a report, memo, letter or Word document (docx), a PDF, a Markdown or HTML document built from a template, a format conversion between pdf, docx, xlsx, pptx, md, html and csv, filling {{placeholders}} in a template, or a change to an existing Office file. Plans the document, builds it with the genoffice tools inside the session workspace, renders and checks the pages, then presents the file.
+description: Tool reference for Khai's built-in GenOffice document engine (mcp__genoffice__* tools) — which tool creates, converts, reads, edits, checks or renders docx, xlsx, pptx, pdf, md and html, its JSON envelope, paths and error handling. Load whenever mcp__genoffice__* tools will be called, together with the task skill (office-docx, office-pptx, office-xlsx, office-pdf) and document-design for the look; it also covers template {{placeholder}} merges and format conversions.
 license: Apache-2.0 (adapted from GenOffice skills/genoffice; see LICENSE.txt and NOTICE)
 metadata:
   upstream: https://github.com/genspark-ai/genoffice/tree/db347087628281d49e53d009183d2fb506c3a444/skills/genoffice
@@ -12,8 +12,9 @@ metadata:
 Khai runs GenOffice's document engine as the built-in MCP server `genoffice`.
 Every GenOffice command is a tool named `mcp__genoffice__<tool>`; you never need
 a shell or the GenOffice app window. If no `mcp__genoffice__*` tool is
-available, tell the user the GenOffice engine is not installed (the operator
-runs `scripts/setup-genoffice.sh`) instead of hand-writing Office XML.
+available, use the fallback path of the matching office-* skill (Python
+libraries) and mention that the GenOffice engine is not installed (the
+operator runs `scripts/setup-genoffice.sh`); never hand-write Office XML.
 
 ## Ground rules
 
@@ -69,6 +70,10 @@ say the visual check was skipped.
 
 ## Workflow for "make me a report / deck / sheet"
 
+For how the file should look (palette, fonts, slide layouts, table and sheet
+styling), also follow the `document-design` skill: pick its style first and
+apply it in every step below.
+
 1. **Plan** (briefly, in your reply or a todo list): audience, the sections /
    slides / sheets, the real figures and where they come from, the output
    path inside the workspace. Read the user's source files first (see below).
@@ -86,7 +91,9 @@ say the visual check was skipped.
      `deck_page` per page until its audit, outline and off-palette findings
      are empty, then `deck_build`.
    - PDF → build the docx/pptx/md first, then `create_pdf` or `convert`.
-3. **Check, then look** — before saying "done", for every file:
+3. **Check, then look** — before saying "done", for every file (the Look
+   column only if render is available; on `app_unavailable` continue without
+   it and say the visual check was skipped):
 
    | Artifact | Check | Look |
    | --- | --- | --- |

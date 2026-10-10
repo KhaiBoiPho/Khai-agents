@@ -22,6 +22,30 @@ FINISH_REASON_MAP = {
 }
 
 
+
+def _responses_cached_tokens(usage: Any) -> int:
+    """``usage.input_tokens_details.cached_tokens`` (dict or SDK object), else 0.
+
+    Prompt-cache reads are what make a stable prefix cheaper; recording them
+    lets the usage ledger show the saving.
+    """
+    details = (
+        usage.get("input_tokens_details")
+        if isinstance(usage, dict)
+        else getattr(usage, "input_tokens_details", None)
+    )
+    if details is None:
+        return 0
+    value = (
+        details.get("cached_tokens")
+        if isinstance(details, dict)
+        else getattr(details, "cached_tokens", None)
+    )
+    try:
+        return max(0, int(value or 0))
+    except (TypeError, ValueError):
+        return 0
+
 def map_finish_reason(status: str | None) -> str:
     """Map a Responses API status string to a Chat-Completions-style finish_reason."""
     return FINISH_REASON_MAP.get(status or "completed", "stop")
@@ -211,6 +235,9 @@ def parse_response_output(response: Any) -> LLMResponse:
             "completion_tokens": int(usage_raw.get("output_tokens") or 0),
             "total_tokens": int(usage_raw.get("total_tokens") or 0),
         }
+        cached = _responses_cached_tokens(usage_raw)
+        if cached:
+            usage["cached_tokens"] = cached
 
     status = response.get("status")
     finish_reason = map_finish_reason(status)
@@ -334,6 +361,9 @@ async def consume_sdk_stream(
                         ),
                         "total_tokens": int(getattr(usage_obj, "total_tokens", 0) or 0),
                     }
+                    cached = _responses_cached_tokens(usage_obj)
+                    if cached:
+                        usage["cached_tokens"] = cached
                 for out_item in getattr(resp, "output", None) or []:
                     if getattr(out_item, "type", None) == "reasoning":
                         dump = getattr(out_item, "model_dump", None)

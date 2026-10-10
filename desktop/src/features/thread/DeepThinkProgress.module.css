@@ -1,0 +1,234 @@
+.root {
+  display: grid;
+  gap: 6px;
+  padding: 8px 10px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--surface-canvas);
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+}
+
+.root[data-status="running"] {
+  border-color: color-mix(in srgb, var(--signal) 30%, var(--border-subtle));
+}
+
+.header {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 12px;
+}
+
+.title {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-primary);
+  font-weight: var(--weight-medium);
+}
+
+.title svg {
+  color: var(--signal);
+}
+
+.chain {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.arrow {
+  display: inline-flex;
+  color: var(--text-tertiary);
+}
+
+.step {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--text-tertiary);
+  font: inherit;
+  font-size: var(--text-2xs);
+  cursor: pointer;
+}
+
+.step:disabled {
+  cursor: default;
+}
+
+.step:not(:disabled):hover,
+.step[aria-expanded="true"] {
+  background: var(--surface-hover);
+}
+
+.step[aria-expanded="true"] {
+  border-color: var(--border-subtle);
+}
+
+.step[data-status="completed"] {
+  color: var(--text-secondary);
+}
+
+.step[data-status="completed"] svg {
+  color: var(--success);
+}
+
+.step[data-status="running"] {
+  color: var(--signal);
+  font-weight: var(--weight-medium);
+}
+
+.step[data-status="failed"],
+.step[data-status="stopped"] {
+  color: var(--danger);
+}
+
+.step[data-status="skipped"],
+.step[data-status="pending"] {
+  opacity: 0.75;
+}
+
+.headline,
+/* Caveats (e.g. no web search) as one quiet line, never in the answer. */
+.note {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin: 2px 0 0;
+  color: var(--text-tertiary);
+  font-size: var(--text-2xs);
+  line-height: 1.45;
+}
+
+.note > svg {
+  flex-shrink: 0;
+  margin-top: 2px;
+  opacity: 0.8;
+}
+
+.details {
+  display: grid;
+  gap: 6px;
+  padding-top: 6px;
+  border-top: 1px solid var(--border-subtle);
+  animation: reveal 180ms ease backwards;
+}
+
+.detailLine {
+  margin: 0;
+  color: var(--text-tertiary);
+  font-size: var(--text-2xs);
+}
+
+.detailLine span[data-status="failed"],
+.detailLine span[data-status="stopped"] {
+  color: var(--danger);
+}
+
+.items {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding-left: 18px;
+  color: var(--text-secondary);
+}
+
+.queries {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.queries li {
+  padding: 1px 8px;
+  border-radius: var(--radius-pill);
+  background: var(--surface-hover);
+  color: var(--text-secondary);
+  font-size: var(--text-2xs);
+}
+
+.sources {
+  display: grid;
+  gap: 1px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.sources li {
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr);
+  align-items: center;
+}
+
+.sourceIndex {
+  color: var(--text-tertiary);
+  font-size: var(--text-2xs);
+  font-variant-numeric: tabular-nums;
+}
+
+.sources a {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 4px;
+  border-radius: var(--radius-sm, 4px);
+  color: var(--text-secondary);
+  text-decoration: none;
+}
+
+.sources a:hover {
+  background: var(--surface-hover);
+  color: var(--text-primary);
+}
+
+.sourceTitle {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sources small {
+  flex: 0 0 auto;
+  color: var(--text-tertiary);
+}
+
+.spinning {
+  animation: spin 900ms linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes reveal {
+  from {
+    opacity: 0;
+    transform: translateY(-3px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .spinning,
+  .details {
+    animation: none;
+  }
+}

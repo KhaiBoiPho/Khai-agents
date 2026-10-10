@@ -30,6 +30,8 @@ anyio==4.14.2
     #   anthropic
     #   google-genai
     #   httpx
+    #   httpx2
+    #   langsmith
     #   mcp
     #   openai
     #   sse-starlette
@@ -97,6 +99,7 @@ distro==1.9.0
     #   -c scripts/ci/../../desktop/sidecar-requirements.lock
     #   anthropic
     #   google-genai
+    #   langsmith
     #   openai
 docstring-parser==0.18.0
     # via
@@ -104,6 +107,10 @@ docstring-parser==0.18.0
     #   anthropic
 docutils==0.23
     # via readme-renderer
+et-xmlfile==2.0.0
+    # via
+    #   -c scripts/ci/../../desktop/sidecar-requirements.lock
+    #   openpyxl
 filelock==3.32.6
     # via
     #   python-discovery
@@ -125,23 +132,38 @@ h11==0.16.0
     # via
     #   -c scripts/ci/../../desktop/sidecar-requirements.lock
     #   httpcore
+    #   httpcore2
     #   uvicorn
 httpcore==1.0.9
     # via
     #   -c scripts/ci/../../desktop/sidecar-requirements.lock
     #   httpx
+httpcore2==2.13.1 ; sys_platform != 'emscripten'
+    # via
+    #   -c scripts/ci/../../desktop/sidecar-requirements.lock
+    #   httpx2
 httpx==0.28.1
     # via
     #   -c scripts/ci/../../desktop/sidecar-requirements.lock
     #   anthropic
     #   deepcode-hku
     #   google-genai
+    #   langchain-core
+    #   langgraph-sdk
     #   mcp
     #   openai
 httpx-sse==0.4.3
     # via
     #   -c scripts/ci/../../desktop/sidecar-requirements.lock
     #   mcp
+httpx2==2.13.1
+    # via
+    #   -c scripts/ci/../../desktop/sidecar-requirements.lock
+    #   langsmith
+httpx2-jsfetch==1.0 ; sys_platform == 'emscripten'
+    # via
+    #   -c scripts/ci/../../desktop/sidecar-requirements.lock
+    #   httpx2
 id==1.6.1
     # via twine
 identify==2.6.19
@@ -151,6 +173,7 @@ idna==3.18
     #   -c scripts/ci/../../desktop/sidecar-requirements.lock
     #   anyio
     #   httpx
+    #   httpx2
     #   requests
     #   yarl
 inflection==0.5.1
@@ -176,6 +199,14 @@ json-repair==0.61.4
     # via
     #   -c scripts/ci/../../desktop/sidecar-requirements.lock
     #   deepcode-hku
+jsonpatch==1.34
+    # via
+    #   -c scripts/ci/../../desktop/sidecar-requirements.lock
+    #   langchain-core
+jsonpointer==3.2.0
+    # via
+    #   -c scripts/ci/../../desktop/sidecar-requirements.lock
+    #   jsonpatch
 jsonschema==4.26.0
     # via
     #   -c scripts/ci/../../desktop/sidecar-requirements.lock
@@ -187,10 +218,48 @@ jsonschema-specifications==2025.9.1
     #   jsonschema
 keyring==25.7.0 ; platform_machine != 'ppc64le' and platform_machine != 's390x'
     # via twine
+langchain-core==1.6.9
+    # via
+    #   -c scripts/ci/../../desktop/sidecar-requirements.lock
+    #   langgraph
+    #   langgraph-checkpoint
+    #   langgraph-prebuilt
+    #   langgraph-sdk
+langchain-protocol==0.0.19
+    # via
+    #   -c scripts/ci/../../desktop/sidecar-requirements.lock
+    #   langchain-core
+    #   langgraph-sdk
+langgraph==1.2.14
+    # via
+    #   -c scripts/ci/../../desktop/sidecar-requirements.lock
+    #   deepcode-hku
+langgraph-checkpoint==4.2.0
+    # via
+    #   -c scripts/ci/../../desktop/sidecar-requirements.lock
+    #   langgraph
+    #   langgraph-prebuilt
+langgraph-prebuilt==1.1.0
+    # via
+    #   -c scripts/ci/../../desktop/sidecar-requirements.lock
+    #   langgraph
+langgraph-sdk==0.4.6
+    # via
+    #   -c scripts/ci/../../desktop/sidecar-requirements.lock
+    #   langgraph
+langsmith==0.14.7
+    # via
+    #   -c scripts/ci/../../desktop/sidecar-requirements.lock
+    #   langchain-core
 loguru==0.7.3
     # via
     #   -c scripts/ci/../../desktop/sidecar-requirements.lock
     #   deepcode-hku
+lxml==6.1.3
+    # via
+    #   -c scripts/ci/../../desktop/sidecar-requirements.lock
+    #   python-docx
+    #   python-pptx
 markdown-it-py==4.2.0
     # via rich
 mcp==1.29.0
@@ -223,10 +292,25 @@ openai==2.29.0
     #   deepcode-hku
 openapi==2.0.0
     # via deepcode-hku
+openpyxl==3.1.5
+    # via
+    #   -c scripts/ci/../../desktop/sidecar-requirements.lock
+    #   deepcode-hku
+orjson==3.13.0
+    # via
+    #   -c scripts/ci/../../desktop/sidecar-requirements.lock
+    #   langgraph-sdk
+    #   langsmith
+ormsgpack==1.12.2
+    # via
+    #   -c scripts/ci/../../desktop/sidecar-requirements.lock
+    #   langgraph-checkpoint
 packaging==26.2
     # via
     #   -c scripts/ci/../../desktop/sidecar-requirements.lock
     #   build
+    #   langchain-core
+    #   langsmith
     #   pytest
     #   twine
     #   wheel
@@ -235,7 +319,10 @@ paho-mqtt==2.1.0
 pathlib2==2.3.7.post1
     # via deepcode-hku
 pillow==12.3.0
-    # via reportlab
+    # via
+    #   -c scripts/ci/../../desktop/sidecar-requirements.lock
+    #   python-pptx
+    #   reportlab
 platformdirs==4.11.8
     # via virtualenv
 pluggy==1.6.0
@@ -270,6 +357,9 @@ pydantic==2.12.5
     #   -c scripts/ci/../../desktop/sidecar-requirements.lock
     #   anthropic
     #   google-genai
+    #   langchain-core
+    #   langgraph
+    #   langsmith
     #   mcp
     #   mcp-server-git
     #   openai
@@ -296,6 +386,10 @@ pypdf==6.16.1
     # via
     #   -c scripts/ci/../../desktop/sidecar-requirements.lock
     #   deepcode-hku
+pypdfium2==5.14.0
+    # via
+    #   -c scripts/ci/../../desktop/sidecar-requirements.lock
+    #   deepcode-hku
 pyproject-hooks==1.2.0
     # via build
 pytest==9.1.1
@@ -306,6 +400,10 @@ pytest-asyncio==1.4.0
     # via deepcode-hku
 python-discovery==1.6.0
     # via virtualenv
+python-docx==1.2.0
+    # via
+    #   -c scripts/ci/../../desktop/sidecar-requirements.lock
+    #   deepcode-hku
 python-dotenv==1.2.2
     # via
     #   -c scripts/ci/../../desktop/sidecar-requirements.lock
@@ -314,6 +412,10 @@ python-multipart==0.0.32
     # via
     #   -c scripts/ci/../../desktop/sidecar-requirements.lock
     #   mcp
+python-pptx==1.0.2
+    # via
+    #   -c scripts/ci/../../desktop/sidecar-requirements.lock
+    #   deepcode-hku
 pywin32==312 ; sys_platform == 'win32'
     # via
     #   -c scripts/ci/../../desktop/sidecar-requirements.lock
@@ -326,6 +428,7 @@ pyyaml==6.0.3
     # via
     #   -c scripts/ci/../../desktop/sidecar-requirements.lock
     #   deepcode-hku
+    #   langchain-core
     #   pre-commit
 readme-renderer==46.0
     # via twine
@@ -343,10 +446,14 @@ requests==2.34.2
     #   -c scripts/ci/../../desktop/sidecar-requirements.lock
     #   google-auth
     #   google-genai
+    #   langsmith
     #   requests-toolbelt
     #   twine
 requests-toolbelt==1.0.0
-    # via twine
+    # via
+    #   -c scripts/ci/../../desktop/sidecar-requirements.lock
+    #   langsmith
+    #   twine
 rfc3986==2.0.0
     # via twine
 rich==15.0.0
@@ -373,6 +480,7 @@ sniffio==1.3.1
     #   -c scripts/ci/../../desktop/sidecar-requirements.lock
     #   anthropic
     #   google-genai
+    #   langsmith
     #   openai
 sse-starlette==3.4.5
     # via
@@ -384,11 +492,19 @@ starlette==1.3.1
     #   mcp
     #   sse-starlette
 tenacity==9.1.4
-    # via google-genai
+    # via
+    #   -c scripts/ci/../../desktop/sidecar-requirements.lock
+    #   google-genai
+    #   langchain-core
 tqdm==4.68.4
     # via
     #   -c scripts/ci/../../desktop/sidecar-requirements.lock
     #   openai
+truststore==0.10.4 ; sys_platform != 'emscripten'
+    # via
+    #   -c scripts/ci/../../desktop/sidecar-requirements.lock
+    #   httpcore2
+    #   httpx2
 twine==7.0.0
     # via -r scripts/ci/requirements.in
 typing-extensions==4.16.0
@@ -399,6 +515,10 @@ typing-extensions==4.16.0
     #   anthropic
     #   anyio
     #   google-genai
+    #   httpx2
+    #   langchain-core
+    #   langchain-protocol
+    #   langsmith
     #   mcp
     #   openai
     #   psycopg
@@ -406,6 +526,8 @@ typing-extensions==4.16.0
     #   pydantic
     #   pydantic-core
     #   pytest-asyncio
+    #   python-docx
+    #   python-pptx
     #   referencing
     #   starlette
     #   typing-inspection
@@ -423,6 +545,11 @@ urllib3==2.7.0
     #   id
     #   requests
     #   twine
+uuid-utils==0.17.1
+    # via
+    #   -c scripts/ci/../../desktop/sidecar-requirements.lock
+    #   langchain-core
+    #   langsmith
 uvicorn==0.51.0 ; sys_platform != 'emscripten'
     # via
     #   -c scripts/ci/../../desktop/sidecar-requirements.lock
@@ -434,17 +561,34 @@ wcwidth==0.8.2
     #   -c scripts/ci/../../desktop/sidecar-requirements.lock
     #   prompt-toolkit
 websockets==16.1.1
-    # via google-genai
+    # via
+    #   -c scripts/ci/../../desktop/sidecar-requirements.lock
+    #   google-genai
+    #   langgraph-sdk
+    #   langsmith
 wheel==0.48.0
     # via -r scripts/ci/requirements.in
 win32-setctime==1.2.0 ; sys_platform == 'win32'
     # via
     #   -c scripts/ci/../../desktop/sidecar-requirements.lock
     #   loguru
+xlsxwriter==3.2.9
+    # via
+    #   -c scripts/ci/../../desktop/sidecar-requirements.lock
+    #   python-pptx
+xxhash==4.0.1
+    # via
+    #   -c scripts/ci/../../desktop/sidecar-requirements.lock
+    #   langgraph
+    #   langsmith
 yarl==1.24.2
     # via
     #   -c scripts/ci/../../desktop/sidecar-requirements.lock
     #   aiohttp
+zstandard==0.25.0
+    # via
+    #   -c scripts/ci/../../desktop/sidecar-requirements.lock
+    #   langsmith
 
 # The following packages were excluded from the output:
 # deepcode-hku

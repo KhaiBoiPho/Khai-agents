@@ -9,7 +9,7 @@ the services.
 from __future__ import annotations
 
 import threading
-from collections.abc import Iterable, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 
 from core.rag.chunking import Chunk
 from core.rag.hybrid import CANDIDATES, Candidate, keyword_overlap, rerank, tokenize
@@ -20,8 +20,11 @@ class MemoryStore:
     def __init__(self) -> None:
         self._lock = threading.RLock()
         self._documents: dict[str, DocumentRecord] = {}
-        # path -> [(ordinal, locator, heading, text, vector)]
-        self._chunks: dict[str, list[tuple[int, str, str, str, list[float]]]] = {}
+        # path -> [(ordinal, locator, heading, text, vector, context, visual)]
+        self._chunks: dict[str, list[tuple]] = {}
+        # (kind, key) -> value: the enrichment cache.
+        self.cache: dict[tuple[str, str], str] = {}
+        self.cache_reads = 0
         self.closed = False
 
     def close(self) -> None:
@@ -40,7 +43,15 @@ class MemoryStore:
         if len(chunks) != len(vectors):
             raise ValueError("one vector is required per chunk")
         rows = [
-            (chunk.ordinal, chunk.locator, chunk.heading, chunk.text, normalize(vector))
+            (
+                chunk.ordinal,
+                chunk.locator,
+                chunk.heading,
+                chunk.text,
+                normalize(vector),
+                chunk.context,
+                chunk.visual,
+            )
             for chunk, vector in zip(chunks, vectors, strict=True)
         ]
         with self._lock:
@@ -93,7 +104,13 @@ class MemoryStore:
         terms = list(dict.fromkeys(tokenize(query or "")))
         if terms:
             overlaps = [
-                (keyword_overlap(terms, set(tokenize(row[4])) | set(tokenize(row[3]))), index)
+                (
+                    keyword_overlap(
+                        terms,
+                        set(tokenize(row[4])) | set(tokenize(row[3])) | set(tokenize(row[6])),
+                    ),
+                    index,
+                )
                 for index, row in enumerate(rows)
             ]
             overlaps = sorted((entry for entry in overlaps if entry[0] > 0), reverse=True)
@@ -107,6 +124,8 @@ class MemoryStore:
                 heading=rows[index][3],
                 text=rows[index][4],
                 cosine=max(0.0, scored[index]),
+                context=rows[index][6],
+                visual=rows[index][7],
             )
             for index in pool
             if scored[index] > -1.0
@@ -119,6 +138,19 @@ class MemoryStore:
                 text=candidate.text,
                 score=round(candidate.score, 4),
                 ordinal=candidate.ordinal,
+                visual=candidate.visual,
             )
             for candidate in rerank(query, candidates, k)
         ]
+
+    # -- enrichment cache -------------------------------------------------
+
+    def cached_values(self, kind: str, keys: Sequence[str]) -> dict[str, str]:
+        with self._lock:
+            self.cache_reads += 1
+            return {key: self.cache[(kind, key)] for key in keys if (kind, key) in self.cache}
+
+    def cache_values(self, kind: str, model: str, values: Mapping[str, str]) -> None:
+        with self._lock:
+            for key, value in values.items():
+                self.cache[(kind, key)] = value

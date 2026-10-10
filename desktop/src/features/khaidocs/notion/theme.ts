@@ -1,47 +1,62 @@
 /*
  * Original KhaiDocs code, MIT.
  *
- * Notion-like neutrals for Docmost's Mantine theme: warm near-black text on
- * white in light mode, #191919 canvas with soft grey text in dark mode, and
- * the system UI font stack.
+ * Mantine theme for KhaiDocs, modelled on AFFiNE's: neutral greys,
+ * near-black #141414 text, a #141414 canvas in dark mode, AFFiNE's blue
+ * (#1E96EB) as the primary colour, and Inter.
  */
 
 import type { MantineColorsTuple, MantineThemeOverride } from "@mantine/core";
 
 /** Mantine's dark tuple; [7] is the dark body, [8] code blocks/sidebars. */
 const dark: MantineColorsTuple = [
-  "#d4d4d4", // 0: text
-  "#b4b4b4",
-  "#9b9b9b", // 2: dimmed
+  "#e6e6e6", // 0: text
+  "#c2c2c2",
+  "#9d9d9d", // 2: dimmed
   "#7a7a7a",
-  "#3a3a3a", // 4: borders
-  "#2f2f2f", // 5: hover
-  "#262626", // 6: subtle fills
-  "#191919", // 7: body
-  "#202020", // 8: sidebar / code
+  "#2e2e2e", // 4: borders
+  "#262626", // 5: hover
+  "#1e1e1e", // 6: subtle fills
+  "#141414", // 7: body
+  "#1a1a1a", // 8: sidebar / code
+  "#0f0f0f",
+];
+
+/** AFFiNE's neutral greys. */
+const gray: MantineColorsTuple = [
+  "#fafafa", // 0: sidebar
+  "#f4f4f5", // 1: hover
+  "#eeeeee", // 2
+  "#e6e6e6", // 3: borders
+  "#d4d4d4",
+  "#a9a9ad",
+  "#929292", // 6: placeholder-ish
+  "#7a7a7a", // 7: secondary text
+  "#4d4d4d",
   "#141414",
 ];
 
-/** Warm greys close to Notion's light UI. */
-const gray: MantineColorsTuple = [
-  "#f7f7f5", // 0: sidebar
-  "#f1f1ef", // 1: hover
-  "#ebebe9", // 2
-  "#e3e2e0", // 3: borders
-  "#d3d1cb",
-  "#acaba9",
-  "#91918e", // 6: placeholder-ish
-  "#787774", // 7: secondary text
-  "#5a5955",
-  "#37352f",
+/** AFFiNE's brand blue, #1E96EB at [6]. */
+const blue: MantineColorsTuple = [
+  "#e8f4fd",
+  "#d0e9fb",
+  "#a3d3f7",
+  "#72bcf3",
+  "#4aa9ef",
+  "#319eed",
+  "#1e96eb",
+  "#0f82d4",
+  "#0074be",
+  "#0064a6",
 ];
 
 export const NOTION_FONT_FAMILY =
-  'ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI Variable Display", "Segoe UI", Helvetica, "Apple Color Emoji", Arial, sans-serif, "Segoe UI Emoji", "Segoe UI Symbol"';
+  '"Inter Variable", Inter, "Source Sans 3 Variable", -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji"';
 
 export const notionThemeOverride: MantineThemeOverride = {
-  colors: { dark, gray },
-  black: "#37352f",
+  colors: { dark, gray, blue },
+  primaryColor: "blue",
+  black: "#141414",
   fontFamily: NOTION_FONT_FAMILY,
   headings: { fontFamily: NOTION_FONT_FAMILY },
 };

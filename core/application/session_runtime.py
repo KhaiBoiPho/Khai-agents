@@ -736,13 +736,20 @@ class SessionRuntimeRegistry:
         if canonical is None:
             return
         extra = extra_metadata or {}
-        for record in new_records_from_history(history or (), canonical.messages):
-            metadata = {**(record.metadata or {}), **extra}
-            stored = self.store.append_message(
+        records = new_records_from_history(history or (), canonical.messages)
+        if records:
+            # One batched write: appending record by record rewrote the whole
+            # transcript once per record, quadratic in a long Turn's history.
+            stored = self.store.append_messages(
                 session_id,
-                record.role,
-                record.content,
-                metadata=metadata or None,
+                [
+                    {
+                        "role": record.role,
+                        "content": record.content,
+                        "metadata": {**(record.metadata or {}), **extra} or None,
+                    }
+                    for record in records
+                ],
             )
             if stored is None:
                 return

@@ -114,6 +114,8 @@ export interface ClientRuntime extends RpcTransport {
   downloadFile?(threadId: string, path: string): Promise<void>;
   /** A workspace file's raw bytes, for in-app previews of binary documents. */
   readFileBytes?(threadId: string, path: string): Promise<ArrayBuffer>;
+  /** A server-rendered PDF of a docx/pptx, or null when the server has no converter. */
+  readPreviewPdf?(threadId: string, path: string): Promise<ArrayBuffer | null>;
   exportDiagnostics(diagnostics: DiagnosticsSnapshot): Promise<string | null>;
   /** Open a local file in the platform's default application. */
   openPath(path: string): Promise<void>;

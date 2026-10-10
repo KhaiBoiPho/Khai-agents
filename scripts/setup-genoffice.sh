@@ -7,14 +7,21 @@
 #   scripts/setup-genoffice.sh <checkout>      build packages/cli from a GenOffice
 #                                              source checkout and copy the result
 #
-# Layout written (mirrors the app's Contents/Resources so the CLI finds its
-# runtime assets through its own `packagedResourcesDir()` lookup):
+# Layout written (app/resources mirrors a Linux GenOffice install's resources/
+# dir, so the CLI finds its runtime assets through its own
+# `packagedResourcesDir()` lookup):
 #
-#   tools/genoffice/genoffice            launcher (runs cli/genoffice.cjs on node)
-#   tools/genoffice/cli/                 genoffice.cjs, package.json, node_modules, skills
-#   tools/genoffice/wasm/                pdfium.wasm (+ hb-subset.wasm) for PDF work
-#   tools/genoffice/native/xlsx-sidecar  formula engine (optional)
-#   tools/genoffice/ocr/                 OCR helper (optional)
+#   tools/genoffice/genoffice                          launcher (runs the CLI on node)
+#   tools/genoffice/app/resources/cli/                 genoffice.cjs, package.json, node_modules, skills
+#   tools/genoffice/app/resources/wasm/                pdfium.wasm (+ hb-subset.wasm) for PDF work
+#   tools/genoffice/app/resources/native/xlsx-sidecar  formula engine (optional)
+#   tools/genoffice/app/resources/ocr/                 OCR helper (optional)
+#
+# The extra app/ level matters on Linux: the CLI looks for the GenOffice GUI
+# binary at <resources>/../genoffice, which with resources directly under
+# tools/genoffice/ would be this bundle directory itself (spawn EACCES,
+# reported as `app_crashed`); here it is absent, so renderer-backed commands
+# fail cleanly with `app_unavailable` when no GenOffice app is installed.
 #
 # Only the Apache-2.0 CLI is copied; GenOffice's ee/ directory is never touched.
 # tools/genoffice/ is git-ignored: re-run this script on every machine.
@@ -53,7 +60,8 @@ find_app_resources() {
 stage=$(mktemp -d "${TMPDIR:-/tmp}/genoffice-stage.XXXXXX")
 trap 'rm -rf "$stage"' EXIT
 chmod 755 "$stage"
-mkdir -p "$stage/cli" "$stage/wasm" "$stage/native" "$stage/ocr"
+res="$stage/app/resources"
+mkdir -p "$res/cli" "$res/wasm" "$res/native" "$res/ocr"
 
 if [ -n "$checkout" ]; then
   [ -f "$checkout/packages/cli/package.json" ] || fail "$checkout is not a GenOffice checkout"
@@ -63,17 +71,17 @@ if [ -n "$checkout" ]; then
     (cd "$checkout" && npm ci --no-audit --no-fund)
   fi
   (cd "$checkout/packages/cli" && npm run build)
-  cp "$checkout/packages/cli/dist/genoffice.cjs" "$stage/cli/"
-  cp -R "$checkout/packages/cli/dist/node_modules" "$stage/cli/node_modules"
-  cp "$checkout/packages/cli/package.json" "$stage/cli/"
-  mkdir -p "$stage/cli/skills"
-  cp -R "$checkout/skills/genoffice" "$stage/cli/skills/genoffice"
+  cp "$checkout/packages/cli/dist/genoffice.cjs" "$res/cli/"
+  cp -R "$checkout/packages/cli/dist/node_modules" "$res/cli/node_modules"
+  cp "$checkout/packages/cli/package.json" "$res/cli/"
+  mkdir -p "$res/cli/skills"
+  cp -R "$checkout/skills/genoffice" "$res/cli/skills/genoffice"
   pdfium=$(cd "$checkout" && node -p "require.resolve('@embedpdf/pdfium/pdfium.wasm')" 2>/dev/null || true)
-  [ -n "$pdfium" ] && [ -f "$pdfium" ] && cp "$pdfium" "$stage/wasm/"
+  [ -n "$pdfium" ] && [ -f "$pdfium" ] && cp "$pdfium" "$res/wasm/"
   sidecar="$checkout/apps/sheets/native/xlsx-engine/target/release/xlsx-sidecar"
-  [ -x "$sidecar" ] && cp "$sidecar" "$stage/native/"
+  [ -x "$sidecar" ] && cp "$sidecar" "$res/native/"
   [ -x "$checkout/packages/pdf2docx/ocr-helper/vision-ocr" ] \
-    && cp "$checkout/packages/pdf2docx/ocr-helper/vision-ocr" "$stage/ocr/"
+    && cp "$checkout/packages/pdf2docx/ocr-helper/vision-ocr" "$res/ocr/"
   for file in LICENSE NOTICE; do cp "$checkout/$file" "$stage/"; done
   source_desc="checkout $checkout"
 else
@@ -81,10 +89,10 @@ else
     || fail "no GenOffice app found; pass a GenOffice source checkout path instead"
   echo "Copying the GenOffice CLI from $resources ..."
   for item in genoffice.cjs package.json node_modules skills; do
-    cp -R "$resources/cli/$item" "$stage/cli/$item"
+    cp -R "$resources/cli/$item" "$res/cli/$item"
   done
   for dir in wasm native ocr; do
-    [ -d "$resources/$dir" ] && cp -R "$resources/$dir/." "$stage/$dir/"
+    [ -d "$resources/$dir" ] && cp -R "$resources/$dir/." "$res/$dir/"
   done
   [ -f "$resources/THIRD-PARTY-NOTICES.txt" ] && cp "$resources/THIRD-PARTY-NOTICES.txt" "$stage/"
   source_desc="app $resources"
@@ -122,7 +130,7 @@ if [ -z "$node_bin" ]; then
   done
 fi
 [ -n "$node_bin" ] || { echo "genoffice: node (>= 22) not found; set GENOFFICE_NODE" >&2; exit 127; }
-exec "$node_bin" "$here/cli/genoffice.cjs" "$@"
+exec "$node_bin" "$here/app/resources/cli/genoffice.cjs" "$@"
 EOF
 chmod +x "$stage/genoffice"
 

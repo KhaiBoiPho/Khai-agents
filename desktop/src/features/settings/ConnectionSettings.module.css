@@ -326,15 +326,29 @@
 
 .providerSummary {
   display: grid;
-  min-height: 68px;
   grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
   gap: 12px;
-  padding: 14px 16px;
-  border: 1px solid color-mix(in srgb, var(--signal) 24%, var(--border-subtle));
-  border-radius: 14px;
-  background: linear-gradient(135deg, color-mix(in srgb, var(--signal-soft) 70%, var(--surface-canvas)), var(--surface-canvas));
-  color: var(--signal);
+  padding: 12px 14px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md, 10px);
+  background: var(--surface-raised, var(--surface-canvas));
+  color: var(--text-secondary);
+}
+
+.providerSummary > span {
+  display: grid;
+  gap: 2px;
+}
+
+.providerSummary strong {
+  color: var(--text-primary);
+  font-size: var(--text-sm);
+}
+
+.providerSummary small {
+  color: var(--text-tertiary);
+  font-size: var(--text-micro);
 }
 
 .providerSummary button {
@@ -402,6 +416,15 @@
 
 .advanced summary::-webkit-details-marker {
   display: none;
+}
+
+.advanced > .advancedStack {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 14px;
+  padding: 8px 0 12px;
+  border-bottom: 1px solid var(--border-subtle);
+  margin-bottom: 4px;
 }
 
 .advanced > div {
@@ -824,4 +847,44 @@
  * write scope — connections are user-scoped by design. */
 .scopeNote {
   color: var(--attention);
+}
+
+/* Built-in web search card, below the providers rail. */
+.webSearch {
+  min-height: 0;
+  margin-top: 14px;
+}
+
+.webSearchForm {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.webSearchForm input {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 34px;
+  padding: 0 11px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  outline: 0;
+  background-color: var(--surface-canvas);
+  color: var(--text-primary);
+  font: var(--text-2xs) var(--font-mono);
+}
+
+.webSearchForm input:focus {
+  border-color: var(--signal);
+  box-shadow: 0 0 0 2px var(--signal-soft);
+}
+
+.connectionBody p.webSearchError {
+  color: var(--danger);
+}
+
+@media (max-width: 560px) {
+  .webSearchForm {
+    flex-wrap: wrap;
+  }
 }

@@ -396,6 +396,18 @@ class ErrorEvent:
 
 
 @dataclass(frozen=True)
+class DeepThinkProgress:
+    """Snapshot of one DeepThink run's step progress (plan/search/check/summarize).
+
+    ``payload`` is the complete, JSON-safe progress document; every emission
+    replaces the previous one, so a consumer only needs the latest snapshot.
+    """
+
+    payload: dict[str, Any]
+    type: str = field(default="deepthink_progress", init=False)
+
+
+@dataclass(frozen=True)
 class TaskComplete:
     final_text: str | None
     stop_reason: str
@@ -423,6 +435,7 @@ EventMsg = Union[
     ToolStarted,
     ToolCompleted,
     ErrorEvent,
+    DeepThinkProgress,
     TaskComplete,
     ShutdownComplete,
 ]

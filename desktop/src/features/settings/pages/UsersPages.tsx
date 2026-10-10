@@ -200,6 +200,19 @@ export function SecurityPage(_props: SettingsSectionProps) {
         title={t("account.changePassword", "Change password")}
         description={t("account.passwordHint", "At least 10 characters.")}
       >
+        {/* The account's username, for password managers: without it the
+            browser pairs these password fields with the settings search box
+            and fills the username there. */}
+        <input
+          type="text"
+          name="username"
+          autoComplete="username"
+          value={account.username}
+          readOnly
+          tabIndex={-1}
+          aria-hidden="true"
+          style={{ position: "absolute", width: 1, height: 1, opacity: 0, pointerEvents: "none" }}
+        />
         <Row label={t("account.currentPassword", "Current password")}>
           <TextInput
             type="password"

@@ -149,6 +149,7 @@ class ControlServer:
                 web.post("/api/uploads", self.web_surface.upload),
                 web.post("/api/workspace/upload", self.web_surface.workspace_upload),
                 web.get("/api/download", self.web_surface.download),
+                web.get("/api/preview-pdf", self.web_surface.preview_pdf),
             ]
         )
         app.on_shutdown.append(self.business.shutdown)
