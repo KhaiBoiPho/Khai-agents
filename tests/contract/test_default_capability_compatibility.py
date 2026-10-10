@@ -17,6 +17,13 @@ from core.harness.tools import default_coding_tools
 from core.persistence import Database, ItemRepository, TurnRepository
 
 _DEFAULT_TOOL_PARAMETERS = {
+    "document_export": {
+        "action": ("string", True),
+        "path": ("string", True),
+        "out": ("string", False),
+        "pages": ("array", False),
+        "width": ("integer", False),
+    },
     "read": {
         "file_path": ("string", True),
         "offset": ("integer", False),

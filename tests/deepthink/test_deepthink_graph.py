@@ -8,6 +8,7 @@ from typing import Any
 
 import pytest
 
+from core.deepthink.graph import SEARCH_UNAVAILABLE_NOTE
 from core.deepthink.limits import DeepThinkLimits
 from core.deepthink.runner import DeepThinkRunner, compact_history
 from core.deepthink.search import SearchHit, SearchUnavailable
@@ -277,10 +278,11 @@ def test_missing_search_tool_answers_from_model_knowledge_with_a_note() -> None:
     provider = StubProvider(answer="From memory.")
     events = asyncio.run(_collect(_runner(provider, None)))
     assert provider.kinds() == ["plan", "summarize"]
-    text = _final(events)
-    assert text.startswith("> Web search was unavailable")
-    assert text.endswith("From memory.")
-    steps = _steps(_last_progress(events))
+    # The note goes to the progress document; the answer is only content.
+    assert _final(events) == "From memory."
+    progress = _last_progress(events)
+    assert SEARCH_UNAVAILABLE_NOTE in progress["notes"]
+    steps = _steps(progress)
     assert steps["search"]["status"] == "skipped"
     assert steps["search"]["detail"] == "No web search tool is connected"
 
@@ -297,9 +299,10 @@ def test_search_failure_degrades_to_an_answer(backend: StubBackend, detail: str)
     events = asyncio.run(_collect(_runner(provider, backend)))
     assert provider.kinds() == ["plan", "summarize"]
     assert events[-1].msg.stop_reason == "completed"
-    assert "Best effort." in _final(events)
-    assert _final(events).startswith("> Web search")
-    steps = _steps(_last_progress(events))
+    assert _final(events) == "Best effort."
+    progress = _last_progress(events)
+    assert any(note.startswith("Web search") for note in progress["notes"])
+    steps = _steps(progress)
     assert steps["search"] == {**steps["search"], "status": "failed", "detail": detail}
     assert steps["check"]["status"] == "skipped"
 

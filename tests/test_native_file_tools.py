@@ -143,6 +143,7 @@ def test_default_coding_tools_registry(tmp_path):
         "edit",
         "apply_patch",
         "bash",
+        "document_export",
         "grep",
         "glob",
         "memory",

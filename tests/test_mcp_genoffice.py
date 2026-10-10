@@ -72,7 +72,7 @@ def test_builtin_definition_is_workspace_scoped_and_compact(tmp_path: Path) -> N
     assert definition.enabled
     assert not definition.exposes("open")
     assert definition.exposes("create_pptx")
-    assert builtin_server_definitions({"GENOFFICE_BIN": ""}) == {}
+    assert builtin_server_definitions({"GENOFFICE_BIN": "", "KHAI_BUILTIN_WEBSEARCH": "off"}) == {}
 
 
 def test_genoffice_instructions_avoid_empty_or_unparseable_docx_html() -> None:
