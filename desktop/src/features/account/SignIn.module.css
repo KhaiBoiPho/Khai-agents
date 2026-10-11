@@ -1,4 +1,4 @@
-/* The sign-in sheet: the landing page's ground, glow and faint grid, with
+/* The sign-in sheet: the landing page's black ground, grey glow and grid, with
    one framed card (see SignIn.tsx for the entrance). */
 
 /* The landing's fonts (IBM Plex), served by the gateway; elsewhere the
@@ -32,21 +32,21 @@
 }
 
 .login {
-  /* The landing's palette: ground, panels, and sky → cyan → teal. */
-  --bg: #0b1116;
-  --bg-1: #0c141c;
-  --bg-2: #0f1922;
-  --bg-3: #122029;
-  --ink: #e9f1f3;
-  --ink-2: #94a8b2;
-  --ink-3: #6f8590;
-  --ink-4: #586e79;
-  --line: rgb(233 241 243 / 8%);
-  --line-2: rgb(233 241 243 / 16%);
-  --accent: #06b6d4;
-  --sky: #0ea5e9;
-  --teal: #4ecdc4;
-  --grid: rgb(233 241 243 / 3.5%);
+  /* The landing's palette: black, greys and a white → grey gradient. */
+  --bg: #0a0a0b;
+  --bg-1: #0d0d0e;
+  --bg-2: #121212;
+  --bg-3: #181818;
+  --ink: #ededed;
+  --ink-2: #a3a3a3;
+  --ink-3: #7a7a7a;
+  --ink-4: #5c5c5c;
+  --line: rgb(255 255 255 / 8%);
+  --line-2: rgb(255 255 255 / 15%);
+  --accent: #d4d4d4;
+  --sky: #ffffff;
+  --teal: #a8a8a8;
+  --grid: rgb(255 255 255 / 3.5%);
   --sans: "IBM Plex Sans", var(--font-ui, system-ui), sans-serif;
   --mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
 
@@ -57,8 +57,8 @@
   padding: 5rem 1rem 2.5rem;
   overflow: hidden;
   background:
-    radial-gradient(52rem 30rem at 82% -6rem, rgb(14 165 233 / 13%), transparent 62%),
-    radial-gradient(38rem 26rem at -8% 22rem, rgb(78 205 196 / 7%), transparent 60%),
+    radial-gradient(52rem 30rem at 82% -6rem, rgb(255 255 255 / 9%), transparent 62%),
+    radial-gradient(38rem 26rem at -8% 22rem, rgb(255 255 255 / 5%), transparent 60%),
     var(--bg);
   color: var(--ink-2);
   color-scheme: dark;
@@ -130,7 +130,7 @@
   background: var(--bg-1);
   box-shadow:
     0 24px 70px rgb(0 0 0 / 50%),
-    0 0 0 1px rgb(6 182 212 / 5%);
+    0 0 0 1px rgb(255 255 255 / 4%);
 }
 
 .bar {
@@ -140,7 +140,7 @@
   align-items: center;
   padding: 0 0.9rem;
   border-bottom: 1px solid var(--line);
-  background: rgb(233 241 243 / 2%);
+  background: rgb(255 255 255 / 2%);
   color: var(--ink-3);
   font-family: var(--mono);
   font-size: 0.72rem;
@@ -227,7 +227,7 @@
 
 .box:focus-within {
   border-color: var(--accent);
-  box-shadow: 0 0 0 3px rgb(6 182 212 / 16%);
+  box-shadow: 0 0 0 3px rgb(255 255 255 / 12%);
 }
 
 .icon {
@@ -309,8 +309,8 @@
   border: none;
   border-radius: 8px;
   background: linear-gradient(92deg, var(--sky), var(--accent) 46%, var(--teal));
-  box-shadow: 0 10px 30px -10px rgb(6 182 212 / 55%);
-  color: #071016;
+  box-shadow: 0 10px 30px -10px rgb(255 255 255 / 25%);
+  color: #0a0a0b;
   cursor: pointer;
   font: inherit;
   font-family: var(--mono);
@@ -418,9 +418,9 @@
 }
 
 .notice {
-  background: rgb(6 182 212 / 10%);
-  box-shadow: inset 0 0 0 1px rgb(6 182 212 / 24%);
-  color: #8ee3f0;
+  background: rgb(255 255 255 / 7%);
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 18%);
+  color: #d9d9d9;
 }
 
 @media (width < 480px) {

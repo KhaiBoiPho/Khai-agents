@@ -357,18 +357,18 @@
 }
 
 /* Ambient backdrop, after Auraxis's Aqua theme with a wallpaper (MIT, see
-   THIRD_PARTY_NOTICES.md): large soft colour fields, as if a photo were
+   THIRD_PARTY_NOTICES.md), in black, white and greys: large soft fields, as if a photo were
    blurred behind the glass, and the panes floating on it as frosted glass. */
 .shell {
   background:
-    radial-gradient(42% 52% at 8% 12%, rgb(244 206 120 / 75%), transparent 70%),
-    radial-gradient(38% 46% at 34% 4%, rgb(236 158 168 / 60%), transparent 72%),
-    radial-gradient(40% 50% at 70% 10%, rgb(150 180 232 / 70%), transparent 70%),
-    radial-gradient(36% 48% at 96% 34%, rgb(190 160 222 / 65%), transparent 72%),
-    radial-gradient(44% 50% at 62% 74%, rgb(162 210 140 / 70%), transparent 70%),
-    radial-gradient(40% 46% at 22% 86%, rgb(240 128 112 / 62%), transparent 70%),
-    radial-gradient(36% 44% at 92% 96%, rgb(240 150 130 / 55%), transparent 72%),
-    #e9e4dc;
+    radial-gradient(42% 52% at 8% 12%, rgb(255 255 255 / 90%), transparent 70%),
+    radial-gradient(38% 46% at 34% 4%, rgb(150 150 150 / 45%), transparent 72%),
+    radial-gradient(40% 50% at 70% 10%, rgb(255 255 255 / 80%), transparent 70%),
+    radial-gradient(36% 48% at 96% 34%, rgb(120 120 120 / 40%), transparent 72%),
+    radial-gradient(44% 50% at 62% 74%, rgb(250 250 250 / 85%), transparent 70%),
+    radial-gradient(40% 46% at 22% 86%, rgb(110 110 110 / 35%), transparent 70%),
+    radial-gradient(36% 44% at 92% 96%, rgb(170 170 170 / 45%), transparent 72%),
+    #dedede;
 }
 
 .workspace {
@@ -385,13 +385,13 @@
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) .shell {
     background:
-      radial-gradient(42% 52% at 8% 12%, rgb(150 110 40 / 55%), transparent 70%),
-      radial-gradient(38% 46% at 34% 4%, rgb(140 60 80 / 45%), transparent 72%),
-      radial-gradient(40% 50% at 70% 10%, rgb(50 80 150 / 55%), transparent 70%),
-      radial-gradient(36% 48% at 96% 34%, rgb(100 60 150 / 50%), transparent 72%),
-      radial-gradient(44% 50% at 62% 74%, rgb(50 110 60 / 50%), transparent 70%),
-      radial-gradient(40% 46% at 22% 86%, rgb(150 50 40 / 45%), transparent 70%),
-      #121214;
+      radial-gradient(42% 52% at 8% 12%, rgb(255 255 255 / 11%), transparent 70%),
+      radial-gradient(38% 46% at 34% 4%, rgb(150 150 150 / 9%), transparent 72%),
+      radial-gradient(40% 50% at 70% 10%, rgb(255 255 255 / 7%), transparent 70%),
+      radial-gradient(36% 48% at 96% 34%, rgb(0 0 0 / 55%), transparent 72%),
+      radial-gradient(44% 50% at 62% 74%, rgb(200 200 200 / 8%), transparent 70%),
+      radial-gradient(40% 46% at 22% 86%, rgb(0 0 0 / 50%), transparent 70%),
+      #0e0e0f;
   }
 
   :root:not([data-theme="light"]) .workspace {
@@ -405,13 +405,13 @@
 
 :root[data-theme="dark"] .shell {
   background:
-    radial-gradient(42% 52% at 8% 12%, rgb(150 110 40 / 55%), transparent 70%),
-    radial-gradient(38% 46% at 34% 4%, rgb(140 60 80 / 45%), transparent 72%),
-    radial-gradient(40% 50% at 70% 10%, rgb(50 80 150 / 55%), transparent 70%),
-    radial-gradient(36% 48% at 96% 34%, rgb(100 60 150 / 50%), transparent 72%),
-    radial-gradient(44% 50% at 62% 74%, rgb(50 110 60 / 50%), transparent 70%),
-    radial-gradient(40% 46% at 22% 86%, rgb(150 50 40 / 45%), transparent 70%),
-    #121214;
+    radial-gradient(42% 52% at 8% 12%, rgb(255 255 255 / 11%), transparent 70%),
+    radial-gradient(38% 46% at 34% 4%, rgb(150 150 150 / 9%), transparent 72%),
+    radial-gradient(40% 50% at 70% 10%, rgb(255 255 255 / 7%), transparent 70%),
+    radial-gradient(36% 48% at 96% 34%, rgb(0 0 0 / 55%), transparent 72%),
+    radial-gradient(44% 50% at 62% 74%, rgb(200 200 200 / 8%), transparent 70%),
+    radial-gradient(40% 46% at 22% 86%, rgb(0 0 0 / 50%), transparent 70%),
+    #0e0e0f;
 }
 
 :root[data-theme="dark"] .workspace {

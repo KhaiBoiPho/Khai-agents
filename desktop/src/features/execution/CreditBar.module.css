@@ -11,7 +11,7 @@
   cursor: default;
 }
 
-/* A thin, long track; the orange fill is what the key has left. */
+/* A thin, long track; the fill (the text colour) is what the key has left. */
 .track {
   position: relative;
   height: 6px;
@@ -19,14 +19,14 @@
   flex: 1;
   overflow: hidden;
   border-radius: 999px;
-  background: rgb(234 120 34 / 16%);
+  background: color-mix(in srgb, var(--text-primary) 14%, transparent);
 }
 
 .fill {
   position: absolute;
   inset: 0 auto 0 0;
   border-radius: inherit;
-  background: #ea7822;
+  background: linear-gradient(90deg, color-mix(in srgb, var(--text-primary) 55%, transparent), var(--text-primary));
   transition: width 400ms ease;
 }
 
