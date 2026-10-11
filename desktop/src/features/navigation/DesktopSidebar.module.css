@@ -29,7 +29,7 @@
   place-items: center;
   border-radius: var(--radius-sm);
   background: var(--text-primary);
-  box-shadow: 0 5px 14px rgb(27 34 30 / 13%);
+  box-shadow: var(--shadow-soft);
 }
 
 .brandMark svg {

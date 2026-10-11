@@ -79,12 +79,14 @@ describe("ConversationSplitter", () => {
 
   it("only moves the width while previewing, not the rest of the appearance", () => {
     const { handle } = mount();
+    const themeBefore = document.documentElement.getAttribute("data-theme");
 
     fireEvent.pointerDown(handle, { pointerId: 1, button: 0, clientX: EDGE });
     fireEvent.pointerMove(window, { pointerId: 1, clientX: EDGE + 40 });
 
-    // A preview repaints one custom property: no theme attribute, no font stack.
-    expect(document.documentElement.getAttribute("data-theme")).toBeNull();
+    // A preview repaints one custom property: the theme attribute stays as it
+    // was, and no font stack is written.
+    expect(document.documentElement.getAttribute("data-theme")).toBe(themeBefore);
     expect(document.documentElement.style.getPropertyValue("--font-size-base")).toBe("");
     expect(cssWidth()).toBe("78%");
   });
