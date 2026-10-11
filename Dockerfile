@@ -90,6 +90,13 @@ RUN mkdir -p /khai/tools \
        fi \
     && mkdir -p /khai/tools/genoffice
 
+# Runtime of the slides-html Skill (playwright-core drives the system
+# Chromium below; pptxgenjs writes the PPTX).
+FROM node:22-bookworm-slim AS slides
+WORKDIR /slides
+COPY tools/slides/package.json tools/slides/package-lock.json ./
+RUN --mount=type=cache,target=/root/.npm npm ci --omit=dev --no-audit --no-fund
+
 FROM python:3.12-slim-bookworm
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
@@ -113,6 +120,14 @@ RUN apt-get update \
        fonts-dejavu-core fonts-liberation2 fonts-crosextra-carlito fonts-crosextra-caladea \
     && rm -rf /var/lib/apt/lists/* /usr/share/doc/* /usr/share/man/* \
     && fc-cache -f
+# Chromium renders slides-html decks (PDF, PNG previews, PPTX artwork).
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends chromium \
+    && rm -rf /var/lib/apt/lists/* /usr/share/doc/* /usr/share/man/*
+# Slide fonts (OFL; Vietnamese coverage) installed system-wide so
+# LibreOffice previews of the generated PPTX match the PDF.
+COPY tools/slides/fonts/ /usr/share/fonts/truetype/khai-slides/
+RUN fc-cache -f
 # The unprivileged user hosted workers run as (WORKER_UID in
 # app_server/gateway/workers.py). It needs a passwd entry: getpass, git and
 # ssh look the current user up by uid.
@@ -131,6 +146,7 @@ COPY --from=genoffice /usr/local/bin/node /usr/local/bin/node
 COPY --from=genoffice /khai/tools/genoffice /app/tools/genoffice
 COPY . .
 COPY --from=web /src/app_server/web_assets ./app_server/web_assets
+COPY --from=slides /slides/node_modules ./tools/slides/node_modules
 # Workers run on a read-only filesystem and cannot cache bytecode, so it is
 # compiled here once; otherwise every cold start recompiles the app.
 RUN pip install --no-deps --no-build-isolation -e . \

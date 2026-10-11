@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<title>Kiến trúc GenOffice</title>
+<style>
+  /* Deck-specific touches go here; the theme is injected before this. */
+  .cover .blob.a { top: -200px; right: -140px; width: 520px; height: 520px; background: var(--accent); }
+  .cover .blob.b { top: 190px; right: 300px; width: 120px; height: 120px; background: var(--accent-2); }
+  .cover h1 { max-width: 900px; }
+</style>
+</head>
+<body data-palette="paper">
+
+<!-- 1. Cover -->
+<section class="slide cover">
+  <div class="blob a"></div>
+  <div class="blob b"></div>
+  <span class="tag">Kiến trúc phần mềm · 2026</span>
+  <h1>GenOffice: một lõi tài liệu, ba lớp tách bạch</h1>
+  <p class="lead">Renderer hiển thị, preload làm cầu nối, main process giữ quyền hệ thống — và vì sao cách chia này giữ cho ứng dụng an toàn.</p>
+  <aside class="notes">Mở đầu: nêu câu hỏi chính — vì sao tách ba lớp.</aside>
+</section>
+
+<!-- 2. Three cards -->
+<section class="slide">
+  <div class="title rule">
+    <span class="kicker">Tổng quan</span>
+    <h2>Renderer hiển thị, main kiểm soát quyền hệ thống</h2>
+  </div>
+  <div class="cols-3">
+    <div class="card top-rule">
+      <span class="num">01 · RENDERER</span>
+      <h3>Hiển thị UI và xử lý tương tác chỉnh sửa</h3>
+      <p>Sống trong renderer của ứng dụng: React, editor và trạng thái tài liệu.</p>
+    </div>
+    <div class="card top-rule">
+      <span class="num">02 · PRELOAD + IPC</span>
+      <h3>Tạo cầu nối API có giới hạn</h3>
+      <p>Preload phơi bày các hàm được chọn; IPC chuyển lời gọi giữa renderer và main.</p>
+    </div>
+    <div class="card top-rule">
+      <span class="num">03 · MAIN PROCESS</span>
+      <h3>Giữ quyền truy cập hệ thống</h3>
+      <p>Mở hộp thoại tệp, đọc/ghi dữ liệu, quản lý cửa sổ và tích hợp engine.</p>
+    </div>
+  </div>
+  <div class="callout accent-bg"><p>Quy tắc: renderer yêu cầu — main kiểm tra và thực thi quyền desktop.</p></div>
+  <div class="footer"><span>Nguồn: apps/shell/src/main/index.ts · apps/docs/src/preload/index.ts</span><span>02</span></div>
+</section>
+
+<!-- 3. Big number, dark -->
+<section class="slide dark">
+  <div class="glow"></div>
+  <div class="body center">
+    <div class="split wide-right">
+      <div class="metric huge">
+        <span class="value">3</span>
+        <span class="label">lớp, mỗi lớp một trách nhiệm duy nhất</span>
+      </div>
+      <div class="stack">
+        <span class="kicker">Vì sao quan trọng</span>
+        <h2>Lỗi ở giao diện không bao giờ chạm được vào ổ đĩa</h2>
+        <p class="lead">Renderer không có quyền Node.js; mọi thao tác nguy hiểm đều phải đi qua một API đã được kiểm duyệt.</p>
+      </div>
+    </div>
+  </div>
+  <div class="footer"><span>GenOffice · Kiến trúc</span><span>03</span></div>
+</section>
+
+<!-- 4. Timeline -->
+<section class="slide">
+  <div class="title">
+    <span class="kicker">Luồng lưu tệp</span>
+    <h2>Một lần bấm “Lưu” đi qua năm bước</h2>
+  </div>
+  <div class="body center">
+    <div class="timeline">
+      <div class="step"><span class="when">Bước 1</span><h4>Editor ghi nhận</h4><p>Thay đổi nằm trong trạng thái tài liệu.</p></div>
+      <div class="step"><span class="when">Bước 2</span><h4>Renderer gửi yêu cầu</h4><p>Tạo bytes của tệp và gọi API lưu.</p></div>
+      <div class="step"><span class="when">Bước 3</span><h4>Preload chuyển tiếp</h4><p>Đóng gói thành một thông điệp IPC.</p></div>
+      <div class="step"><span class="when">Bước 4</span><h4>Main kiểm tra</h4><p>Xác thực đường dẫn và quyền ghi.</p></div>
+      <div class="step"><span class="when">Bước 5</span><h4>Ghi xuống đĩa</h4><p>Ghi nguyên tử, rồi báo kết quả về UI.</p></div>
+    </div>
+  </div>
+  <div class="footer"><span>apps/shell/src/main/ipc.ts</span><span>04</span></div>
+</section>
+
+<!-- 5. Chart + insight -->
+<section class="slide">
+  <div class="split wide-left">
+    <div class="bars" style="height:420px">
+      <div class="bar" style="--v:.38"><span class="v">38</span><span class="k">Docx</span></div>
+      <div class="bar" style="--v:.52"><span class="v">52</span><span class="k">Sheet</span></div>
+      <div class="bar hl" style="--v:.94"><span class="v">94</span><span class="k">Slides</span></div>
+      <div class="bar" style="--v:.27"><span class="v">27</span><span class="k">PDF</span></div>
+    </div>
+    <div class="stack">
+      <span class="kicker">Mức độ phức tạp</span>
+      <h2>Slides chiếm gần nửa mã nguồn engine</h2>
+      <p>Bố cục, theme và trình kết xuất riêng khiến module slides lớn gấp đôi các định dạng còn lại.</p>
+      <p class="small muted">Đơn vị: nghìn dòng mã, packages/*/src</p>
+    </div>
+  </div>
+</section>
+
+<!-- 6. Quote / closing -->
+<section class="slide accent-bg">
+  <div class="body center">
+    <div class="quote">
+      <blockquote>Renderer yêu cầu, main quyết định. Mọi thứ khác chỉ là chi tiết.</blockquote>
+      <span class="who">— Nguyên tắc thiết kế của GenOffice</span>
+    </div>
+  </div>
+</section>
+
+</body>
+</html>

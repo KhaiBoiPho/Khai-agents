@@ -39,6 +39,9 @@ display font without Vietnamese glyphs.
 
 ## 2. Slides (pptx)
 
+New decks are built with the `slides-html` Skill, whose theme already
+follows these rules; they apply as written when editing an existing deck.
+
 - Canvas 1280×720. Margins 64 px left/right, 48 px top/bottom; align
   everything to one left edge.
 - Type scale: title 40–44 px bold, slide headline 28–32 px, body 18–22 px,

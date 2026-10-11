@@ -1,0 +1,10 @@
+{
+  "name": "khai-slides",
+  "private": true,
+  "description": "Runtime for the slides-html Skill: Chromium renders HTML slides to PDF, PNG and editable PPTX.",
+  "type": "module",
+  "dependencies": {
+    "playwright-core": "1.58.2",
+    "pptxgenjs": "4.0.1"
+  }
+}

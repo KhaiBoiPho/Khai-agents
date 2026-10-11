@@ -52,7 +52,8 @@ operator runs `scripts/setup-genoffice.sh`); never hand-write Office XML.
 | Change format (pdf↔docx/pptx/xlsx, csv→xlsx, md→docx/html/pdf, docx→md/html/pdf, html→docx/pdf, xlsx→csv/pdf, pptx→pdf) | `convert` |
 | New Word document from Markdown or restricted HTML | `create_docx` |
 | New workbook from rows / `{sheets:[{name,rows}]}` / csv (`"=..."` = formula) | `create_xlsx` |
-| New deck in one call from ops or a deck spec (≤ ~5 slides) | `create_pptx` (`render: true`, `audit: true`) |
+| A new, good-looking deck (PDF and/or PPTX) | the `slides-html` Skill, not GenOffice |
+| New deck in one call from ops or a deck spec (≤ ~5 slides), when PowerPoint-native shapes are required | `create_pptx` (`render: true`, `audit: true`) |
 | Longer or design-sensitive deck | `deck_start` → `deck_page` (one per page, in order) → `deck_build` → `deck_replace` to fix a page |
 | PDF printed from md/html/docx/xlsx/pptx | build the file here, then the built-in `document_export {action: "pdf"}` (`create_pdf` only with the desktop app) |
 | Read / edit / check Word | `docs_read` / `docs_apply` / `docs_check` |

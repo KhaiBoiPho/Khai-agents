@@ -75,7 +75,10 @@ GENOFFICE_DESCRIPTION = (
 # (the per-turn MCP instruction context), so it only reaches the model while
 # the genoffice tools are actually available.
 GENOFFICE_KHAI_INSTRUCTIONS = """\
-Khai: for requests to make or change a document (report, memo, deck, \
+Khai: a NEW slide deck (presentation, slides, pitch) is built with the \
+`slides-html` Skill (HTML on a designed theme → PDF + editable PPTX), not \
+with these tools; use GenOffice to read or edit an existing .pptx. \
+For other requests to make or change a document (report, memo, existing deck, \
 spreadsheet, PDF, conversion), load the `genoffice` Skill first, then: \
 1) plan briefly (audience, sections/slides/sheets, real figures, output path); \
 For slide decks, never invent `layout` or page `type` names. Load the GenOffice \

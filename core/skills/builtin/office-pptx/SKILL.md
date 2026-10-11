@@ -8,6 +8,11 @@ license: Original Khai-Agents content (see repository license)
 
 ## 0. Choose the engine and the look
 
+- **New deck → load the `slides-html` Skill and follow it instead of this
+  one.** It writes the slides as HTML on a designed theme and builds a
+  vector PDF plus an editable PPTX, with previews to check. Use the paths
+  below only to read, edit or template an existing .pptx, or when the user
+  explicitly asks for a deck built natively in PowerPoint.
 - `mcp__genoffice__*` tools listed → **GenOffice path** (load `genoffice` for
   arguments and errors; `guide slides` / `guide slides spec` for op and spec
   fields — never invent `layout` or page `type` names).

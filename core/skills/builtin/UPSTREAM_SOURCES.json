@@ -115,6 +115,12 @@
       "path": "core/skills/builtin/skill-creator",
       "modified": "Original Khai-Agents skill (not adapted from an upstream source); revision is the base commit it was written on."
     },
+    "slides-html": {
+      "repository": "https://github.com/KhaiBoiPho/Khai-agents",
+      "revision": "1960c203c26be2cc4c130fe9635cacce25c09f85",
+      "path": "core/skills/builtin/slides-html",
+      "modified": "Original Khai-Agents skill (not adapted from an upstream source); revision is the base commit it was written on."
+    },
     "web-artifacts-builder": {
       "repository": "https://github.com/anthropics/skills",
       "revision": "dbd4588f9e1033efb41dad4bef2f7947c8993d44",

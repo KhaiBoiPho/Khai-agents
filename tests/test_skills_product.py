@@ -706,6 +706,7 @@ def test_bundled_core_skills_load_with_resources_and_fixed_provenance(
         "security-ownership-map",
         "security-threat-model",
         "skill-creator",
+        "slides-html",
         "web-artifacts-builder",
         "webapp-testing",
     }

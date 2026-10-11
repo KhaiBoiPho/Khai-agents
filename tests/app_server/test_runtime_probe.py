@@ -48,6 +48,7 @@ def test_runtime_probe_imports_lazy_desktop_capabilities(monkeypatch):
         "security-ownership-map",
         "security-threat-model",
         "skill-creator",
+        "slides-html",
         "web-artifacts-builder",
         "webapp-testing",
     ]
