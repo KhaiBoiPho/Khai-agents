@@ -125,6 +125,58 @@ function inspectDeck() {
     return { hex: h.toUpperCase(), alpha: Math.round((a / 255) * 100) / 100 };
   }
 
+  // The colour behind an element: its own and its ancestors' backgrounds,
+  // blended until opaque. null when an image or gradient is in the way.
+  // What is painted under the text: hit-test its first line and walk the
+  // stack downwards (positioned labels can sit outside their parent).
+  function backdrop(el, rects) {
+    const first = rects[0];
+    const stack = first
+      ? document.elementsFromPoint(first.left + Math.min(first.width / 2, 12), first.top + first.height / 2)
+      : [];
+    const chain = stack.length ? stack : [];
+    if (!chain.length) for (let node = el; node; node = node.parentElement) chain.push(node);
+    const layers = [];
+    for (const node of chain) {
+      if (node === document.body || node === document.documentElement) break;
+      if (node.matches(".glow, .grid-bg")) continue;
+      const s = getComputedStyle(node);
+      if (s.backgroundImage && s.backgroundImage !== "none" && !node.matches("li, ol, ul")) return null;
+      const { rgb, a } = rgba(s.backgroundColor);
+      const opacity = Number(s.opacity);
+      if (a > 0) layers.push({ rgb, a: a * opacity });
+      if (a * opacity >= 1) break;
+      if (node.classList.contains("slide")) break;
+    }
+    let base = [255, 255, 255];
+    for (const layer of layers.reverse()) {
+      base = base.map((v, i) => v * (1 - layer.a) + layer.rgb[i] * layer.a);
+    }
+    return base;
+  }
+
+  function rgba(color) {
+    probe.clearRect(0, 0, 1, 1);
+    probe.fillStyle = "rgba(0,0,0,0)";
+    probe.fillStyle = color;
+    probe.fillRect(0, 0, 1, 1);
+    const [r, g, b, a] = probe.getImageData(0, 0, 1, 1).data;
+    return { rgb: [r, g, b], a: a / 255 };
+  }
+
+  function luminance([r, g, b]) {
+    const lin = (v) => {
+      const c = v / 255;
+      return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+    };
+    return 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b);
+  }
+
+  function contrast(fg, bg) {
+    const [hi, lo] = [luminance(fg), luminance(bg)].sort((x, y) => y - x);
+    return (hi + 0.05) / (lo + 0.05);
+  }
+
   function family(css) {
     return css.split(",")[0].trim().replace(/^["']|["']$/g, "");
   }
@@ -178,6 +230,8 @@ function inspectDeck() {
   const result = [];
   let next = 0;
   slides.forEach((slide, index) => {
+    // Hit-testing (elementsFromPoint) only sees what is in the viewport.
+    slide.scrollIntoView({ block: "start" });
     const box = slide.getBoundingClientRect();
     const warnings = [];
     const notes = Array.from(slide.querySelectorAll(".notes"))
@@ -273,6 +327,16 @@ function inspectDeck() {
       if (el.scrollHeight > el.clientHeight + 2 && s.overflowY !== "visible") {
         warnings.push(`text clipped inside its box: "${label}"`);
       }
+      const behind = backdrop(el, rects);
+      if (behind) {
+        const ink = rgba(s.color);
+        const fg = ink.rgb.map((v, i) => v * ink.a + behind[i] * (1 - ink.a));
+        const ratio = contrast(fg, behind);
+        const large = size >= 24 || (size >= 18.5 && Number(s.fontWeight) >= 700);
+        if (ratio < (large ? 3 : 4.5)) {
+          warnings.push(`low contrast ${ratio.toFixed(1)}:1 (text colour on its background): "${label}"`);
+        }
+      }
       const outside =
         r.left < box.left - 1 || r.top < box.top - 1 || r.right > box.right + 1 || r.bottom > box.bottom + 1;
       if (outside) warnings.push(`text runs off the slide: "${label}"`);
@@ -301,6 +365,52 @@ function inspectDeck() {
         }
       }
     }
+    // Boxes (anything with a fill or border) must not overlap unless one
+    // contains the other.
+    const boxes = Array.from(slide.querySelectorAll("*")).filter((el) => {
+      if (el.closest(".blob, .glow, .grid-bg, .notes, [data-deco], [data-allow-overlap], svg")) return false;
+      const s = getComputedStyle(el);
+      if (s.position === "absolute" && el.parentElement === slide) return false;
+      const filled = rgba(s.backgroundColor).a > 0.05 || s.backgroundImage !== "none";
+      const bordered = ["Top", "Right", "Bottom", "Left"].some(
+        (side) => parseFloat(s[`border${side}Width`]) > 0 && rgba(s[`border${side}Color`]).a > 0.05,
+      );
+      const r = el.getBoundingClientRect();
+      return (filled || bordered) && r.width > 24 && r.height > 24;
+    });
+    const named = (el) =>
+      `${el.tagName.toLowerCase()}${typeof el.className === "string" && el.className.trim() ? `.${el.className.trim().split(/\s+/).join(".")}` : ""}`;
+    let overlaps = 0;
+    for (let i = 0; i < boxes.length && overlaps < 3; i += 1) {
+      for (let j = i + 1; j < boxes.length && overlaps < 3; j += 1) {
+        const a = boxes[i];
+        const b = boxes[j];
+        if (a.contains(b) || b.contains(a)) continue;
+        const ra = a.getBoundingClientRect();
+        const rb = b.getBoundingClientRect();
+        const ox = Math.min(ra.right, rb.right) - Math.max(ra.left, rb.left);
+        const oy = Math.min(ra.bottom, rb.bottom) - Math.max(ra.top, rb.top);
+        if (ox > 2 && oy > 2) {
+          overlaps += 1;
+          warnings.push(`boxes overlap: ${named(a)} and ${named(b)}`);
+        }
+      }
+    }
+    // Text spilling out of the box it belongs to (a card squeezed by a full
+    // slide), in-flow text only.
+    spill: for (const el of boxes) {
+      const r = el.getBoundingClientRect();
+      for (const b of blocks) {
+        const node = slide.querySelector(`[data-kx="${b.id}"]`);
+        if (!node || !el.contains(node) || node === el) continue;
+        if (getComputedStyle(node).position === "absolute") continue;
+        if (b.y + b.h > r.bottom - box.top + 3 || b.x + b.w > r.right - box.left + 3) {
+          warnings.push(`text spills out of its box: ${named(el)} (shorten it or give it room)`);
+          break spill;
+        }
+      }
+    }
+
     // Decorative shapes must not sit under text.
     for (const deco of slide.querySelectorAll(".blob, [data-deco]")) {
       const d = deco.getBoundingClientRect();
@@ -489,7 +599,13 @@ async function main() {
   const files = [report.outputs.pdf, report.outputs.pptx]
     .filter(Boolean)
     .map((file) => ({ output_path: relative(process.cwd(), file) || file }));
-  console.log(JSON.stringify({ ok: report.ok, files, ...report }, null, 2));
+  const warnings = report.slides.flatMap((slide) => [
+    ...slide.warnings.map((w) => `slide ${slide.index}: ${w}`),
+    ...(slide.note ? [`slide ${slide.index}: ${slide.note}`] : []),
+  ]);
+  console.log(
+    JSON.stringify({ ok: report.ok, files, warnings: [...report.problems, ...warnings], ...report }, null, 2),
+  );
   if (!report.ok) {
     console.error(
       `\n${warned.length} slide(s) with warnings${report.problems.length ? ` and ${report.problems.length} problem(s)` : ""}: fix them, rebuild, and look at the previews again.`,

@@ -78,6 +78,16 @@ Vietnamese. Use only these fonts.
 Slide variants: `cover`, `section` (with `.big` number), `dark`,
 `accent-bg`.
 
+**Colour contexts.** Text, lines and highlights read the tokens `--ink`,
+`--ink-2`, `--ink-3`, `--line`, `--surface` and `--hl`. A `dark` or
+`accent-bg` slide, a `.card.dark` / `.card.fill` and a `.callout` re-point
+them, so everything inside stays readable. On a dark or accent slide a plain
+`.card` is a translucent panel with light text; for a **white card on a dark
+or coloured slide use `.card.light`** (it restores dark text). Never paint a
+background or text colour by hand (`style="background:#fff"`,
+`color: white`) — that is how text ends up white on white. For custom
+colours, set the tokens on the element instead.
+
 Building blocks:
 
 | Class | Use |
@@ -100,6 +110,22 @@ Building blocks:
 Inline SVG works for diagrams, icons and charts (keep SVG text minimal —
 it stays part of the picture in the PPTX). `<img>` for photos and
 screenshots (`.photo` covers its box).
+
+## Lint warnings you must clear
+
+`warnings` in the build output lists every problem as `slide N: …`. A deck
+is not done until it is empty (or each remaining item is a deliberate,
+explained choice):
+
+- `low contrast X:1` — text is hard to read on what is behind it (needs
+  4.5:1, 3:1 for large text). Use the colour contexts above.
+- `boxes overlap` / `text spills out of its box` / `text blocks overlap` —
+  content does not fit: cut text, split the slide, or give the boxes room.
+  Never fix overlap with negative margins or absolute positions.
+- `runs off the slide`, `extends past the slide edge`, `clipped` — too
+  much content or a fixed size that is too small.
+- `content ends in the top half` — centre (`.body.center`) or enlarge.
+- `dense slide`, `text under 14px` — cut copy.
 
 ## Design rules — what makes slides look professional
 
