@@ -313,8 +313,11 @@ class Gateway:
         elif path.startswith("/khaidocs/"):
             # Locales and icons: stable names, so revalidate after a day.
             response.headers["Cache-Control"] = "public, max-age=86400"
+        elif path.startswith("/landing/fonts/"):
+            response.headers["Cache-Control"] = "public, max-age=604800"
         elif path.startswith("/landing/"):
-            response.headers["Cache-Control"] = "public, max-age=3600"
+            # The landing's script changes with the page: always revalidate.
+            response.headers["Cache-Control"] = "no-cache"
         elif path in {"/", "/app", "/index.html", "/web-build.json"}:
             # Revalidated on every load (ETag), so a new release shows at once.
             response.headers["Cache-Control"] = "no-cache"

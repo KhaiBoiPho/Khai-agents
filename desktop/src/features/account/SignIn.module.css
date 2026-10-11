@@ -46,7 +46,7 @@
   --accent: #06b6d4;
   --sky: #0ea5e9;
   --teal: #4ecdc4;
-  --grid: rgb(233 241 243 / 2.5%);
+  --grid: rgb(233 241 243 / 3.5%);
   --sans: "IBM Plex Sans", var(--font-ui, system-ui), sans-serif;
   --mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
 
@@ -83,7 +83,7 @@
     linear-gradient(90deg, var(--grid) 1px, transparent 1px);
   background-position: -1px -1px;
   background-size: 32px 32px;
-  mask-image: radial-gradient(ellipse 70% 75% at 50% 35%, #000 25%, transparent 75%);
+  mask-image: radial-gradient(ellipse 80% 80% at 50% 40%, #000 35%, transparent 85%);
 }
 
 .top {

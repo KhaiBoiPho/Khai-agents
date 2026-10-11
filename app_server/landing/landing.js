@@ -1,5 +1,7 @@
 // Khai landing: terminal replay and scroll reveal (from the DeepCode landing, MIT).
 (function(){
+  // Content is visible without this script; only now hide it to animate.
+  document.documentElement.classList.add("js");
   var reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
   var rows = Array.prototype.slice.call(document.querySelectorAll("#replay .row"));
   if (reduce){ rows.forEach(function(r){ r.classList.add("on"); }); }
