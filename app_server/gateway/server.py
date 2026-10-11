@@ -69,10 +69,15 @@ logger = logging.getLogger(__name__)
 MAX_JSON = 16 * 1024
 # How long an "is this account active" answer is reused (see _active_user).
 USER_CACHE_SECONDS = 5.0
-# Public routes that never need the session.
+# Public routes that never need the session. "/" is not one: it looks the
+# session up to choose between the landing page and the app.
 STATIC_PATHS = frozenset(
-    {"/", "/index.html", "/web-build.json", "/health/live", "/auth/config"}
+    {"/app", "/index.html", "/web-build.json", "/health/live", "/auth/config"}
 )
+# The public landing page (signed-out visitors at "/") and its files; its
+# fonts are the slide fonts already shipped in tools/slides/fonts.
+LANDING_DIRECTORY = Path(__file__).resolve().parents[1] / "landing"
+LANDING_FONTS = Path(__file__).resolve().parents[2] / "tools" / "slides" / "fonts"
 MAX_UPLOAD = 10 * 1024 * 1024 + 1024
 USER = web.AppKey("user", object)
 SESSION = web.AppKey("session", object)
@@ -157,8 +162,11 @@ class Gateway:
         app.add_routes(
             [
                 web.get("/health/live", self.health),
-                web.get("/", self.index),
+                web.get("/", self.home),
+                web.get("/app", self.index),
                 web.get("/index.html", self.index),
+                web.get("/landing/fonts/{path:.*}", self.landing_font),
+                web.get("/landing/{path:.*}", self.landing_asset),
                 web.get("/web-build.json", self.manifest),
                 web.get("/assets/{path:.*}", self.asset),
                 web.get("/khaidocs/{path:.*}", self.khaidocs_asset),
@@ -257,6 +265,7 @@ class Gateway:
             path in STATIC_PATHS
             or path.startswith("/assets/")
             or path.startswith("/khaidocs/")
+            or path.startswith("/landing/")
         )
 
     async def _active_user(self, user_id: str) -> User | None:
@@ -304,7 +313,9 @@ class Gateway:
         elif path.startswith("/khaidocs/"):
             # Locales and icons: stable names, so revalidate after a day.
             response.headers["Cache-Control"] = "public, max-age=86400"
-        elif path in {"/", "/index.html", "/web-build.json"}:
+        elif path.startswith("/landing/"):
+            response.headers["Cache-Control"] = "public, max-age=3600"
+        elif path in {"/", "/app", "/index.html", "/web-build.json"}:
             # Revalidated on every load (ETag), so a new release shows at once.
             response.headers["Cache-Control"] = "no-cache"
         elif "Cache-Control" not in response.headers:
@@ -398,6 +409,22 @@ class Gateway:
 
     async def health(self, _request) -> web.Response:
         return web.json_response({"status": "ready"})
+
+    async def home(self, request) -> web.StreamResponse:
+        """The app for a signed-in visitor, the landing page for anyone else."""
+
+        if request[USER] is not None:
+            return await self.index(request)
+        landing = LANDING_DIRECTORY / "index.html"
+        if not landing.is_file():
+            return await self.index(request)
+        return web.FileResponse(landing)
+
+    async def landing_asset(self, request) -> web.FileResponse:
+        return self._static(LANDING_DIRECTORY.resolve(), request.match_info["path"])
+
+    async def landing_font(self, request) -> web.FileResponse:
+        return self._static(LANDING_FONTS.resolve(), request.match_info["path"])
 
     async def index(self, _request) -> web.StreamResponse:
         index = self.settings.assets / "index.html"
