@@ -102,12 +102,13 @@ describe('ThinkingDepthSelector', () => {
     const highDot = container.querySelector('[data-level="high"]') as HTMLElement;
     const thumb = container.querySelector('.ax-effort-thumb') as HTMLElement;
     // Dots and thumb are positioned by their left edge; centers are
-    // dotWidth/2 = 11 and thumbWidth/2 = 10 to the right of `left`.
+    // dotWidth/2 = 8 and thumbWidth/2 = 7 to the right of `left` (this
+    // app's compact rail: 16px dots, 14px thumb).
     expect(lowDot.style.left).toBe('-1px');
-    expect(mediumDot.style.left).toBe('89px');
-    expect(highDot.style.left).toBe('179px');
-    // Pointer at x=30 → thumb center 30 → thumb left edge 20.
-    expect(thumb.style.left).toBe('20px');
+    expect(mediumDot.style.left).toBe('92px');
+    expect(highDot.style.left).toBe('185px');
+    // Pointer at x=30 → thumb center 30 → thumb left edge 23.
+    expect(thumb.style.left).toBe('23px');
     fireEvent.pointerMove(track, { pointerId: 1, clientX: 160 });
     expect(onChange).toHaveBeenCalledWith('high');
     fireEvent.pointerUp(track, { pointerId: 1, clientX: 160 });
@@ -142,8 +143,9 @@ describe('ThinkingDepthSelector', () => {
     const highDot = container.querySelector('[data-level="high"]') as HTMLElement;
     const thumb = container.querySelector('.ax-effort-thumb') as HTMLElement;
     expect(lowDot.style.left).toBe('-1px');
-    expect(highDot.style.left).toBe('177px');
-    expect(thumb.style.left).toBe('0px');
+    expect(highDot.style.left).toBe('183px');
+    // Pointer at x=16, content edge at 6 → thumb center 10 → left edge 3.
+    expect(thumb.style.left).toBe('3px');
   });
 
   it('renders a canvas particle layer for the ember stream', () => {

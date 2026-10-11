@@ -358,24 +358,65 @@
   }
 }
 
-/* Ambient "Aqua" backdrop, after Auraxis (MIT, see THIRD_PARTY_NOTICES.md):
-   soft violet/green light over the shell, with the workspace as frosted
-   glass floating on it. */
+/* Ambient backdrop, after Auraxis's Aqua theme with a wallpaper (MIT, see
+   THIRD_PARTY_NOTICES.md): large soft colour fields, as if a photo were
+   blurred behind the glass, and the panes floating on it as frosted glass. */
 .shell {
   background:
-    radial-gradient(1100px 720px at 8% -12%, rgb(124 108 240 / 30%), transparent 62%),
-    radial-gradient(960px 680px at 104% 12%, rgb(79 174 134 / 22%), transparent 58%),
-    radial-gradient(900px 900px at 55% 120%, rgb(124 108 240 / 26%), transparent 64%),
-    radial-gradient(700px 500px at 30% 60%, rgb(234 120 34 / 8%), transparent 70%),
-    var(--surface-shell);
+    radial-gradient(42% 52% at 8% 12%, rgb(244 206 120 / 75%), transparent 70%),
+    radial-gradient(38% 46% at 34% 4%, rgb(236 158 168 / 60%), transparent 72%),
+    radial-gradient(40% 50% at 70% 10%, rgb(150 180 232 / 70%), transparent 70%),
+    radial-gradient(36% 48% at 96% 34%, rgb(190 160 222 / 65%), transparent 72%),
+    radial-gradient(44% 50% at 62% 74%, rgb(162 210 140 / 70%), transparent 70%),
+    radial-gradient(40% 46% at 22% 86%, rgb(240 128 112 / 62%), transparent 70%),
+    radial-gradient(36% 44% at 92% 96%, rgb(240 150 130 / 55%), transparent 72%),
+    #e9e4dc;
 }
 
 .workspace {
-  background: color-mix(in srgb, var(--surface-raised) 38%, transparent);
-  backdrop-filter: blur(18px) saturate(1.35);
-  -webkit-backdrop-filter: blur(18px) saturate(1.35);
+  border-color: rgb(255 255 255 / 45%);
+  background: color-mix(in srgb, var(--surface-raised) 34%, transparent);
+  backdrop-filter: blur(28px) saturate(1.5);
+  -webkit-backdrop-filter: blur(28px) saturate(1.5);
   box-shadow:
     0 1px 2px rgb(20 24 30 / 4%),
-    0 12px 32px -8px rgb(20 24 30 / 14%),
-    inset 0 1px 0 rgb(255 255 255 / 8%);
+    0 14px 36px -10px rgb(20 24 30 / 18%),
+    inset 0 1px 0 rgb(255 255 255 / 40%);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .shell {
+    background:
+      radial-gradient(42% 52% at 8% 12%, rgb(150 110 40 / 55%), transparent 70%),
+      radial-gradient(38% 46% at 34% 4%, rgb(140 60 80 / 45%), transparent 72%),
+      radial-gradient(40% 50% at 70% 10%, rgb(50 80 150 / 55%), transparent 70%),
+      radial-gradient(36% 48% at 96% 34%, rgb(100 60 150 / 50%), transparent 72%),
+      radial-gradient(44% 50% at 62% 74%, rgb(50 110 60 / 50%), transparent 70%),
+      radial-gradient(40% 46% at 22% 86%, rgb(150 50 40 / 45%), transparent 70%),
+      #121214;
+  }
+
+  :root:not([data-theme="light"]) .workspace {
+    border-color: rgb(255 255 255 / 8%);
+    background: color-mix(in srgb, var(--surface-raised) 55%, transparent);
+    box-shadow:
+      0 14px 36px -10px rgb(0 0 0 / 45%),
+      inset 0 1px 0 rgb(255 255 255 / 6%);
+  }
+}
+
+:root[data-theme="dark"] .shell {
+  background:
+    radial-gradient(42% 52% at 8% 12%, rgb(150 110 40 / 55%), transparent 70%),
+    radial-gradient(38% 46% at 34% 4%, rgb(140 60 80 / 45%), transparent 72%),
+    radial-gradient(40% 50% at 70% 10%, rgb(50 80 150 / 55%), transparent 70%),
+    radial-gradient(36% 48% at 96% 34%, rgb(100 60 150 / 50%), transparent 72%),
+    radial-gradient(44% 50% at 62% 74%, rgb(50 110 60 / 50%), transparent 70%),
+    radial-gradient(40% 46% at 22% 86%, rgb(150 50 40 / 45%), transparent 70%),
+    #121214;
+}
+
+:root[data-theme="dark"] .workspace {
+  border-color: rgb(255 255 255 / 8%);
+  background: color-mix(in srgb, var(--surface-raised) 55%, transparent);
 }

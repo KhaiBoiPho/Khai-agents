@@ -1045,7 +1045,7 @@
 
 /* Frosted glass over the ambient shell backdrop (App.module.css). */
 .sidebar {
-  background: color-mix(in srgb, var(--surface-sidebar) 58%, transparent);
-  backdrop-filter: blur(18px) saturate(1.35);
-  -webkit-backdrop-filter: blur(18px) saturate(1.35);
+  background: color-mix(in srgb, var(--surface-sidebar) 40%, transparent);
+  backdrop-filter: blur(28px) saturate(1.5);
+  -webkit-backdrop-filter: blur(28px) saturate(1.5);
 }

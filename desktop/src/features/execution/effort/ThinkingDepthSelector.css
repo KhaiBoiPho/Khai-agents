@@ -5,9 +5,10 @@
    theme. The canvas reads --color-violet and --color-bg-elevated as hex, so
    those two are literal per theme (Auraxis's own values). */
 .ax-effort {
-  --color-violet: #6a6884;
-  --color-violet-soft: rgba(106, 104, 132, 0.1);
-  --color-violet-border: rgba(106, 104, 132, 0.24);
+  /* Brighter than Auraxis's muted violet so the ember stream stands out. */
+  --color-violet: #7c4dff;
+  --color-violet-soft: rgba(124, 77, 255, 0.16);
+  --color-violet-border: rgba(124, 77, 255, 0.35);
   --color-bg-elevated: #ffffff;
   --color-bg-tertiary: var(--surface-inset);
   --color-border-dim: var(--border-subtle);
@@ -20,17 +21,17 @@
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) .ax-effort {
-    --color-violet: #8c8aa8;
-    --color-violet-soft: rgba(140, 138, 168, 0.14);
-    --color-violet-border: rgba(140, 138, 168, 0.3);
+    --color-violet: #a78bfa;
+    --color-violet-soft: rgba(167, 139, 250, 0.2);
+    --color-violet-border: rgba(167, 139, 250, 0.4);
     --color-bg-elevated: #2c3037;
   }
 }
 
 :root[data-theme="dark"] .ax-effort {
-  --color-violet: #8c8aa8;
-  --color-violet-soft: rgba(140, 138, 168, 0.14);
-  --color-violet-border: rgba(140, 138, 168, 0.3);
+  --color-violet: #a78bfa;
+  --color-violet-soft: rgba(167, 139, 250, 0.2);
+  --color-violet-border: rgba(167, 139, 250, 0.4);
   --color-bg-elevated: #2c3037;
 }
 
@@ -256,4 +257,33 @@
     transform: translateY(var(--effort-exit-y, -4px));
     filter: blur(2px);
   }
+}
+
+/* Compact: a slimmer rail and thumb than Auraxis's 32px. */
+.ax-effort .ax-effort-track {
+  height: 22px;
+  border-radius: 7px;
+}
+
+.ax-effort .ax-effort-thumb {
+  width: 14px;
+  height: 18px;
+  border-radius: 5px;
+}
+
+.ax-effort .ax-effort-dot {
+  width: 16px;
+  height: 16px;
+}
+
+.ax-effort .ax-effort-dot::after {
+  width: 4px;
+  height: 4px;
+}
+
+.ax-effort .ax-effort-desc {
+  min-height: 0;
+  padding-top: 4px;
+  font-size: 11px;
+  line-height: 16px;
 }

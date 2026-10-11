@@ -6,8 +6,8 @@ export const THINKING_LEVELS: readonly ThinkingLevel[] = ['low', 'medium', 'high
 export const THINKING_LEVEL_INDEX: Record<ThinkingLevel, number> = { low: 0, medium: 1, high: 2 };
 export const THINKING_MAX_LEVEL = THINKING_LEVELS.length - 1;
 
-export const THUMB_WIDTH = 20;
-export const DOT_WIDTH = 22;
+export const THUMB_WIDTH = 14;
+export const DOT_WIDTH = 16;
 export const SPRING_STIFFNESS = 920;
 export const SPRING_DAMPING = 42;
 
