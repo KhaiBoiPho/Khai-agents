@@ -75,6 +75,21 @@ def test_builtin_definition_is_workspace_scoped_and_compact(tmp_path: Path) -> N
     assert builtin_server_definitions({"GENOFFICE_BIN": "", "KHAI_BUILTIN_WEBSEARCH": "off"}) == {}
 
 
+def test_app_only_tools_are_hidden_without_the_genoffice_app(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    binary = _fake_binary(tmp_path / "genoffice")
+    monkeypatch.setattr(genoffice, "_INSTALLED_APP_PATHS", ())
+    server = builtin_server_definitions({"GENOFFICE_BIN": str(binary)})[GENOFFICE_SERVER_NAME]
+    for tool in ("render", "slides_render", "create_pdf"):
+        assert not server.exposes(tool)
+    assert server.exposes("convert") and server.exposes("create_docx")
+    with_app = builtin_server_definitions(
+        {"GENOFFICE_BIN": str(binary), "GENOFFICE_APP_BIN": "/opt/app"}
+    )[GENOFFICE_SERVER_NAME]
+    assert with_app.exposes("render") and with_app.exposes("create_pdf")
+
+
 def test_genoffice_instructions_avoid_empty_or_unparseable_docx_html() -> None:
     instructions = builtin_server_instructions(GENOFFICE_SERVER_NAME)
     assert instructions is not None

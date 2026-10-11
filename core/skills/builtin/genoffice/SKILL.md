@@ -67,6 +67,9 @@ operator runs `scripts/setup-genoffice.sh`); never hand-write Office XML.
 hidden GenOffice renderer for a few seconds; they need the GenOffice app on
 this machine. If they fail with `app_unavailable`, deliver the file anyway and
 say the visual check was skipped.
+On a server these tools are hidden: look at pages with the built-in
+`document_export {action: "preview"}` and print PDFs with
+`document_export {action: "pdf"}` instead.
 
 ## Workflow for "make me a report / deck / sheet"
 

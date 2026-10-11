@@ -145,8 +145,11 @@ function PdfView({ bytes }: { bytes: ArrayBuffer }) {
   const [pages, setPages] = useState<{ shown: number; total: number } | null>(null);
   const { hostRef, state } = useRender(
     async (host, isLive) => {
-      const pdfjs = await import("pdfjs-dist");
-      const worker = await import("pdfjs-dist/build/pdf.worker.min.mjs?url");
+      // The legacy build carries polyfills (Math.sumPrecise, …) that the
+      // modern one assumes; without them browsers fail to load embedded
+      // fonts and draw raw character codes, garbling the text.
+      const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
+      const worker = await import("pdfjs-dist/legacy/build/pdf.worker.min.mjs?url");
       pdfjs.GlobalWorkerOptions.workerSrc = worker.default;
       // pdf.js transfers the buffer to its worker; hand it a copy.
       const task = pdfjs.getDocument({ data: bytes.slice(0) });

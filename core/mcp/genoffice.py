@@ -43,6 +43,28 @@ GENOFFICE_DISABLED_TOOLS: tuple[str, ...] = (
     "media",
 )
 
+# Tools that print through the GenOffice desktop app (a hidden Electron
+# window). Servers have no app, so these only fail with app_unavailable;
+# hide them there. PDFs then go through the LibreOffice document_export tool.
+GENOFFICE_APP_TOOLS: tuple[str, ...] = ("render", "slides_render", "create_pdf")
+GENOFFICE_APP_BIN_ENV = "GENOFFICE_APP_BIN"
+_INSTALLED_APP_PATHS: tuple[str, ...] = (
+    "/opt/GenOffice/genoffice",
+    "/usr/bin/genoffice",
+    "/Applications/GenOffice.app/Contents/MacOS/GenOffice",
+    "~/Applications/GenOffice.app/Contents/MacOS/GenOffice",
+)
+
+
+def genoffice_app_available(env: Mapping[str, str] | None = None) -> bool:
+    """Whether the GenOffice desktop app can be launched on this machine."""
+
+    environ = os.environ if env is None else env
+    if environ.get(GENOFFICE_APP_BIN_ENV):
+        return True
+    return any(Path(path).expanduser().is_file() for path in _INSTALLED_APP_PATHS)
+
+
 GENOFFICE_DESCRIPTION = (
     "Built-in GenOffice document engine: create, convert, read, edit and render "
     "DOCX, XLSX, PPTX, PDF, Markdown and HTML files in the workspace."
@@ -113,7 +135,9 @@ def resolve_genoffice_binary(
     return Path(found) if found else None
 
 
-def genoffice_server_definition(binary: Path) -> McpServerDefinition:
+def genoffice_server_definition(
+    binary: Path, *, app_available: bool = True
+) -> McpServerDefinition:
     """The built-in stdio definition for one resolved ``genoffice`` binary.
 
     ``--compact-schemas`` keeps tools/list at roughly 8.6k tokens instead of
@@ -137,7 +161,8 @@ def genoffice_server_definition(binary: Path) -> McpServerDefinition:
             "envVars": ["GENOFFICE_NODE"],
             "startupTimeoutSeconds": 30,
             "toolTimeoutSeconds": 300,
-            "disabledTools": list(GENOFFICE_DISABLED_TOOLS),
+            "disabledTools": list(GENOFFICE_DISABLED_TOOLS)
+            + ([] if app_available else list(GENOFFICE_APP_TOOLS)),
             "approvalMode": "auto",
             "description": GENOFFICE_DESCRIPTION,
         }
@@ -171,7 +196,9 @@ def builtin_server_definitions(
     servers: dict[str, McpServerDefinition] = {}
     binary = resolve_genoffice_binary(env)
     if binary is not None:
-        servers[GENOFFICE_SERVER_NAME] = genoffice_server_definition(binary)
+        servers[GENOFFICE_SERVER_NAME] = genoffice_server_definition(
+            binary, app_available=genoffice_app_available(environ)
+        )
     if builtin_websearch_enabled(environ):
         servers[FIRECRAWL_SERVER_NAME] = firecrawl_server_definition()
     return servers
@@ -194,7 +221,9 @@ __all__ = [
     "BUILTIN_WEBSEARCH_ENV",
     "BUNDLED_GENOFFICE_BIN",
     "GENOFFICE_BIN_ENV",
+    "GENOFFICE_APP_TOOLS",
     "GENOFFICE_DISABLED_TOOLS",
+    "genoffice_app_available",
     "GENOFFICE_SERVER_NAME",
     "GENOFFICE_KHAI_INSTRUCTIONS",
     "builtin_server_definitions",
