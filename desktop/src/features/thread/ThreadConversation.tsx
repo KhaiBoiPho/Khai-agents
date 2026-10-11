@@ -28,6 +28,7 @@ import {
   reuseUnchangedTurns,
   type ConversationTurn,
 } from "./conversationModel";
+import { DocumentDownloadContext } from "./documentFiles";
 import styles from "./ThreadConversation.module.css";
 import { TurnBlock } from "./TurnBlock";
 import type { TranscriptMode } from "./transcriptMode";
@@ -48,6 +49,8 @@ interface ThreadConversationProps {
   onRespondToApproval(approvalId: string, decision: ApprovalDecision): void;
   onRetryTurn(turnId: string): void;
   onCancelQueuedTurn(turnId: string): void;
+  /** Download a workspace file; absent where the runtime cannot. */
+  onDownloadFile?(path: string): void;
 }
 
 const FOLLOW_THRESHOLD = 120;
@@ -82,6 +85,7 @@ export function ThreadConversation({
   onRespondToApproval,
   onRetryTurn,
   onCancelQueuedTurn,
+  onDownloadFile,
 }: ThreadConversationProps) {
   const scrollViewportRef = useRef<HTMLDivElement | null>(null);
   const endRef = useRef<HTMLDivElement | null>(null);
@@ -245,6 +249,7 @@ export function ThreadConversation({
         ref={scrollViewportRef}
       >
         <div className={styles.conversation}>
+          <DocumentDownloadContext.Provider value={onDownloadFile ?? null}>
           <CitationContext.Provider value={openCitation}>
             {groupedTurns.map((group) => (
               <Fragment key={group.id}>
@@ -269,6 +274,7 @@ export function ThreadConversation({
               </Fragment>
             ))}
           </CitationContext.Provider>
+          </DocumentDownloadContext.Provider>
           {compactionsAfter.trailing.map((entry) => (
             <CompactionNotice key={entry.id} entry={entry} />
           ))}

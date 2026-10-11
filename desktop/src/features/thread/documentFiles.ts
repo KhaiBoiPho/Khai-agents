@@ -1,4 +1,13 @@
+import { createContext, useContext } from "react";
+
 import type { Item } from "../../generated/app-server";
+
+/** Downloads a workspace file of the open thread; null where unsupported. */
+export const DocumentDownloadContext = createContext<((path: string) => void) | null>(null);
+
+export function useDocumentDownload() {
+  return useContext(DocumentDownloadContext);
+}
 
 /** A document a tool call wrote, as the backend projection reports it. */
 export interface DocumentFileView {
@@ -6,6 +15,8 @@ export interface DocumentFileView {
   name: string;
   extension: string;
   sizeBytes: number | null;
+  /** The same deliverable in other formats (a deck's PPTX and HTML source). */
+  alternates: DocumentFileView[];
 }
 
 const TYPE_LABELS: Record<string, string> = {
@@ -39,15 +50,13 @@ export function formatFileSize(bytes: number | null): string | null {
   return `${value >= 10 ? Math.round(value) : value.toFixed(1)} ${units[unit]}`;
 }
 
-function itemDocuments(item: Item): DocumentFileView[] {
-  if (item.status !== "completed") return [];
-  const value = item.payload.documents;
+function parseDocuments(value: unknown, nested = false): DocumentFileView[] {
   if (!Array.isArray(value)) return [];
   return value.flatMap((candidate): DocumentFileView[] => {
     if (typeof candidate !== "object" || candidate === null || Array.isArray(candidate)) {
       return [];
     }
-    const { path, name, extension, sizeBytes } = candidate as Record<string, unknown>;
+    const { path, name, extension, sizeBytes, alternates } = candidate as Record<string, unknown>;
     if (typeof path !== "string" || !path) return [];
     return [
       {
@@ -56,16 +65,29 @@ function itemDocuments(item: Item): DocumentFileView[] {
         extension:
           typeof extension === "string" ? extension : path.split(".").pop() ?? "",
         sizeBytes: typeof sizeBytes === "number" ? sizeBytes : null,
+        alternates: nested ? [] : parseDocuments(alternates, true),
       },
     ];
   });
 }
 
-/** Every document the turn's tool calls wrote, once per path (latest wins), in first-seen order. */
+function itemDocuments(item: Item): DocumentFileView[] {
+  if (item.status !== "completed") return [];
+  return parseDocuments(item.payload.documents);
+}
+
+/**
+ * Every document the turn's tool calls wrote, once per path (latest wins), in
+ * first-seen order. A file that is another card's alternate format (a deck's
+ * HTML source, written before the build) folds into that card.
+ */
 export function turnDocuments(items: readonly Item[]): DocumentFileView[] {
   const byPath = new Map<string, DocumentFileView>();
   for (const item of items) {
     for (const document of itemDocuments(item)) byPath.set(document.path, document);
   }
-  return [...byPath.values()];
+  const folded = new Set(
+    [...byPath.values()].flatMap((document) => document.alternates.map((alt) => alt.path)),
+  );
+  return [...byPath.values()].filter((document) => !folded.has(document.path));
 }

@@ -94,3 +94,95 @@
     transition: none;
   }
 }
+
+/* A card and its download control sit side by side as one tile. */
+.item {
+  position: relative;
+  display: flex;
+  min-width: 0;
+  align-items: stretch;
+}
+
+.item .card {
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
+.download {
+  display: inline-flex;
+  height: 100%;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  padding: 0 10px;
+  border: 1px solid var(--border-subtle);
+  border-left: 0;
+  border-radius: 0 var(--radius-md) var(--radius-md) 0;
+  background: var(--surface-raised);
+  color: var(--text-secondary);
+  transition:
+    background 140ms ease,
+    color 140ms ease;
+}
+
+.download:hover,
+.download[aria-expanded="true"] {
+  background: var(--surface-hover);
+  color: var(--text-primary);
+}
+
+.downloadMenu {
+  position: relative;
+  display: flex;
+}
+
+.menu {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + 6px);
+  right: 0;
+  min-width: 200px;
+  margin: 0;
+  padding: 4px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  background: var(--surface-raised);
+  box-shadow: 0 12px 32px -8px rgb(0 0 0 / 28%);
+  list-style: none;
+}
+
+.menu button {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 8px;
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-size: var(--text-xs);
+  text-align: left;
+}
+
+.menu button:hover,
+.menu button:focus-visible {
+  background: var(--surface-hover);
+}
+
+.menu small {
+  color: var(--text-tertiary);
+  font-size: var(--text-2xs);
+}
+
+.menuIcon {
+  display: inline-flex;
+  color: var(--text-secondary);
+}
+
+.menuIcon[data-tone="word"] { color: light-dark(#2b579a, #6b9be0); }
+.menuIcon[data-tone="pdf"] { color: light-dark(#b3261e, #f0726a); }
+.menuIcon[data-tone="slides"] { color: light-dark(#c24e1c, #f0864f); }
+.menuIcon[data-tone="web"] { color: light-dark(#d1491f, #ef7a50); }
+
+.menuLabel {
+  flex: 1;
+}

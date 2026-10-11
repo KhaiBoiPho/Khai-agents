@@ -693,6 +693,11 @@ export function App({
                     onCancelQueuedTurn={(turnId) =>
                       void controller.interruptTurn(turnId)
                     }
+                    onDownloadFile={
+                      runtime.downloadFile
+                        ? (path) => void runtime.downloadFile!(selectedThread.id, path)
+                        : undefined
+                    }
                   />
                 </Suspense>
               )}

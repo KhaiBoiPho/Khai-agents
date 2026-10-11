@@ -3,6 +3,7 @@
 // into PNG previews, a vector PDF and an editable PPTX, and lint it.
 //
 //   node build.mjs <deck.html> [--out <dir/name>] [--only check|pdf|pptx]
+//                  [--primary pdf|pptx]
 //
 // PPTX: each slide's artwork (backgrounds, shapes, gradients, images, SVG
 // charts) is rendered with its text hidden and placed as the slide picture;
@@ -25,16 +26,19 @@ const PX_PER_IN = 96;
 
 function usage(message) {
   if (message) console.error(`error: ${message}`);
-  console.error("usage: node build.mjs <deck.html> [--out <dir/name>] [--only check|pdf|pptx]");
+  console.error(
+    "usage: node build.mjs <deck.html> [--out <dir/name>] [--only check|pdf|pptx] [--primary pdf|pptx]",
+  );
   process.exit(2);
 }
 
 function parseArgs(argv) {
-  const args = { input: null, out: null, only: null, scale: 2 };
+  const args = { input: null, out: null, only: null, primary: "pdf", scale: 2 };
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i];
     if (arg === "--out") args.out = argv[++i];
     else if (arg === "--only") args.only = argv[++i];
+    else if (arg === "--primary") args.primary = argv[++i];
     else if (arg === "--help" || arg === "-h") usage();
     else if (arg.startsWith("--")) usage(`unknown option ${arg}`);
     else if (!args.input) args.input = arg;
@@ -42,6 +46,7 @@ function parseArgs(argv) {
   }
   if (!args.input) usage("missing deck.html");
   if (args.only && !["check", "pdf", "pptx"].includes(args.only)) usage("--only takes check, pdf or pptx");
+  if (!["pdf", "pptx"].includes(args.primary)) usage("--primary takes pdf or pptx");
   return args;
 }
 
@@ -596,9 +601,14 @@ async function main() {
   report.ok = !warned.length && !report.problems.length;
   // Deliverables first, as `output_path` entries: Khai turns those into file
   // cards in the chat (the tool result preview is cut after a few KB).
-  const files = [report.outputs.pdf, report.outputs.pptx]
-    .filter(Boolean)
-    .map((file) => ({ output_path: relative(process.cwd(), file) || file }));
+  // One deliverable: the format the user asked for, with the others (and
+  // the HTML source) as alternates the chat card offers for download.
+  const rel = (file) => relative(process.cwd(), file) || file;
+  const built = [report.outputs[args.primary], report.outputs.pdf, report.outputs.pptx].filter(Boolean);
+  const [primary, ...others] = [...new Set(built)];
+  const files = primary
+    ? [{ output_path: rel(primary), alternate_paths: [...others, input].map(rel) }]
+    : [];
   const warnings = report.slides.flatMap((slide) => [
     ...slide.warnings.map((w) => `slide ${slide.index}: ${w}`),
     ...(slide.note ? [`slide ${slide.index}: ${slide.note}`] : []),

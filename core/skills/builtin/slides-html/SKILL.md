@@ -26,20 +26,24 @@ Chromium and produces:
 2. **Write** `decks/<name>/<name>.html` (workspace-relative). Start from
    `assets/example.html` in this skill (read it once: it shows every layout
    in use). Keep images next to the deck and reference them relatively.
-3. **Build**:
-   `node <skill-dir>/scripts/build.mjs decks/<name>/<name>.html`
-   (`--only check` for a fast lint + previews while iterating; `--out` to
-   change the output base path).
+3. **Build** (from the workspace root):
+   `node <skill-dir>/scripts/build.mjs decks/<name>/<name>.html --primary pdf`
+   — `--primary` is the format the user asked for: `pdf` (default) or
+   `pptx` when they asked for PowerPoint/PPTX. Both are always built.
+   `--only check` gives a fast lint + previews while iterating; `--out`
+   changes the output base path.
 4. **Look**: open every `slide-NN.png` from the preview folder (read the
    images). Check hierarchy, alignment, balance, empty space, contrast and
    that nothing is cut off. Fix every lint warning and everything that looks
    off, rebuild, and look again. Two or three rounds are normal; do not
    report done before a clean build *and* a visual pass.
-5. **Deliver**: the chat shows the built PDF and PPTX as file cards. Link
-   files with workspace-relative paths, e.g.
-   `[PDF](decks/<name>/<name>.pdf)` — they open in the Files tab; never
-   absolute paths or `file://` URLs. The PDF is the faithful version; the
-   PPTX is for editing text in PowerPoint/Keynote.
+5. **Deliver**: the chat shows **one card** for the deck in the requested
+   format; its download menu offers the other formats (PDF, PPTX, HTML
+   source). So **do not list links or file paths** in your answer — say in a
+   sentence or two what the deck covers (slides, structure) and that the
+   card has the other formats. If you must point at a file, use a
+   workspace-relative link (`[deck](decks/<name>/<name>.pdf)`), never an
+   absolute path or `file://`.
 
 ## Deck structure
 

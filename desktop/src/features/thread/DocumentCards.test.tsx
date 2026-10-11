@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Item } from "../../generated/app-server";
 import { subscribeFilePreview } from "../inspector/filePreviewRequests";
 import { DocumentCards } from "./DocumentCards";
-import { formatFileSize, turnDocuments } from "./documentFiles";
+import { DocumentDownloadContext, formatFileSize, turnDocuments } from "./documentFiles";
 
 function toolItem(
   id: string,
@@ -30,9 +30,30 @@ describe("turnDocuments", () => {
       toolItem("e", "not a list"),
     ];
     expect(turnDocuments(items)).toEqual([
-      { path: "reports/q3.docx", name: "q3.docx", extension: "docx", sizeBytes: 20 },
-      { path: "decks/pitch.pptx", name: "pitch.pptx", extension: "pptx", sizeBytes: 2048 },
+      { path: "reports/q3.docx", name: "q3.docx", extension: "docx", sizeBytes: 20, alternates: [] },
+      { path: "decks/pitch.pptx", name: "pitch.pptx", extension: "pptx", sizeBytes: 2048, alternates: [] },
     ]);
+  });
+
+  it("folds a deck's other formats, and its earlier HTML card, into one card", () => {
+    const items = [
+      toolItem("w", [{ path: "decks/t/t.html", name: "t.html", extension: "html", sizeBytes: 9 }]),
+      toolItem("b", [
+        {
+          path: "decks/t/t.pdf",
+          name: "t.pdf",
+          extension: "pdf",
+          sizeBytes: 100,
+          alternates: [
+            { path: "decks/t/t.pptx", name: "t.pptx", extension: "pptx", sizeBytes: 200 },
+            { path: "decks/t/t.html", name: "t.html", extension: "html", sizeBytes: 9 },
+          ],
+        },
+      ]),
+    ];
+    const documents = turnDocuments(items);
+    expect(documents.map((document) => document.path)).toEqual(["decks/t/t.pdf"]);
+    expect(documents[0].alternates.map((alt) => alt.extension)).toEqual(["pptx", "html"]);
   });
 
   it("formats sizes compactly", () => {
@@ -57,7 +78,9 @@ describe("DocumentCards", () => {
     const unsubscribe = subscribeFilePreview((path) => opened.push(path));
     render(
       <DocumentCards
-        documents={[{ path: "decks/pitch.pptx", name: "pitch.pptx", extension: "pptx", sizeBytes: 8157 }]}
+        documents={[
+          { path: "decks/pitch.pptx", name: "pitch.pptx", extension: "pptx", sizeBytes: 8157, alternates: [] },
+        ]}
         onOpenInspector={onOpenInspector}
       />,
     );
@@ -72,7 +95,9 @@ describe("DocumentCards", () => {
   it("delivers a request made before the Files panel subscribes", () => {
     render(
       <DocumentCards
-        documents={[{ path: "reports/q3.docx", name: "q3.docx", extension: "docx", sizeBytes: null }]}
+        documents={[
+          { path: "reports/q3.docx", name: "q3.docx", extension: "docx", sizeBytes: null, alternates: [] },
+        ]}
         onOpenInspector={() => {}}
       />,
     );
@@ -81,5 +106,32 @@ describe("DocumentCards", () => {
     const unsubscribe = subscribeFilePreview((path) => opened.push(path));
     expect(opened).toEqual(["reports/q3.docx"]);
     unsubscribe();
+  });
+
+  it("offers each format of a deck for download from one card", () => {
+    const download = vi.fn();
+    render(
+      <DocumentDownloadContext.Provider value={download}>
+        <DocumentCards
+          documents={[
+            {
+              path: "decks/t/t.pdf",
+              name: "t.pdf",
+              extension: "pdf",
+              sizeBytes: 2048,
+              alternates: [
+                { path: "decks/t/t.pptx", name: "t.pptx", extension: "pptx", sizeBytes: 4096, alternates: [] },
+              ],
+            },
+          ]}
+          onOpenInspector={() => {}}
+        />
+      </DocumentDownloadContext.Provider>,
+    );
+    expect(screen.getByText("PDF · 2.0 KB · also PPTX")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: /Download t\.pdf as/ }));
+    fireEvent.click(screen.getByRole("menuitem", { name: /PowerPoint deck/ }));
+    expect(download).toHaveBeenCalledWith("decks/t/t.pptx");
+    expect(screen.queryByRole("menu")).toBeNull();
   });
 });

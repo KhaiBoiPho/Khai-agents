@@ -96,3 +96,31 @@ def test_projector_attaches_documents_only_to_successful_calls(
     )
     assert projector._documents_for(ok)[0]["path"] == "report.docx"
     assert projector._documents_for(failed) == []
+
+
+def test_alternate_formats_ride_on_the_primary_document(tmp_path: Path) -> None:
+    deck = tmp_path / "decks" / "talk"
+    deck.mkdir(parents=True)
+    for suffix in ("pdf", "pptx", "html"):
+        (deck / f"talk.{suffix}").write_text(suffix)
+    preview = json.dumps(
+        {
+            "ok": True,
+            "files": [
+                {
+                    "output_path": "decks/talk/talk.pdf",
+                    "alternate_paths": [
+                        "decks/talk/talk.pptx",
+                        "decks/talk/talk.html",
+                        "decks/talk/missing.docx",
+                    ],
+                }
+            ],
+        }
+    )
+    (document,) = document_outputs(result_preview=preview, edited_path=None, workspace=tmp_path)
+    assert document["path"] == "decks/talk/talk.pdf"
+    assert [alt["path"] for alt in document["alternates"]] == [
+        "decks/talk/talk.pptx",
+        "decks/talk/talk.html",
+    ]
