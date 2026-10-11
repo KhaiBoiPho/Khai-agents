@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 
 import { readCalendarTasks } from "./calendarFeed";
-import { createSeed } from "./seed";
+import { PLANNER_KEYS } from "../shared/persistentState";
+import { createFixture } from "./seed.fixture";
 import {
   activeFilterCount,
   addSubtask,
@@ -186,8 +187,9 @@ describe("tags and storage", () => {
 
 describe("calendar feed", () => {
   it("returns dated, unarchived tasks in range, in date order", () => {
-    // No storage in this environment, so the feed reads the seed.
-    const seed = createSeed();
+    // The feed reads storage; give it the old sample tasks.
+    const seed = createFixture();
+    localStorage.setItem(PLANNER_KEYS.tasks, JSON.stringify(seed));
     const dated = seed.tasks.filter((entry) => entry.dueDate).map((entry) => entry.dueDate!).sort();
     const feed = readCalendarTasks(dated[0]!, dated[dated.length - 1]!);
     expect(feed.length).toBe(dated.length);

@@ -131,7 +131,7 @@ export function useThinkingDepthSelector({
     THINKING_LEVELS.forEach((_, index) => {
       const dot = dotRefs.current[index];
       if (!dot) return;
-      const center = THUMB_WIDTH / 2 + (index / 2) * usable;
+      const center = THUMB_WIDTH / 2 + (index / THINKING_MAX_LEVEL) * usable;
       dot.style.left = `${center - DOT_WIDTH / 2}px`;
     });
   }, [measureTrack]);

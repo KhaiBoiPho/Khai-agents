@@ -287,3 +287,69 @@
   font-size: 11px;
   line-height: 16px;
 }
+
+/* Claude-style layout: level beside the title, help pushed right, the
+   Faster/Smarter ends above the rail, "Recommended" under its stop, and a
+   white pill thumb. */
+.ax-effort .ax-effort-head {
+  justify-content: flex-start;
+}
+
+.ax-effort .ax-effort-stage {
+  min-width: 0;
+  flex: 1;
+  text-align: left;
+}
+
+.ax-effort .ax-effort-stage > span {
+  right: auto;
+  left: 0;
+  color: var(--color-violet);
+}
+
+.ax-effort-help {
+  display: inline-flex;
+  margin-left: auto;
+  color: var(--color-text-muted);
+  cursor: help;
+}
+
+.ax-effort-ends {
+  display: flex;
+  justify-content: space-between;
+  padding: 2px 0 6px;
+  color: var(--color-text-muted);
+  font-size: 12px;
+  line-height: 16px;
+}
+
+.ax-effort .ax-effort-track {
+  height: 24px;
+  border-radius: 8px;
+}
+
+.ax-effort .ax-effort-thumb,
+.ax-effort .ax-effort-track.is-dragging .ax-effort-thumb {
+  height: 20px;
+  border-radius: 6px;
+  background: #fff;
+  box-shadow:
+    0 0 0 1px rgb(0 0 0 / 12%),
+    0 2px 6px rgb(0 0 0 / 30%);
+}
+
+.ax-effort-marks {
+  position: relative;
+  height: 16px;
+  margin-top: 4px;
+  color: var(--color-text-muted);
+  font-size: 11px;
+  line-height: 16px;
+}
+
+.ax-effort-marks span {
+  position: absolute;
+  top: 0;
+  transform: translateX(-50%);
+  white-space: nowrap;
+}

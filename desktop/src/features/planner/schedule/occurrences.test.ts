@@ -27,7 +27,7 @@ import {
   ScheduleError,
   upsertPattern,
 } from "./scheduleStore";
-import { buildSeed } from "./seed";
+import { buildFixture } from "./seed.fixture";
 
 const T = (id: string, start: string | null = null, end: string | null = null): ShiftType => ({
   id,
@@ -245,7 +245,7 @@ describe("scheduleData", () => {
   });
 
   it("resolves the seed for every member without throwing", () => {
-    const seed = buildSeed("2026-10-06");
+    const seed = buildFixture("2026-10-06");
     const { entries, warnings } = scheduleData(seed, "2026-10-05", "2026-11-08");
     expect(entries.some((entry) => entry.memberId === "agent" && entry.shiftType?.id === "st-maint")).toBe(true);
     // Minh's release week overlaps the A/B timetable on purpose.
@@ -340,7 +340,7 @@ describe("week grid lanes", () => {
 });
 
 describe("store rules", () => {
-  const seed = buildSeed("2026-10-06");
+  const seed = buildFixture("2026-10-06");
 
   it("refuses to shorten a cycle past days that still have shifts", () => {
     const linh = seed.patterns.find((item) => item.id === "sp-linh-rotation")!;

@@ -4,9 +4,11 @@
 import { memo } from 'react';
 import './ThinkingDepthSelector.css';
 import clsx from 'clsx';
-import { Gauge } from 'lucide-react';
+import { HelpCircle } from 'lucide-react';
+import { THUMB_WIDTH } from './ThinkingDepthCanvas';
 import {
   THINKING_LEVELS,
+  THINKING_LEVEL_INDEX,
   THINKING_MAX_LEVEL,
   useThinkingDepthSelector,
   type ThinkingLevel,
@@ -20,6 +22,10 @@ interface ThinkingDepthSelectorProps {
   ariaLabel: string;
   title: string;
   description?: string;
+  /** The stop marked "Recommended" under the rail. */
+  recommended?: ThinkingLevel;
+  /** Hover text for the help icon in the header. */
+  help?: string;
   /** Lock the rail (e.g. thinking mode is off in Chat). */
   disabled?: boolean;
   onChange?: (level: ThinkingLevel) => void;
@@ -38,6 +44,8 @@ export const ThinkingDepthSelector = memo(function ThinkingDepthSelector({
   ariaLabel,
   title,
   description,
+  recommended,
+  help,
   disabled,
   onChange,
 }: ThinkingDepthSelectorProps) {
@@ -64,13 +72,9 @@ export const ThinkingDepthSelector = memo(function ThinkingDepthSelector({
 
   return (
     <div className="ax-effort">
+      {/* Laid out like Claude's: title and level on the left, help on the right. */}
       <div className="ax-effort-head">
-        <span className="ax-effort-title">
-          <span className="ax-effort-title-icon">
-            <Gauge size={14} />
-          </span>
-          {title}
-        </span>
+        <span className="ax-effort-title">{title}</span>
         <span className="ax-effort-stage" style={stageStyle} aria-live="polite" aria-atomic="true">
           {outLabel !== null && outLabel !== curLabel && (
             <span key={`out-${labelKey}`} className="ax-effort-label-out" aria-hidden="true">
@@ -81,6 +85,15 @@ export const ThinkingDepthSelector = memo(function ThinkingDepthSelector({
             {curLabel}
           </span>
         </span>
+        {help ? (
+          <span className="ax-effort-help" title={help} aria-label={help}>
+            <HelpCircle size={14} />
+          </span>
+        ) : null}
+      </div>
+      <div className="ax-effort-ends" aria-hidden="true">
+        <span>Faster</span>
+        <span>Smarter</span>
       </div>
 
       <div
@@ -126,6 +139,20 @@ export const ThinkingDepthSelector = memo(function ThinkingDepthSelector({
         </div>
         <div ref={thumbRef} className="ax-effort-thumb" aria-hidden="true" />
       </div>
+
+      {recommended ? (
+        <div className="ax-effort-marks" aria-hidden="true">
+          <span
+            style={{
+              left: `calc(${THUMB_WIDTH / 2}px + (100% - ${THUMB_WIDTH}px) * ${
+                THINKING_LEVEL_INDEX[recommended] / THINKING_MAX_LEVEL
+              })`,
+            }}
+          >
+            Recommended
+          </span>
+        </div>
+      ) : null}
 
       {description ? (
         <div className="ax-effort-desc" id={descId}>

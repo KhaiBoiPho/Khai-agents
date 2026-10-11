@@ -2,24 +2,28 @@ import { act, cleanup, fireEvent, render, screen } from "@testing-library/react"
 import { useState } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { EffortSlider, type EffortLevel } from "./EffortSlider";
+import { EffortSlider, useEffortLabel, type EffortLevel } from "./EffortSlider";
 
 function Harness({ onChange }: { onChange(level: EffortLevel): void }) {
   const [value, setValue] = useState<EffortLevel>("low");
+  const label = useEffortLabel(value);
   return (
-    <EffortSlider
-      value={value}
-      onChange={(level) => {
-        onChange(level);
-        setValue(level);
-      }}
-    />
+    <>
+      <output aria-label="chip">{label}</output>
+      <EffortSlider
+        value={value}
+        onChange={(level) => {
+          onChange(level);
+          setValue(level);
+        }}
+      />
+    </>
   );
 }
 
 const slider = () => screen.getByRole("slider", { name: "Effort" });
+const chip = () => screen.getByLabelText("chip").textContent;
 
-/** Keys spring the thumb to a stop; let the spring settle. */
 async function press(key: string) {
   fireEvent.keyDown(slider(), { key });
   await act(async () => {
@@ -29,41 +33,45 @@ async function press(key: string) {
 
 describe("EffortSlider", () => {
   beforeEach(() => {
-    localStorage.clear();
     vi.useFakeTimers();
     vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(null);
   });
-  afterEach(() => {
+  afterEach(async () => {
+    // Back to the first stop for the next test (the stop is module state).
+    cleanup();
+    render(<Harness onChange={() => {}} />);
+    await press("Home");
     cleanup();
     vi.useRealTimers();
     vi.restoreAllMocks();
   });
 
-  it("offers Fast, a Medium placeholder that runs as Fast, and Smart", async () => {
+  it("has six stops; only the last sends the smarter effort", async () => {
     const onChange = vi.fn();
     render(<Harness onChange={onChange} />);
-    expect(slider().getAttribute("aria-valuetext")).toBe("Fast");
-
-    await press("ArrowRight");
-    expect(slider().getAttribute("aria-valuetext")).toBe("Medium");
-    // Medium is a mock: the effort sent is still "low", so nothing changes.
+    expect(chip()).toBe("Fast");
+    for (const name of ["Light", "Balanced", "Medium", "Deep"]) {
+      await press("ArrowRight");
+      expect(slider().getAttribute("aria-valuetext")).toBe(name);
+      // The chip beside the model names the stop too.
+      expect(chip()).toBe(name);
+    }
     expect(onChange).not.toHaveBeenCalled();
-
     await press("ArrowRight");
-    expect(slider().getAttribute("aria-valuetext")).toBe("Smart");
+    expect(chip()).toBe("Smart");
     expect(onChange).toHaveBeenLastCalledWith("medium");
-
-    await press("Home");
-    expect(slider().getAttribute("aria-valuetext")).toBe("Fast");
+    await press("ArrowLeft");
+    expect(chip()).toBe("Deep");
     expect(onChange).toHaveBeenLastCalledWith("low");
   });
 
-  it("remembers the Medium stop across reopenings", async () => {
+  it("remembers a placeholder stop across reopenings", async () => {
     const { unmount } = render(<Harness onChange={() => {}} />);
+    await press("ArrowRight");
     await press("ArrowRight");
     unmount();
     render(<Harness onChange={() => {}} />);
-    expect(slider().getAttribute("aria-valuetext")).toBe("Medium");
+    expect(slider().getAttribute("aria-valuetext")).toBe("Balanced");
   });
 
   it("shows Smart for a session already running a higher effort", () => {

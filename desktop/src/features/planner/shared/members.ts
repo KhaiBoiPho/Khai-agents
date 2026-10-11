@@ -20,8 +20,6 @@ export interface Member {
 export const MEMBERS: readonly Member[] = [
   { id: "me", name: MOCK_ACCOUNT.name, color: "#6c3aed" },
   { id: "agent", name: "Khai Agent", color: "#00668f", isAgent: true },
-  { id: "linh", name: "Linh", color: "#ce2a63" },
-  { id: "minh", name: "Minh", color: "#157f3d" },
 ];
 
 export function memberById(id: string | null | undefined): Member | null {

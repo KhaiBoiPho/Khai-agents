@@ -11,12 +11,28 @@
 
 import { useEffect, useState, type Dispatch, type SetStateAction } from "react";
 
+// v2: the planner now starts empty. The v1 keys held the old sample data
+// (written into every browser that opened a planner page); they are removed
+// once, below, so nobody keeps the samples.
 export const PLANNER_KEYS = {
-  tasks: "khai-agents.planner.tasks",
-  schedule: "khai-agents.planner.schedule",
-  calendar: "khai-agents.planner.calendar",
-  notes: "khai-agents.planner.notes",
+  tasks: "khai-agents.planner.v2.tasks",
+  schedule: "khai-agents.planner.v2.schedule",
+  calendar: "khai-agents.planner.v2.calendar",
+  notes: "khai-agents.planner.v2.notes",
 } as const;
+
+const RETIRED_KEYS = [
+  "khai-agents.planner.tasks",
+  "khai-agents.planner.schedule",
+  "khai-agents.planner.calendar",
+  "khai-agents.planner.notes",
+];
+
+try {
+  for (const key of RETIRED_KEYS) localStorage.removeItem(key);
+} catch {
+  // Storage can be unavailable; there is then nothing stored to remove.
+}
 
 export function readStore<T>(key: string, seed: T): T {
   try {

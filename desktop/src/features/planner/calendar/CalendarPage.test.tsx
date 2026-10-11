@@ -2,6 +2,7 @@ import { act, cleanup, fireEvent, render, screen, within } from "@testing-librar
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
 import { __resetEscapeLayersForTests } from "../../../app/escapeLayer";
+import { loadPlannerFixtures } from "../fixtures";
 import { CalendarPage } from "./CalendarPage";
 import { formatWeekdayDate } from "./dates";
 import { periodLabel } from "./periods";
@@ -27,11 +28,9 @@ const dayName = (day: string) => new RegExp(escape(formatWeekdayDate(day, true))
 beforeEach(() => {
   vi.useFakeTimers({ toFake: ["Date"] });
   vi.setSystemTime(new Date(2026, 9, 6, 10, 0));
-  try {
-    localStorage.clear();
-  } catch {
-    // Storage may be unavailable; the page falls back to its seed.
-  }
+  localStorage.clear();
+  // The app starts empty; these tests run against the old sample data.
+  loadPlannerFixtures(new Date(2026, 9, 6, 10, 0));
 });
 
 afterEach(() => {
@@ -51,8 +50,8 @@ it("renders the month with seeded events, layers and the period header", () => {
   expect(within(grid).getByText("File expense report")).toBeTruthy();
   expect(within(grid).getByText("Early shift")).toBeTruthy();
   expect(within(grid).getAllByText("Daily code review run").length).toBeGreaterThan(0);
-  // Minh's birthday (19 October) comes from the birthdays layer.
-  expect(within(grid).getByText("Minh's birthday")).toBeTruthy();
+  // No birthdays: the layer has no contacts to read from.
+  expect(within(grid).queryByText(/birthday/)).toBeNull();
 });
 
 it("switches views from the tabs and the keyboard", () => {

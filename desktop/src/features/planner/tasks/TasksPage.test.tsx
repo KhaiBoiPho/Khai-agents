@@ -1,7 +1,14 @@
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
-import { afterEach, expect, it } from "vitest";
+import { afterEach, beforeEach, expect, it } from "vitest";
 
+import { loadPlannerFixtures } from "../fixtures";
 import { TasksPage } from "./TasksPage";
+
+beforeEach(() => {
+  localStorage.clear();
+  // The app starts empty; these tests run against the old sample data.
+  loadPlannerFixtures();
+});
 
 afterEach(cleanup);
 

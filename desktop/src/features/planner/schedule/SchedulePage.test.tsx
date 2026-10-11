@@ -1,11 +1,13 @@
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
+import { loadPlannerFixtures } from "../fixtures";
 import { SchedulePage } from "./SchedulePage";
 
 beforeEach(() => {
-  // Storage is unavailable here; the page must still render from its seed.
-  vi.stubGlobal("localStorage", undefined);
+  localStorage.clear();
+  // The app starts empty; these tests run against the old sample data.
+  loadPlannerFixtures();
 });
 
 afterEach(() => {
@@ -21,7 +23,8 @@ it("renders every view from the seed and opens the create flows", () => {
 
   fireEvent.click(screen.getByRole("tab", { name: "Month" }));
   expect(screen.getByRole("region", { name: "Month roster" })).toBeTruthy();
-  expect(screen.getAllByRole("rowheader").length).toBeGreaterThanOrEqual(4);
+  // One row per member: the user and the agent.
+  expect(screen.getAllByRole("rowheader").length).toBeGreaterThanOrEqual(2);
 
   fireEvent.click(screen.getByRole("tab", { name: "Planning" }));
   expect(screen.getByText("Nightly maintenance")).toBeTruthy();

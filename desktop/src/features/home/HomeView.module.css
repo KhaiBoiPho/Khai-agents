@@ -367,6 +367,9 @@
 
 .box textarea {
   width: 100%;
+  /* In this column the prompt takes the height it is given (it grows with
+     its text, up to 45vh); flex: 1 would pin it to the box's height. */
+  flex: 0 0 auto;
 }
 
 .toolbar {

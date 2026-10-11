@@ -1,11 +1,8 @@
 /**
- * Preview data and quick-start templates.
- *
- * TODO(backend): preview data — replace with the planning service.
+ * The starting schedule and quick-start templates.
  */
 
-import { addDays, startOfWeek } from "./dates";
-import type { Pattern, PatternDay, ScheduleState, ShiftColor, ShiftType } from "./model";
+import type { ScheduleState, ShiftColor, ShiftType } from "./model";
 
 interface Preset {
   key: string;
@@ -91,126 +88,15 @@ const TYPES: ShiftType[] = [
   { id: "st-sick", name: "Sick", shortCode: "S", start: null, end: null, color: "red" },
 ];
 
-function days(patternId: string, layout: (string | null)[][]): PatternDay[] {
-  return layout.flatMap((rows, position) =>
-    rows.map((shiftTypeId, index) => ({ id: `${patternId}-d${position}-${index}`, position, shiftTypeId })),
-  );
-}
-
-/** Seed relative to `today`, so the preview always shows a live week. */
-export function buildSeed(today: string): ScheduleState {
-  const week = startOfWeek(today);
-  const pattern = (value: Omit<Pattern, "active" | "createdAt"> & Partial<Pattern>): Pattern => ({
-    active: true,
-    createdAt: "2026-01-01T00:00:00.000Z",
-    ...value,
-  });
-  const patterns: Pattern[] = [
-    pattern({
-      id: "sp-me-week",
-      memberId: "me",
-      name: "Work week",
-      kind: "timetable",
-      anchorDate: week,
-      cycleLength: 7,
-      validFrom: null,
-      validUntil: null,
-      days: days("sp-me-week", [
-        ["st-standup"],
-        ["st-standup", "st-focus"],
-        ["st-standup"],
-        ["st-standup", "st-focus"],
-        ["st-standup"],
-        [],
-        [],
-      ]),
-    }),
-    pattern({
-      id: "sp-linh-rotation",
-      memberId: "linh",
-      name: "Support rotation",
-      kind: "rotation",
-      // Anchored in the past: earlier days wrap backwards through the cycle.
-      anchorDate: addDays(week, -10),
-      cycleLength: 8,
-      validFrom: null,
-      validUntil: null,
-      days: days("sp-linh-rotation", [
-        ["st-early"],
-        ["st-early"],
-        ["st-late"],
-        ["st-late"],
-        ["st-night"],
-        ["st-night"],
-        [],
-        [],
-      ]),
-    }),
-    pattern({
-      id: "sp-minh-ab",
-      memberId: "minh",
-      name: "Week A / week B",
-      kind: "timetable",
-      anchorDate: week,
-      cycleLength: 14,
-      validFrom: null,
-      validUntil: null,
-      days: days("sp-minh-ab", [
-        ["st-day"], ["st-day"], ["st-day"], ["st-day"], ["st-day"], [], [],
-        ["st-day"], ["st-day"], ["st-day"], ["st-oncall"], [], [], [],
-      ]),
-    }),
-    pattern({
-      id: "sp-minh-release",
-      memberId: "minh",
-      name: "Release week",
-      kind: "rotation",
-      anchorDate: addDays(week, 14),
-      cycleLength: 5,
-      validFrom: addDays(week, 14),
-      validUntil: addDays(week, 18),
-      createdAt: "2026-02-01T00:00:00.000Z",
-      days: days("sp-minh-release", [["st-late"], ["st-late"], ["st-late"], ["st-late"], ["st-late"]]),
-    }),
-    pattern({
-      id: "sp-agent-nightly",
-      memberId: "agent",
-      name: "Nightly maintenance",
-      kind: "timetable",
-      anchorDate: week,
-      cycleLength: 7,
-      validFrom: null,
-      validUntil: null,
-      days: days("sp-agent-nightly", [
-        ["st-maint", "st-review"],
-        ["st-maint", "st-review"],
-        ["st-maint", "st-review"],
-        ["st-maint", "st-review"],
-        ["st-maint", "st-review"],
-        ["st-maint"],
-        ["st-reindex"],
-      ]),
-    }),
-  ];
+/** The starting schedule: the shift types, and no shifts yet. */
+export function buildSeed(): ScheduleState {
+  // A fresh schedule starts empty; only the shift types are offered.
   return {
     version: 1,
     types: TYPES,
-    patterns,
-    overrides: [
-      ...[15, 16, 17].map((offset) => ({
-        id: `so-linh-${offset}`,
-        memberId: "linh",
-        date: addDays(week, offset),
-        shiftTypeId: "st-vacation",
-        note: "Trip to Da Nang",
-      })),
-      { id: "so-minh-sick", memberId: "minh", date: addDays(today, -1), shiftTypeId: "st-sick", note: "" },
-      { id: "so-agent-freeze", memberId: "agent", date: addDays(week, 9), shiftTypeId: null, note: "Paused for model upgrade" },
-    ],
-    extras: [
-      { id: "se-me-cover", memberId: "me", date: addDays(week, 4), shiftTypeId: "st-oncall", note: "Covering for Linh" },
-      { id: "se-minh-oncall", memberId: "minh", date: addDays(week, 2), shiftTypeId: "st-oncall", note: "" },
-    ],
+    patterns: [],
+    overrides: [],
+    extras: [],
     settings: { weeklyHours: {}, overtimeEnabled: true },
   };
 }

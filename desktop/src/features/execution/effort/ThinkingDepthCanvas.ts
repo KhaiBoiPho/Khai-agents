@@ -1,9 +1,17 @@
 // Ported from Auraxis (https://github.com/yth1120/Auraxis-Agent), MIT License,
 // Copyright (c) 2026 Auraxis Contributors. See THIRD_PARTY_NOTICES.md.
 
-export type ThinkingLevel = 'low' | 'medium' | 'high';
-export const THINKING_LEVELS: readonly ThinkingLevel[] = ['low', 'medium', 'high'];
-export const THINKING_LEVEL_INDEX: Record<ThinkingLevel, number> = { low: 0, medium: 1, high: 2 };
+// Six stops here (Auraxis has three: low, medium, high).
+export type ThinkingLevel = 'fast' | 'light' | 'balanced' | 'medium' | 'deep' | 'smart';
+export const THINKING_LEVELS: readonly ThinkingLevel[] = ['fast', 'light', 'balanced', 'medium', 'deep', 'smart'];
+export const THINKING_LEVEL_INDEX: Record<ThinkingLevel, number> = {
+  fast: 0,
+  light: 1,
+  balanced: 2,
+  medium: 3,
+  deep: 4,
+  smart: 5,
+};
 export const THINKING_MAX_LEVEL = THINKING_LEVELS.length - 1;
 
 export const THUMB_WIDTH = 14;

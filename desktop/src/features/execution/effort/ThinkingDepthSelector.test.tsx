@@ -1,14 +1,18 @@
 // Ported from Auraxis (https://github.com/yth1120/Auraxis-Agent), MIT License,
 // Copyright (c) 2026 Auraxis Contributors. See THIRD_PARTY_NOTICES.md.
+// Adapted to this app's six stops and compact rail (14px thumb, 16px stops).
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { ThinkingDepthSelector } from './ThinkingDepthSelector';
 
 const LABELS = {
-  low: '轻度思考',
-  medium: '中度思考',
-  high: '深度思考',
+  fast: 'Fast',
+  light: 'Light',
+  balanced: 'Balanced',
+  medium: 'Medium',
+  deep: 'Deep',
+  smart: 'Smart',
 };
 
 function mockTrackRect(track: HTMLElement, width = 200) {
@@ -16,9 +20,9 @@ function mockTrackRect(track: HTMLElement, width = 200) {
     left: 0,
     top: 0,
     right: width,
-    bottom: 32,
+    bottom: 24,
     width,
-    height: 32,
+    height: 24,
     x: 0,
     y: 0,
     toJSON: () => ({}),
@@ -37,99 +41,87 @@ afterEach(() => {
 });
 
 describe('ThinkingDepthSelector', () => {
-  it('renders a slider with the current level and label', () => {
+  it('renders a slider with the current level, label, ends and recommendation', () => {
     render(
       <ThinkingDepthSelector
         value="medium"
         labels={LABELS}
-        ariaLabel="思考深度"
-        title="思考深度"
-        description="均衡深度，适合日常开发"
+        ariaLabel="Effort"
+        title="Effort"
+        recommended="medium"
+        description="Balanced depth for most tasks."
       />,
     );
-    const slider = screen.getByRole('slider', { name: '思考深度' });
-    expect(slider.getAttribute('aria-valuenow')).toBe('1');
-    expect(slider.getAttribute('aria-valuetext')).toBe('中度思考');
-    expect(screen.getByText('思考深度')).toBeDefined();
-    expect(screen.getByText('均衡深度，适合日常开发')).toBeDefined();
+    const slider = screen.getByRole('slider', { name: 'Effort' });
+    expect(slider.getAttribute('aria-valuenow')).toBe('3');
+    expect(slider.getAttribute('aria-valuetext')).toBe('Medium');
+    expect(screen.getByText('Faster')).toBeDefined();
+    expect(screen.getByText('Smarter')).toBeDefined();
+    expect(screen.getByText('Recommended')).toBeDefined();
+    expect(screen.getByText('Balanced depth for most tasks.')).toBeDefined();
   });
 
   it('moves to the next level with ArrowRight', async () => {
     const onChange = vi.fn();
-    render(
-      <ThinkingDepthSelector value="low" labels={LABELS} ariaLabel="思考深度" title="思考深度" onChange={onChange} />,
-    );
+    render(<ThinkingDepthSelector value="fast" labels={LABELS} ariaLabel="Effort" title="Effort" onChange={onChange} />);
     const slider = screen.getByRole('slider');
     fireEvent.keyDown(slider, { key: 'ArrowRight' });
     await act(async () => {
       await vi.advanceTimersByTimeAsync(800);
     });
-    expect(onChange).toHaveBeenCalledWith('medium');
+    expect(onChange).toHaveBeenCalledWith('light');
     expect(slider.getAttribute('aria-valuenow')).toBe('1');
   });
 
   it('selects a level when its dot is clicked', async () => {
     const onChange = vi.fn();
     const { container } = render(
-      <ThinkingDepthSelector
-        value="medium"
-        labels={LABELS}
-        ariaLabel="思考深度"
-        title="思考深度"
-        onChange={onChange}
-      />,
+      <ThinkingDepthSelector value="medium" labels={LABELS} ariaLabel="Effort" title="Effort" onChange={onChange} />,
     );
-    const highDot = container.querySelector('[data-level="high"]') as HTMLButtonElement;
-    fireEvent.click(highDot);
+    fireEvent.click(container.querySelector('[data-level="smart"]') as HTMLButtonElement);
     await act(async () => {
       await vi.advanceTimersByTimeAsync(800);
     });
-    expect(onChange).toHaveBeenCalledWith('high');
-    expect(screen.getByRole('slider').getAttribute('aria-valuenow')).toBe('2');
+    expect(onChange).toHaveBeenCalledWith('smart');
+    expect(screen.getByRole('slider').getAttribute('aria-valuenow')).toBe('5');
   });
 
   it('drags across the rail, magnetically snaps and reports the level', async () => {
     const onChange = vi.fn();
     const { container } = render(
-      <ThinkingDepthSelector value="low" labels={LABELS} ariaLabel="思考深度" title="思考深度" onChange={onChange} />,
+      <ThinkingDepthSelector value="fast" labels={LABELS} ariaLabel="Effort" title="Effort" onChange={onChange} />,
     );
     const track = container.querySelector('.ax-effort-track') as HTMLElement;
     mockTrackRect(track);
 
     fireEvent.pointerDown(track, { pointerId: 1, pointerType: 'mouse', button: 0, clientX: 30 });
-    const lowDot = container.querySelector('[data-level="low"]') as HTMLElement;
-    const mediumDot = container.querySelector('[data-level="medium"]') as HTMLElement;
-    const highDot = container.querySelector('[data-level="high"]') as HTMLElement;
+    const dot = (level: string) => container.querySelector(`[data-level="${level}"]`) as HTMLElement;
     const thumb = container.querySelector('.ax-effort-thumb') as HTMLElement;
-    // Dots and thumb are positioned by their left edge; centers are
-    // dotWidth/2 = 8 and thumbWidth/2 = 7 to the right of `left` (this
-    // app's compact rail: 16px dots, 14px thumb).
-    expect(lowDot.style.left).toBe('-1px');
-    expect(mediumDot.style.left).toBe('92px');
-    expect(highDot.style.left).toBe('185px');
-    // Pointer at x=30 → thumb center 30 → thumb left edge 23.
+    // Six stops spread over 200 - 14 = 186px; dots are placed by their left
+    // edge, 8px left of their centers (7 + index * 37.2).
+    expect(dot('fast').style.left).toBe('-1px');
+    expect(dot('smart').style.left).toBe('185px');
+    // Pointer at x=30 → thumb center 30 → left edge 23.
     expect(thumb.style.left).toBe('23px');
-    fireEvent.pointerMove(track, { pointerId: 1, clientX: 160 });
-    expect(onChange).toHaveBeenCalledWith('high');
-    fireEvent.pointerUp(track, { pointerId: 1, clientX: 160 });
+    fireEvent.pointerMove(track, { pointerId: 1, clientX: 190 });
+    expect(onChange).toHaveBeenLastCalledWith('smart');
+    fireEvent.pointerUp(track, { pointerId: 1, clientX: 190 });
     await act(async () => {
       await vi.advanceTimersByTimeAsync(800);
     });
-    expect(onChange).toHaveBeenLastCalledWith('high');
+    expect(onChange).toHaveBeenLastCalledWith('smart');
   });
 
   it('uses content-box geometry so level stops stay inside the rail', () => {
-    const { container } = render(
-      <ThinkingDepthSelector value="low" labels={LABELS} ariaLabel="思考深度" title="思考深度" />,
-    );
+    const { container } = render(<ThinkingDepthSelector value="fast" labels={LABELS} ariaLabel="Effort" title="Effort" />);
     const track = container.querySelector('.ax-effort-track') as HTMLElement;
     vi.spyOn(track, 'getBoundingClientRect').mockReturnValue({
       left: 5,
       top: 0,
       right: 205,
-      bottom: 32,
+      bottom: 24,
       width: 200,
-      height: 32,
+      height: 24,
       x: 5,
       y: 0,
       toJSON: () => ({}),
@@ -139,19 +131,14 @@ describe('ThinkingDepthSelector', () => {
 
     fireEvent.pointerDown(track, { pointerId: 1, pointerType: 'mouse', button: 0, clientX: 16 });
 
-    const lowDot = container.querySelector('[data-level="low"]') as HTMLElement;
-    const highDot = container.querySelector('[data-level="high"]') as HTMLElement;
-    const thumb = container.querySelector('.ax-effort-thumb') as HTMLElement;
-    expect(lowDot.style.left).toBe('-1px');
-    expect(highDot.style.left).toBe('183px');
+    expect((container.querySelector('[data-level="fast"]') as HTMLElement).style.left).toBe('-1px');
+    expect((container.querySelector('[data-level="smart"]') as HTMLElement).style.left).toBe('183px');
     // Pointer at x=16, content edge at 6 → thumb center 10 → left edge 3.
-    expect(thumb.style.left).toBe('3px');
+    expect((container.querySelector('.ax-effort-thumb') as HTMLElement).style.left).toBe('3px');
   });
 
   it('renders a canvas particle layer for the ember stream', () => {
-    const { container } = render(
-      <ThinkingDepthSelector value="medium" labels={LABELS} ariaLabel="思考深度" title="思考深度" />,
-    );
+    const { container } = render(<ThinkingDepthSelector value="medium" labels={LABELS} ariaLabel="Effort" title="Effort" />);
     expect(container.querySelector('canvas.ax-effort-canvas')).toBeTruthy();
     expect(container.querySelector('.ax-effort-thumb')).toBeTruthy();
   });

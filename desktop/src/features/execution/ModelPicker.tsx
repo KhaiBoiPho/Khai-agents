@@ -12,7 +12,12 @@ import type {
 } from "../../generated/app-server";
 import type { ClientRuntime } from "../../rpc/contracts";
 import { useConnectionCatalog } from "../settings/useConnectionCatalog";
-import { EffortSlider, toEffortLevel } from "./EffortSlider";
+import {
+  EffortSlider,
+  toEffortLevel,
+  useEffortLabel,
+  type EffortLevel,
+} from "./EffortSlider";
 import styles from "./ModelPicker.module.css";
 
 interface ModelPickerProps {
@@ -203,6 +208,7 @@ export function ModelPicker({
   };
 
   return (
+    <>
     <div className={styles.picker} ref={rootRef}>
       <button
         type="button"
@@ -219,7 +225,6 @@ export function ModelPicker({
         }
       >
         <strong>{shortModelName(currentModel?.name ?? effectiveModel)}</strong>
-        <span>{toEffortLevel(effectiveEffort) === "medium" ? "Smart" : "Fast"}</span>
       </button>
 
       {open ? (
@@ -227,7 +232,7 @@ export function ModelPicker({
           className={styles.menu}
           style={placement}
           role="dialog"
-          aria-label="Choose model and effort"
+          aria-label="Choose model"
         >
           <label className={styles.search}>
             <Search size={14} />
@@ -294,12 +299,6 @@ export function ModelPicker({
             ) : null}
           </div>
 
-          <EffortSlider
-            value={toEffortLevel(effectiveEffort)}
-            disabled={!effectiveModel || !effectiveConnection}
-            onChange={pickEffort}
-          />
-
           {onManageProviders ? (
             <button
               type="button"
@@ -313,6 +312,69 @@ export function ModelPicker({
               Manage providers →
             </button>
           ) : null}
+        </section>
+      ) : null}
+    </div>
+    <EffortChip
+      value={toEffortLevel(effectiveEffort)}
+      disabled={disabled || !effectiveModel || !effectiveConnection}
+      onChange={pickEffort}
+    />
+    </>
+  );
+}
+
+/**
+ * The composer's Effort control, beside the model: a chip naming the
+ * current stop, opening the Faster ↔ Smarter rail in its own popover.
+ */
+function EffortChip({
+  value,
+  disabled,
+  onChange,
+}: {
+  value: EffortLevel;
+  disabled?: boolean;
+  onChange(level: EffortLevel): void;
+}) {
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef<HTMLDivElement | null>(null);
+  const label = useEffortLabel(value);
+
+  useEffect(() => {
+    if (!open) return;
+    const close = (event: MouseEvent) => {
+      if (!rootRef.current?.contains(event.target as Node)) setOpen(false);
+    };
+    const escape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("mousedown", close);
+    document.addEventListener("keydown", escape);
+    return () => {
+      document.removeEventListener("mousedown", close);
+      document.removeEventListener("keydown", escape);
+    };
+  }, [open]);
+
+  return (
+    <div className={styles.picker} ref={rootRef}>
+      <button
+        type="button"
+        className={styles.effortChip}
+        data-smart={value === "medium" || undefined}
+        onClick={() => setOpen((current) => !current)}
+        disabled={disabled}
+        aria-haspopup="dialog"
+        aria-expanded={open}
+        aria-label={`Effort: ${label}`}
+        title="Effort"
+      >
+        {label}
+      </button>
+      {open ? (
+        <section className={styles.effortMenu} role="dialog" aria-label="Choose effort">
+          <EffortSlider value={value} disabled={disabled} onChange={onChange} />
         </section>
       ) : null}
     </div>

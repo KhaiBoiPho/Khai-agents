@@ -178,8 +178,8 @@ export function moveChanges(events: readonly CalendarEvent[], occurrence: Occurr
   return [{ id: event.id, before: event, after: { ...event, start: move(event.start), end: move(event.end) } }];
 }
 
-export function useCalendarEvents(today: DateKey) {
-  const [stored, setStored] = usePersistentState<CalendarEvent[]>(PLANNER_KEYS.calendar, () => seedEvents(today));
+export function useCalendarEvents() {
+  const [stored, setStored] = usePersistentState<CalendarEvent[]>(PLANNER_KEYS.calendar, () => seedEvents());
   const events = useMemo(() => sanitizeEvents(stored), [stored]);
   const commit = useCallback(
     (changes: readonly Change[]) => setStored((current) => applyChanges(sanitizeEvents(current), changes)),

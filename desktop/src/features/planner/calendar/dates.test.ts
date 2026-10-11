@@ -15,7 +15,7 @@ import {
   weekdayOf,
 } from "./dates";
 import { expandEvents, timeRange } from "./layout";
-import { seedEvents } from "./model";
+import { eventsFixture } from "./events.fixture";
 
 // Day keys must not care about the device's zone or its DST switches.
 const originalTz = process.env.TZ;
@@ -92,7 +92,7 @@ describe("day-key arithmetic", () => {
   });
 
   it("keeps a series at its wall-clock time across a DST change", () => {
-    const [event] = seedEvents("2026-03-27").filter((e) => e.id === "seed-backup");
+    const [event] = eventsFixture("2026-03-27").filter((e) => e.id === "seed-backup");
     const occurrences = expandEvents([{ ...event!, start: "2026-03-27T02:30", end: "2026-03-27T03:00" }], "2026-03-28", "2026-03-30");
     expect(occurrences.map((o) => o.start)).toEqual(["2026-03-28T02:30", "2026-03-29T02:30", "2026-03-30T02:30"]);
     expect(timeRange(occurrences[1]!, "2026-03-29")).toEqual({ start: 150, end: 180 });

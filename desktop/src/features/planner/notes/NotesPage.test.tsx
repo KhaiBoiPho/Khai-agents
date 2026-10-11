@@ -6,9 +6,16 @@ import {
   screen,
   within,
 } from "@testing-library/react";
-import { afterEach, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
+import { loadPlannerFixtures } from "../fixtures";
 import { NotesPage } from "./NotesPage";
+
+beforeEach(() => {
+  localStorage.clear();
+  // The app starts empty; these tests run against the old sample data.
+  loadPlannerFixtures();
+});
 
 afterEach(() => {
   cleanup();

@@ -163,6 +163,6 @@ describe("filters and stored shapes", () => {
     const cleaned = sanitizeEvents([{ id: 1 }, { id: "x", title: "X", start: "bad" }, { id: "ok", title: "OK", start: "2026-10-01" }]);
     expect(cleaned).toHaveLength(1);
     expect(cleaned[0]).toMatchObject({ id: "ok", end: "2026-10-01", exdates: [], visibility: "all" });
-    expect(sanitizeEvents(seedEvents("2026-10-06"))).toHaveLength(seedEvents("2026-10-06").length);
+    expect(sanitizeEvents(seedEvents())).toHaveLength(seedEvents().length);
   });
 });

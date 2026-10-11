@@ -114,8 +114,8 @@ export function todayKey(): string {
   return isoDate(new Date());
 }
 
-export function loadScheduleState(today = todayKey()): ScheduleState {
-  const seed = buildSeed(today);
+export function loadScheduleState(): ScheduleState {
+  const seed = buildSeed();
   return normalizeState(readStore<unknown>(PLANNER_KEYS.schedule, seed), seed);
 }
 
@@ -303,5 +303,5 @@ export function useScheduleStore() {
     setState(next);
     return null;
   }, [state]);
-  return { state, apply, reset: () => setState(buildSeed(todayKey())) };
+  return { state, apply, reset: () => setState(buildSeed()) };
 }

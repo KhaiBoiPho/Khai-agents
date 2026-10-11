@@ -4,6 +4,7 @@ import { PLANNER_KEYS } from "../shared/persistentState";
 import { readScheduleOccurrences } from "./calendarFeed";
 import { addDays, startOfWeek } from "./dates";
 import type { ScheduleState } from "./model";
+import { buildFixture } from "./seed.fixture";
 import { todayKey } from "./scheduleStore";
 
 function fakeStorage(entries: Record<string, string>) {
@@ -23,16 +24,25 @@ afterEach(() => {
 });
 
 describe("readScheduleOccurrences", () => {
-  it("falls back to the seed when storage is empty or unavailable", () => {
+  it("is empty when nothing is stored or storage is unavailable", () => {
     vi.stubGlobal("localStorage", undefined);
     const week = startOfWeek(todayKey());
+    expect(readScheduleOccurrences(week, addDays(week, 6))).toEqual([]);
+    vi.stubGlobal("localStorage", fakeStorage({}));
+    expect(readScheduleOccurrences(week, addDays(week, 6))).toEqual([]);
+  });
+
+  it("reads a stored schedule for every member", () => {
+    const fixture = buildFixture(todayKey());
+    vi.stubGlobal("localStorage", fakeStorage({ [PLANNER_KEYS.schedule]: JSON.stringify(fixture) }));
+    const week = startOfWeek(todayKey());
     const occurrences = readScheduleOccurrences(week, addDays(week, 6));
-    expect(occurrences.length).toBeGreaterThan(0);
     expect(occurrences.some((item) => item.memberId === "agent" && item.label === "Maintenance window")).toBe(true);
   });
 
   it("returns only dates inside the inclusive range, sorted, without free days", () => {
-    vi.stubGlobal("localStorage", fakeStorage({}));
+    const fixture = buildFixture(todayKey());
+    vi.stubGlobal("localStorage", fakeStorage({ [PLANNER_KEYS.schedule]: JSON.stringify(fixture) }));
     const from = todayKey();
     const to = addDays(from, 3);
     const occurrences = readScheduleOccurrences(from, to);

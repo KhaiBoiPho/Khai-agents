@@ -80,7 +80,7 @@ export function CalendarPage() {
   const today = localKey(now);
   const nowMinutes = now.getHours() * 60 + now.getMinutes();
 
-  const { events, commit, revert } = useCalendarEvents(today);
+  const { events, commit, revert } = useCalendarEvents();
   const [prefs, updatePrefs] = useCalendarPrefs();
   // A drill-in to a day is navigation, not a setting: only the tabs persist the view.
   const [view, setView] = useState<CalendarView>(prefs.view);
