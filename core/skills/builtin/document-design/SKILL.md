@@ -107,9 +107,10 @@ display font without Vietnamese glyphs.
 
 ## 5. PDFs
 
-Build the docx or pptx with the rules above first, then `create_pdf` /
-`convert`. For a one-page brief or flyer, write Markdown or restricted HTML
-using the style's colours and convert it.
+Build the docx or pptx with the rules above first, then print it with
+`document_export {action: "pdf"}`. For a one-page brief or flyer, write
+Markdown or restricted HTML using the style's colours and export it the same
+way. (`create_pdf` needs the GenOffice desktop app; servers don't have it.)
 
 ## 6. Without GenOffice
 

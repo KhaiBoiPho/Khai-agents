@@ -12,7 +12,7 @@ license: Original Khai-Agents content (see repository license)
 | --- | --- | --- |
 | Read text | `pdf_read {file, range: "1-20"}` | pypdf `extract_text()` |
 | PDF → docx / md | `convert {file, to: "docx"\|"md"}` | extract text, rebuild with `office-docx` |
-| Designed document as PDF | build docx/pptx/md first, then `create_pdf` / `convert` | reportlab (Platypus) |
+| Designed document as PDF | GenOffice `create_docx`/`create_pptx`, then `document_export {action: "pdf"}` | reportlab (Platypus) |
 | Merge / split / rotate / reorder | pypdf | — |
 | Watermark / page numbers / stamp | pypdf + a reportlab overlay | — |
 | Forms (list, fill, flatten) | pypdf | — |
@@ -41,14 +41,27 @@ workspace-relative; write results to new files, never over the input.
 ## 2. Create
 
 1. Pick a `document-design` style.
-2. Preferred: write the content as docx (`office-docx`) or Markdown, then
-   `create_pdf {from, out}` / `convert {file, to: "pdf"}`.
-3. If the converter is missing or returns `app_unavailable`, or the layout is
-   fixed (certificate, invoice, label, one-pager), draw with reportlab:
-   Platypus for flowing text and tables, canvas for exact positions, charts
-   via `reportlab.graphics.charts`. Register a TTF font that covers the text —
-   built-in Helvetica has no Vietnamese diacritics; the `canvas-design`
-   skill's `canvas-fonts/` (Lora, Work Sans, IBM Plex Serif) do.
+2. Preferred: build the document with GenOffice — `create_docx` (styled per
+   `office-docx`) or `create_pptx` — then print it with the built-in
+   `document_export` tool:
+   `{action: "pdf", path: "reports/report.docx", out: "reports/report.pdf"}`.
+   For a quick, plain write-up a Markdown file can be exported the same way.
+   It runs headless LibreOffice with fonts that cover Vietnamese, keeps
+   headings, tables, code blocks and links, and needs no GenOffice app.
+   Check the result with `document_export {action: "preview"}` (page PNGs).
+3. GenOffice's `create_pdf` / `convert {to: "pdf"}` print through the
+   GenOffice desktop app; on a server without it they return
+   `app_unavailable`. Use them only when `mcp__genoffice__info` reports the
+   app, and never retry them after that error — use step 2.
+4. Only for fixed layouts (certificate, invoice, label, one-pager) draw with
+   reportlab: Platypus for flowing text and tables, canvas for exact
+   positions, charts via `reportlab.graphics.charts`. Register a TTF font
+   that covers the text — built-in Helvetica has no Vietnamese diacritics.
+   DejaVu Sans/Serif are installed:
+   `/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf` (and `-Bold`,
+   `DejaVuSerif.ttf`). Keep text NFC-normalised
+   (`unicodedata.normalize("NFC", s)`): reportlab does not compose combining
+   marks, which garbles decomposed Vietnamese.
 
 ## 3. Page operations
 

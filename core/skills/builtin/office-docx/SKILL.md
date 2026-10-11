@@ -74,9 +74,10 @@ text, numbers right-aligned, units in the header, source line under the table.
 
 - md/html → docx: `create_docx` (Markdown preferred) or `convert`.
 - docx → md/html: `convert`.
-- docx → pdf: use the internal converter when available (`create_pdf` /
-  `convert` to pdf); if it is missing or returns `app_unavailable`, skip the
-  PDF and tell the user the docx is ready but the PDF could not be made here.
+- docx → pdf: `document_export {action: "pdf", path: "<file>.docx"}`
+  (headless LibreOffice, Vietnamese-capable fonts). GenOffice's `create_pdf` /
+  `convert` to pdf need the GenOffice desktop app and return
+  `app_unavailable` on a server — don't use or retry them there.
 
 ## 6. Final check
 

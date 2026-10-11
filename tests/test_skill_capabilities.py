@@ -88,6 +88,11 @@ async def test_skill_tool_reads_and_searches_bounded_package_resources(
     search = await tool.execute(name="research", query="evidence protocol")
     assert "references/protocol.md" in search
     assert "evidence protocol" in search
+    # Both at once: the named resource wins instead of the call failing.
+    both = await tool.execute(
+        name="research", resource="references/protocol.md", query="palette fonts"
+    )
+    assert "independent verification" in both
     escaped = await tool.execute(name="research", resource="../secret.txt")
     assert escaped.startswith("Error:")
 

@@ -54,7 +54,7 @@ operator runs `scripts/setup-genoffice.sh`); never hand-write Office XML.
 | New workbook from rows / `{sheets:[{name,rows}]}` / csv (`"=..."` = formula) | `create_xlsx` |
 | New deck in one call from ops or a deck spec (≤ ~5 slides) | `create_pptx` (`render: true`, `audit: true`) |
 | Longer or design-sensitive deck | `deck_start` → `deck_page` (one per page, in order) → `deck_build` → `deck_replace` to fix a page |
-| PDF printed from md/html/docx/xlsx/pptx | `create_pdf` |
+| PDF printed from md/html/docx/xlsx/pptx | build the file here, then the built-in `document_export {action: "pdf"}` (`create_pdf` only with the desktop app) |
 | Read / edit / check Word | `docs_read` / `docs_apply` / `docs_check` |
 | Read / edit / check Excel | `sheet_read` / `sheet_apply` / `sheet_check` |
 | Read / edit / audit / render PowerPoint | `slides_read` / `slides_apply` / `slides_audit` / `slides_render`, `slides_check`, `slides_replace` |
@@ -90,7 +90,8 @@ apply it in every step below.
      flow: `deck_start {dir, style, outline}` (fix every outline error), one
      `deck_page` per page until its audit, outline and off-palette findings
      are empty, then `deck_build`.
-   - PDF → build the docx/pptx/md first, then `create_pdf` or `convert`.
+   - PDF → build the docx/pptx/md first, then `document_export {action:
+     "pdf"}`; never retry `create_pdf` after `app_unavailable`.
 3. **Check, then look** — before saying "done", for every file (the Look
    column only if render is available; on `app_unavailable` continue without
    it and say the visual check was skipped):

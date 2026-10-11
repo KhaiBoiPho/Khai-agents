@@ -151,7 +151,9 @@ class SkillTool(Tool):
         resource = str(kwargs.get("resource") or "").strip()
         query = str(kwargs.get("query") or "").strip()
         if resource and query:
-            return "Error: pass either resource or query, not both"
+            # Models sometimes send both; the named resource is the more
+            # specific ask, so read it rather than failing the call.
+            query = ""
         try:
             if isinstance(self._source, SkillRuntime):
                 record, added = self._source.load_implicit(name)
