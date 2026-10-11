@@ -100,6 +100,7 @@ class DeepThinkLLM:
         max_tokens: int,
         light: bool = False,
         on_delta: DeltaSink | None = None,
+        on_reasoning: DeltaSink | None = None,
         reserve_calls: int = 0,
     ) -> str:
         if not self.fits(messages, reserve_calls=reserve_calls):
@@ -120,15 +121,22 @@ class DeepThinkLLM:
             "reasoning_effort": self._effort(light),
         }
         streamed: list[str] = []
-        if on_delta is not None:
+        if on_delta is not None or on_reasoning is not None:
 
             async def forward(text: str) -> None:
                 if text:
                     streamed.append(text)
-                    await on_delta(text)
+                    if on_delta is not None:
+                        await on_delta(text)
+
+            async def think(text: str, _channel: Any = None) -> None:
+                if text and on_reasoning is not None:
+                    await on_reasoning(text)
 
             response = await self.provider.chat_stream_with_retry(
-                **kwargs, on_content_delta=forward
+                **kwargs,
+                on_content_delta=forward,
+                on_reasoning_delta=think if on_reasoning is not None else None,
             )
         else:
             response = await self.provider.chat_with_retry(**kwargs)

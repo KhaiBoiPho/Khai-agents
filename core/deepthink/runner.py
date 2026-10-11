@@ -95,6 +95,7 @@ class DeepThinkRunner:
         limits: DeepThinkLimits | None = None,
         max_output_tokens: int | None = None,
         deliver: DeliverRunner | None = None,
+        code_search: bool = False,
     ) -> None:
         self.provider = provider
         self.model = model
@@ -103,6 +104,7 @@ class DeepThinkRunner:
         self.limits = limits or DeepThinkLimits()
         self.max_output_tokens = max_output_tokens
         self.deliver = deliver
+        self.code_search = code_search
         self.llm: DeepThinkLLM | None = None
 
     async def events(
@@ -146,6 +148,7 @@ class DeepThinkRunner:
             resolve_backend=self.resolve_backend,
             emit_delta=on_delta,
             can_deliver=self.deliver is not None,
+            code_search=self.code_search,
         )
         graph = build_graph(context)
 

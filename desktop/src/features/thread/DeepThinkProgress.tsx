@@ -6,10 +6,11 @@ import {
   Circle,
   CircleSlash,
   ExternalLink,
+  FileCode2,
   LoaderCircle,
   OctagonX,
 } from "lucide-react";
-import { Fragment, memo, useId, useState } from "react";
+import { Fragment, memo, useEffect, useId, useRef, useState } from "react";
 
 import type { Item } from "../../generated/app-server";
 import {
@@ -20,6 +21,7 @@ import {
   type DeepThinkView,
 } from "./deepThinkModel";
 import styles from "./DeepThinkProgress.module.css";
+import { useCitationHandler } from "./citations";
 
 const STATUS_TEXT: Record<DeepThinkStepStatus, string> = {
   pending: "pending",
@@ -94,11 +96,15 @@ function StepDetails({
               {view.sources.map((source) => (
                 <li key={source.id}>
                   <span className={styles.sourceIndex}>{source.id}</span>
-                  <a href={source.url} target="_blank" rel="noreferrer noopener">
-                    <span className={styles.sourceTitle}>{source.title}</span>
-                    <small>{hostOf(source.url)}</small>
-                    <ExternalLink size={11} aria-hidden="true" />
-                  </a>
+                  {source.code ? (
+                    <CodeSource source={source} />
+                  ) : (
+                    <a href={source.url} target="_blank" rel="noreferrer noopener">
+                      <span className={styles.sourceTitle}>{source.title}</span>
+                      <small>{hostOf(source.url)}</small>
+                      <ExternalLink size={11} aria-hidden="true" />
+                    </a>
+                  )}
                 </li>
               ))}
             </ol>
@@ -112,6 +118,42 @@ function StepDetails({
         </ol>
       ) : null}
     </div>
+  );
+}
+
+/** An excerpt of the user's code: opens the file at those lines. */
+function CodeSource({ source }: { source: DeepThinkView["sources"][number] }) {
+  const open = useCitationHandler();
+  const code = source.code!;
+  return (
+    <button
+      type="button"
+      className={styles.codeSource}
+      disabled={!open}
+      onClick={() => open?.(code.path, { start: code.start, end: code.end })}
+      title={`Open ${code.path} at lines ${code.start}–${code.end}`}
+    >
+      <span className={styles.sourceTitle}>{source.title}</span>
+      <small>workspace</small>
+      <FileCode2 size={11} aria-hidden="true" />
+    </button>
+  );
+}
+
+/**
+ * The running step's live feed: the model's reasoning and findings as they
+ * arrive, kept to the last few lines and scrolled to the newest.
+ */
+function LiveFeed({ text }: { text: string }) {
+  const box = useRef<HTMLPreElement>(null);
+  useEffect(() => {
+    if (box.current) box.current.scrollTop = box.current.scrollHeight;
+  }, [text]);
+  return (
+    <pre ref={box} className={styles.live} aria-live="off">
+      {text}
+      <span className={styles.caret} aria-hidden="true" />
+    </pre>
   );
 }
 
@@ -183,6 +225,7 @@ export const DeepThinkProgress = memo(function DeepThinkProgress({
           {line}
         </p>
       ) : null}
+      {view.live ? <LiveFeed text={view.live.text} /> : null}
       {view.notes.length ? (
         <p className={styles.note}>
           <Info size={12} aria-hidden="true" />

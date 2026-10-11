@@ -154,6 +154,121 @@ class ToolRegistrySearchBackend:
         return clean_page_text(text, max_chars)
 
 
+#: Queries for the open workspace's code carry this prefix; the rest go to
+#: the web. The planner writes it (see core/deepthink/prompts.py).
+CODE_QUERY_PREFIX = "code:"
+_GREP_LINE = re.compile(r"^(?P<path>[^:\n]+):(?P<line>\d+):\s?(?P<text>.*)$")
+_CODE_URL = re.compile(r"^(?P<path>.+):(?P<start>\d+)-(?P<end>\d+)$")
+
+
+def is_code_query(query: str) -> bool:
+    return query.strip().lower().startswith(CODE_QUERY_PREFIX)
+
+
+def is_code_url(url: str) -> bool:
+    return not url.startswith(("http://", "https://")) and bool(_CODE_URL.match(url))
+
+
+class CodeSearchBackend:
+    """Search the Session's workspace with its own ``grep`` and ``read`` tools.
+
+    A hit is one file region, ``path:start-end`` around its first matches,
+    so it cites like any source and opens at those lines in the app. Calls
+    go through the same permission gate as web search.
+    """
+
+    name = "workspace"
+
+    def __init__(
+        self,
+        registry: Any,
+        *,
+        gate: ToolGate,
+        timeout_s: float,
+        context_lines: int = 20,
+    ) -> None:
+        self.registry = registry
+        self.gate = gate
+        self.timeout_s = timeout_s
+        self.context_lines = context_lines
+
+    async def _call(self, tool_name: str, arguments: dict[str, Any]) -> str:
+        if not await self.gate.allows(tool_name, arguments):
+            raise SearchUnavailable(f"{tool_name} was not permitted")
+        result = await asyncio.wait_for(
+            self.registry.execute(tool_name, arguments), timeout=self.timeout_s
+        )
+        text = str(result or "")
+        if getattr(result, "is_error", False) or text.startswith("Error"):
+            raise RuntimeError(text[:200] or f"{tool_name} failed")
+        return text
+
+    async def search(self, query: str, limit: int) -> list[SearchHit]:
+        pattern = query.strip()
+        if is_code_query(pattern):
+            pattern = pattern[len(CODE_QUERY_PREFIX):].strip()
+        if not pattern:
+            return []
+        text = await self._call("grep", {"pattern": pattern})
+        by_file: dict[str, list[tuple[int, str]]] = {}
+        for raw in text.splitlines():
+            match = _GREP_LINE.match(raw.strip())
+            if not match:
+                continue
+            by_file.setdefault(match["path"], []).append(
+                (int(match["line"]), match["text"].strip())
+            )
+        # Files with the most matches first; ties keep grep's order.
+        ranked = sorted(by_file.items(), key=lambda item: -len(item[1]))[:limit]
+        hits: list[SearchHit] = []
+        for path, lines in ranked:
+            first = lines[0][0]
+            start = max(1, first - self.context_lines // 4)
+            end = first + self.context_lines
+            snippet = " · ".join(f"L{number}: {line}" for number, line in lines[:4])
+            hits.append(
+                SearchHit(url=f"{path}:{start}-{end}", title=f"{path}:{start}-{end}", snippet=snippet)
+            )
+        return hits
+
+    async def fetch(self, url: str, max_chars: int) -> str | None:
+        match = _CODE_URL.match(url)
+        if not match:
+            return None
+        start, end = int(match["start"]), int(match["end"])
+        text = await self._call(
+            "read",
+            {"file_path": match["path"], "offset": start, "limit": end - start + 1},
+        )
+        return text[:max_chars]
+
+
+class CombinedSearchBackend:
+    """Routes ``code:`` queries and file regions to the workspace backend and
+    everything else to web search; either side may be missing."""
+
+    def __init__(self, web: Any | None, code: CodeSearchBackend | None) -> None:
+        self.web = web
+        self.code = code
+        self.name = "+".join(
+            backend.name for backend in (web, code) if backend is not None
+        )
+
+    async def search(self, query: str, limit: int) -> list[SearchHit]:
+        if is_code_query(query):
+            if self.code is None:
+                raise SearchUnavailable("no workspace is open for code search")
+            return await self.code.search(query, limit)
+        if self.web is None:
+            raise SearchUnavailable("no web search tool is connected")
+        return await self.web.search(query, limit)
+
+    async def fetch(self, url: str, max_chars: int) -> str | None:
+        if is_code_url(url):
+            return await self.code.fetch(url, max_chars) if self.code else None
+        return await self.web.fetch(url, max_chars) if self.web else None
+
+
 def _tool_server_and_name(tool_name: str) -> tuple[str, str] | None:
     if not tool_name.startswith("mcp__"):
         return None

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import time
 from collections.abc import Callable
 from copy import deepcopy
 from typing import Any
@@ -20,6 +21,9 @@ _LABELS = {
 }
 _MAX_ITEMS = 8
 _MAX_SOURCES = 24
+#: The live feed keeps only its tail and publishes at most this often.
+_LIVE_CHARS = 1500
+_LIVE_INTERVAL_S = 0.25
 
 ProgressSink = Callable[[dict[str, Any]], None]
 
@@ -50,7 +54,13 @@ class DeepThinkProgress:
             ],
             "sources": [],
             "notes": [],
+            # What the running research step is doing right now: the model's
+            # reasoning and findings as they arrive. Answer text never goes
+            # here; it streams as the reply below the card.
+            "live": {"step": None, "text": ""},
         }
+        self._last_publish = 0.0
+        self._dirty = False
 
     @property
     def snapshot(self) -> dict[str, Any]:
@@ -63,7 +73,29 @@ class DeepThinkProgress:
         return str(self._step(step_id)["status"])
 
     def _publish(self) -> None:
+        self._last_publish = time.monotonic()
+        self._dirty = False
         self._sink(self.snapshot)
+
+    def stream(self, step_id: str, text: str) -> None:
+        """Append to the running step's live feed (publishing throttled)."""
+
+        if not text:
+            return
+        live = self._doc["live"]
+        if live["step"] != step_id:
+            live["step"], live["text"] = step_id, ""
+        live["text"] = (live["text"] + text)[-_LIVE_CHARS:]
+        if time.monotonic() - self._last_publish >= _LIVE_INTERVAL_S:
+            self._publish()
+        else:
+            self._dirty = True
+
+    def flush(self) -> None:
+        """Publish a live feed update the throttle held back."""
+
+        if self._dirty:
+            self._publish()
 
     def update(
         self,
@@ -84,6 +116,7 @@ class DeepThinkProgress:
             self._publish()
 
     def start(self, step_id: str, detail: str | None = None) -> None:
+        self._doc["live"] = {"step": step_id, "text": ""}
         self.update(step_id, "running", detail=detail)
 
     def complete(
@@ -133,6 +166,7 @@ class DeepThinkProgress:
 
     def finish(self, status: str) -> None:
         self._doc["status"] = status
+        self._doc["live"] = {"step": None, "text": ""}
         for step in self._doc["steps"]:
             if step["status"] == "pending":
                 step["status"] = "skipped"

@@ -20,7 +20,12 @@ from typing import Any
 
 from core.deepthink.limits import DeepThinkLimits
 from core.deepthink.runner import DeepThinkRunner
-from core.deepthink.search import ToolGate, discover_search_backend
+from core.deepthink.search import (
+    CodeSearchBackend,
+    CombinedSearchBackend,
+    ToolGate,
+    discover_search_backend,
+)
 from core.events.protocol import Event, UserInput
 
 
@@ -87,15 +92,26 @@ def deepthink_event_stream(
         _session_attr(session, "approval_callback", "_approval_callback"),
     )
     active_limits = limits or DeepThinkLimits()
+    # A Session with a project can research its code with its own grep/read.
+    tool_names = set(getattr(registry, "tool_names", ()) or ())
+    code_backend = (
+        CodeSearchBackend(registry, gate=gate, timeout_s=active_limits.tool_timeout_s)
+        if _session_attr(session, "workspace", "_workspace") is not None
+        and {"grep", "read"} <= tool_names
+        else None
+    )
 
     async def resolve_backend():
-        return await discover_search_backend(
+        web = await discover_search_backend(
             registry=registry,
             mcp_runtime=mcp_runtime,
             gate=gate,
             tool_timeout_s=active_limits.tool_timeout_s,
             discovery_timeout_s=active_limits.tool_discovery_timeout_s,
         )
+        if web is None and code_backend is None:
+            return None
+        return CombinedSearchBackend(web, code_backend)
 
     # The Session's resolved wire model first: it is exactly what the agent
     # loop would send for this Turn.
@@ -110,6 +126,7 @@ def deepthink_event_stream(
         limits=active_limits,
         max_output_tokens=getattr(execution_profile, "max_output_tokens", None),
         deliver=agent_handoff(session, prompt),
+        code_search=code_backend is not None,
     )
     return runner.events(prompt, history=getattr(session, "history", None))
 

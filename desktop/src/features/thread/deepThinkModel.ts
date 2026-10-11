@@ -20,6 +20,14 @@ export interface DeepThinkSourceView {
   id: number;
   title: string;
   url: string;
+  /** Set for an excerpt of the user's code: the file and its lines. */
+  code?: { path: string; start: number; end: number };
+}
+
+/** What the running research step is doing, streamed into the card. */
+export interface DeepThinkLiveView {
+  step: string;
+  text: string;
 }
 
 export interface DeepThinkView {
@@ -28,6 +36,20 @@ export interface DeepThinkView {
   steps: DeepThinkStepView[];
   sources: DeepThinkSourceView[];
   notes: string[];
+  live: DeepThinkLiveView | null;
+}
+
+const CODE_SOURCE = /^(?<path>[^:]+):(?<start>\d+)-(?<end>\d+)$/;
+
+function codeSource(value: unknown): DeepThinkSourceView["code"] | null {
+  if (typeof value !== "string" || /^[a-z]+:\/\//i.test(value)) return null;
+  const match = CODE_SOURCE.exec(value);
+  if (!match?.groups) return null;
+  return {
+    path: match.groups.path,
+    start: Number(match.groups.start),
+    end: Number(match.groups.end),
+  };
 }
 
 const STEP_STATUSES = new Set<DeepThinkStepStatus>([
@@ -102,8 +124,13 @@ export function deepThinkView(item: Item): DeepThinkView | null {
   });
   const sources = (Array.isArray(doc.sources) ? doc.sources : []).flatMap((entry) => {
     const source = record(entry);
-    const url = safeUrl(source?.url);
-    if (!source || !url || typeof source.id !== "number") return [];
+    if (!source || typeof source.id !== "number") return [];
+    const code = codeSource(source.url);
+    if (code) {
+      return [{ id: source.id, title: `${code.path}:${code.start}-${code.end}`, url: String(source.url), code }];
+    }
+    const url = safeUrl(source.url);
+    if (!url) return [];
     return [
       {
         id: source.id,
@@ -118,7 +145,22 @@ export function deepThinkView(item: Item): DeepThinkView | null {
     steps,
     sources,
     notes: strings(doc.notes),
+    live: liveView(doc.live, status, steps),
   };
+}
+
+/** The live feed, only while its step is the one running. */
+function liveView(
+  value: unknown,
+  status: DeepThinkView["status"],
+  steps: DeepThinkStepView[],
+): DeepThinkLiveView | null {
+  const live = record(value);
+  if (status !== "running" || !live) return null;
+  const step = typeof live.step === "string" ? live.step : null;
+  const text = typeof live.text === "string" ? live.text.trim() : "";
+  const running = steps.find((entry) => entry.status === "running");
+  return step && text && running?.id === step ? { step, text } : null;
 }
 
 export function hostOf(url: string): string {

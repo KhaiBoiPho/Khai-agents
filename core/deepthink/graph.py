@@ -15,6 +15,7 @@ request plus brief to the normal agent in the same Turn.
 from __future__ import annotations
 
 import asyncio
+import json
 import re
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
@@ -33,7 +34,14 @@ from core.deepthink.llm import (
 )
 from core.deepthink.progress import DeepThinkProgress
 from core.deepthink.prompts import check_messages, plan_messages, summarize_messages
-from core.deepthink.search import SearchBackend, SearchHit, SearchUnavailable, trim
+from core.deepthink.search import (
+    CODE_QUERY_PREFIX,
+    SearchBackend,
+    SearchHit,
+    SearchUnavailable,
+    is_code_url,
+    trim,
+)
 
 BackendResolver = Callable[[], Awaitable[SearchBackend | None]]
 DeltaSink = Callable[[str], Awaitable[None]]
@@ -79,6 +87,8 @@ class DeepThinkContext:
     final_text: str = ""
     #: Whether the runner can hand a deliverable to the agent loop.
     can_deliver: bool = False
+    #: Whether the Session has a workspace DeepThink may search (code: queries).
+    code_search: bool = False
     #: The research brief for the agent phase; set only by ``deliver``.
     brief: str | None = None
     deliverable: str = ""
@@ -100,6 +110,56 @@ class DeepThinkContext:
         if text:
             self.streamed.append(text)
             await self.emit_delta(text)
+
+
+class JsonFindings:
+    """Finished string values of a JSON reply, picked out while it streams.
+
+    Plan and check answer in JSON; the live feed shows their sub-questions,
+    queries and gaps as each one is written, not the raw JSON. Keys and
+    short enum values (``none``, ``web``) are skipped.
+    """
+
+    _STRING = re.compile(r'"((?:[^"\\]|\\.)*)"\s*([:,\]}])')
+    _SKIP = {"none", "web", "code", "pdf", "docx", "pptx", "xlsx", "md", "file", "action"}
+
+    def __init__(self) -> None:
+        self._buffer = ""
+        self._position = 0
+        self._seen: set[str] = set()
+
+    def feed(self, text: str) -> list[str]:
+        self._buffer += text
+        found: list[str] = []
+        for match in self._STRING.finditer(self._buffer, self._position):
+            self._position = match.end()
+            if match.group(2) == ":":
+                continue
+            try:
+                value = json.loads(f'"{match.group(1)}"')
+            except ValueError:
+                continue
+            value = " ".join(str(value).split())
+            if len(value) < 3 or value.lower() in self._SKIP or value in self._seen:
+                continue
+            self._seen.add(value)
+            found.append(value)
+        return found
+
+
+def _live_sinks(progress: DeepThinkProgress, step_id: str):
+    """``(on_delta, on_reasoning)`` feeding a JSON-answering step's live feed."""
+
+    findings = JsonFindings()
+
+    async def on_delta(text: str) -> None:
+        for value in findings.feed(text):
+            progress.stream(step_id, f"• {value}\n")
+
+    async def on_reasoning(text: str) -> None:
+        progress.stream(step_id, text)
+
+    return on_delta, on_reasoning
 
 
 def _clean_list(value: Any, limit: int, max_chars: int = 300) -> list[str]:
@@ -159,6 +219,8 @@ def _parse_plan(
             if isinstance(entry, dict):
                 q = str(entry.get("question") or "").strip()
                 query = str(entry.get("query") or q).strip()
+                if str(entry.get("source") or "").lower() == "code" and query:
+                    query = f"{CODE_QUERY_PREFIX} {query.removeprefix(CODE_QUERY_PREFIX).strip()}"
             elif isinstance(entry, str):
                 q = query = entry.strip()
             else:
@@ -190,6 +252,8 @@ def _dedupe(values: list[str]) -> list[str]:
 
 
 def _host(url: str) -> str:
+    if is_code_url(url):
+        return "workspace"
     try:
         return urlsplit(url).hostname or url
     except ValueError:
@@ -242,6 +306,9 @@ def link_citations(text: str, urls: dict[int, str]) -> str:
         url = urls.get(number)
         if url is None:
             return match.group(0)
+        if is_code_url(url):
+            # The app turns 【path:12-30】 into a link to those lines.
+            return f"【{url}】"
         return f"[\\[{number}\\]]({url})"
 
     parts = _FENCE_SPLIT.split(text)
@@ -254,6 +321,9 @@ def link_citations(text: str, urls: dict[int, str]) -> str:
 def sources_block(sources: list[dict[str, Any]]) -> str:
     lines = ["", "", "**Sources**", ""]
     for source in sources:
+        if is_code_url(source["url"]):
+            lines.append(f"- \\[{source['id']}\\] 【{source['url']}】 — workspace")
+            continue
         title = str(source.get("title") or source["url"]).replace("[", "(").replace("]", ")")
         lines.append(f"- \\[{source['id']}\\] [{title}]({source['url']}) — {_host(source['url'])}")
     return "\n".join(lines)
@@ -319,15 +389,21 @@ def build_graph(ctx: DeepThinkContext):
         progress.start("plan", "Breaking the question down")
         notes = list(state.get("notes") or [])
         data: dict[str, Any] | None = None
+        on_delta, on_reasoning = _live_sinks(progress, "plan")
         try:
             text = await asyncio.wait_for(
                 ctx.llm.complete(
                     plan_messages(
-                        state["question"], state.get("context", ""), limits.max_sub_questions
+                        state["question"],
+                        state.get("context", ""),
+                        limits.max_sub_questions,
+                        code=ctx.code_search,
                     ),
                     max_tokens=limits.plan_max_tokens,
                     light=True,
                     reserve_calls=1,
+                    on_delta=on_delta,
+                    on_reasoning=on_reasoning,
                 ),
                 timeout=limits.plan_timeout_s,
             )
@@ -420,6 +496,9 @@ def build_graph(ctx: DeepThinkContext):
                     if excerpt:
                         entry["excerpt"] = trim(excerpt, limits.page_char_budget)
                 found.append(entry)
+            lines = [f"↳ {query} — {len(found)} new result{'s' if len(found) != 1 else ''}"]
+            lines.extend(f"   · {entry['title']}" for entry in found)
+            progress.stream("search", "\n".join(lines) + "\n")
             return query, found, None
 
     async def search(state: DeepThinkState) -> dict[str, Any]:
@@ -498,7 +577,10 @@ def build_graph(ctx: DeepThinkContext):
 
         if not sources:
             status = "failed"
-            if queries and refused == len(queries):
+            if queries and all("no web search tool" in error for error in errors):
+                detail = "No web search tool is connected"
+                note = SEARCH_UNAVAILABLE_NOTE
+            elif queries and refused == len(queries):
                 detail = "Web search was not permitted"
                 note = SEARCH_UNAVAILABLE_NOTE
             else:
@@ -542,6 +624,7 @@ def build_graph(ctx: DeepThinkContext):
         sources = list(state.get("sources") or [])
         searched_keys = {item.lower() for item in state.get("searched") or []}
         data: dict[str, Any] | None = None
+        on_delta, on_reasoning = _live_sinks(progress, "check")
         try:
             text = await asyncio.wait_for(
                 ctx.llm.complete(
@@ -551,10 +634,13 @@ def build_graph(ctx: DeepThinkContext):
                         sources,
                         limits.max_follow_up_queries,
                         limits.snippet_char_budget,
+                        code=ctx.code_search,
                     ),
                     max_tokens=limits.check_max_tokens,
                     light=True,
                     reserve_calls=1,
+                    on_delta=on_delta,
+                    on_reasoning=on_reasoning,
                 ),
                 timeout=limits.check_timeout_s,
             )
