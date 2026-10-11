@@ -4,14 +4,6 @@
   flex-direction: column;
   padding: 48px 24px 16px;
   overflow-y: auto;
-  /* Blueprint sheet: a faint 32px grid behind the start page.
-     Drawn from the text colour so every palette gets a matching rule. */
-  background-image:
-    linear-gradient(color-mix(in srgb, var(--text-primary) 3.5%, transparent) 1px, transparent 1px),
-    linear-gradient(90deg, color-mix(in srgb, var(--text-primary) 3.5%, transparent) 1px, transparent 1px);
-  background-position: -1px -1px;
-  background-size: 32px 32px;
-  background-attachment: local;
 }
 
 .column {
@@ -137,7 +129,6 @@
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-md);
   background: var(--surface-sidebar);
-  box-shadow: var(--shadow-float);
 }
 
 .box:focus-within {

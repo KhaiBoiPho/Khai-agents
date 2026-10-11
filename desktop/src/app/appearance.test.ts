@@ -41,9 +41,7 @@ describe("sanitizeAppearance", () => {
   });
 
   it("does not select an imported theme without a valid stored palette", () => {
-    expect(sanitizeAppearance({ theme: "imported" }).theme).toBe(
-      APPEARANCE_DEFAULTS.theme,
-    );
+    expect(sanitizeAppearance({ theme: "imported" }).theme).toBe("system");
   });
 
   it("is total over the settings table", () => {
@@ -92,9 +90,7 @@ describe("applyAppearance", () => {
     // Defaults live in the stylesheet. Echoing them as inline properties
     // would shadow any future change to tokens.css.
     expect(root().getAttribute("style")).toBeFalsy();
-    // The default palette is the one exception: a theme is an attribute,
-    // not a property, and the stylesheet's own default follows the OS.
-    expect(root().getAttribute("data-theme")).toBe(APPEARANCE_DEFAULTS.theme);
+    expect(root().hasAttribute("data-theme")).toBe(false);
   });
 
   it("exposes a narrowed conversation as a percentage", () => {

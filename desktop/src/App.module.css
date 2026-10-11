@@ -58,11 +58,13 @@
 .startEyebrow {
   width: max-content;
   margin: 0 0 14px !important;
-  padding: 0;
-  color: var(--text-tertiary) !important;
-  font: var(--weight-medium) var(--text-2xs) var(--font-mono) !important;
-  letter-spacing: var(--tracking-caps);
-  text-transform: uppercase;
+  padding: 5px 9px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-pill);
+  background: var(--surface-code);
+  color: var(--text-secondary) !important;
+  font: var(--weight-semibold) var(--text-2xs) var(--font-mono) !important;
+  letter-spacing: var(--tracking-normal);
 }
 
 .startState h2 {
@@ -102,7 +104,7 @@
   color: var(--text-inverse);
   font-size: var(--text-sm);
   font-weight: var(--weight-bold);
-  box-shadow: var(--shadow-soft);
+  box-shadow: 0 6px 16px rgb(27 34 30 / 12%);
   transition:
     transform 150ms ease,
     opacity 150ms ease;
