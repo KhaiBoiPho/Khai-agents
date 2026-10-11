@@ -1,22 +1,19 @@
 /**
  * Sign-in and registration for the hosted web app.
  *
- * Styling and the entrance animation follow Bedimcode's "Responsive login
- * form with GSAP" (github.com/bedimcode/responsive-login-form-with-gsap; the
- * repository carries no license file), re-laid-out around a 16:9 artwork:
- * beside the form on wide screens, a banner above it on medium ones. The GSAP
- * timeline is re-created with the Web Animations API, and icons and the Syne
- * font are bundled locally, because the app's Content Security Policy only
- * loads same-origin resources.
+ * Styled as a sheet of the landing page (graphite, hairlines, a faint
+ * blueprint grid, one lifted card). The entrance follows Bedimcode's
+ * "Responsive login form with GSAP" (github.com/bedimcode/
+ * responsive-login-form-with-gsap; no license file), re-created with the Web
+ * Animations API because the Content Security Policy only loads same-origin
+ * resources.
  */
 
 import { IdCard, Lock, LockKeyhole, SendHorizontal, User } from "lucide-react";
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 
-import loginArt from "../../assets/login/kame-house.jpg";
 import { AccountError, register, signIn, type Account } from "./accountApi";
-import "./syne.css";
 import styles from "./SignIn.module.css";
 
 type Mode = "signIn" | "register";
@@ -25,11 +22,8 @@ const POWER3_OUT = "cubic-bezier(0.215, 0.61, 0.355, 1)";
 const POWER2_OUT = "cubic-bezier(0.25, 0.46, 0.45, 0.94)";
 
 /** The original GSAP timeline: drop in, grow tall, grow wide, then the
- *  title, the form rows one by one, and the artwork. */
-function useEntrance(
-  content: React.RefObject<HTMLDivElement | null>,
-  image: React.RefObject<HTMLImageElement | null>,
-) {
+ *  title and the form rows one by one. */
+function useEntrance(content: React.RefObject<HTMLDivElement | null>) {
   useEffect(() => {
     const card = content.current;
     if (!card || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
@@ -55,36 +49,12 @@ function useEntrance(
           { duration: 1200, delay, easing: POWER2_OUT, fill: "backwards" },
         ),
       );
-    const title = card.querySelector(`.${styles.title}`);
-    if (title) rise(title, 2500);
+    card.querySelectorAll(`.${styles.head} > *`).forEach((line, index) => rise(line, 2500 + index * 120));
     card
       .querySelectorAll(`.${styles.form} > *`)
-      .forEach((row, index) => rise(row, 2700 + index * 200));
-    const art = image.current;
-    if (art) {
-      animations.push(
-        art.animate(
-          [
-            { transform: "translateX(100px)", opacity: 0 },
-            { transform: "translateX(-6px)", opacity: 1, offset: 0.55 },
-            { transform: "translateX(3px)", opacity: 1, offset: 0.75 },
-            { transform: "translateX(0)", opacity: 1 },
-          ],
-          { duration: 1200, delay: 3200, easing: "ease-out", fill: "backwards" },
-        ),
-        // The slow "breathing" zoom of the artwork.
-        art.animate([{ scale: "1" }, { scale: "1.08" }], {
-          duration: 5000,
-          delay: 2400,
-          iterations: Infinity,
-          direction: "alternate",
-          easing: "ease-in-out",
-          composite: "add",
-        }),
-      );
-    }
+      .forEach((row, index) => rise(row, 2800 + index * 200));
     return () => animations.forEach((animation) => animation.cancel());
-  }, [content, image]);
+  }, [content]);
 }
 
 function GoogleMark() {
@@ -132,7 +102,6 @@ function Field({
 export function SignIn({ onSignedIn }: { onSignedIn(account: Account): void }) {
   const { t } = useTranslation();
   const content = useRef<HTMLDivElement | null>(null);
-  const image = useRef<HTMLImageElement | null>(null);
   const [mode, setMode] = useState<Mode>("signIn");
   const [username, setUsername] = useState("");
   const [displayName, setDisplayName] = useState("");
@@ -141,7 +110,7 @@ export function SignIn({ onSignedIn }: { onSignedIn(account: Account): void }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
-  useEntrance(content, image);
+  useEntrance(content);
 
   const switchTo = (next: Mode) => {
     setMode(next);
@@ -189,12 +158,32 @@ export function SignIn({ onSignedIn }: { onSignedIn(account: Account): void }) {
   const registering = mode === "register";
   return (
     <section className={styles.login}>
+      <div className={styles.grid} aria-hidden="true" />
+      <header className={styles.top}>
+        <a className={styles.mark} href="/">
+          <span aria-hidden="true">✳</span> Khai
+        </a>
+      </header>
       <div className={styles.content} ref={content}>
-        <div>
-          <h2 className={styles.title}>
-            {registering ? t("account.join", "Join") : t("account.welcomeTo", "Welcome to")}{" "}
-            <span className={styles.brand}>Khai-Agents</span>
-          </h2>
+        <div className={styles.bar} aria-hidden="true">
+          <span className={styles.dots}>
+            <i />
+            <i />
+            <i />
+          </span>
+          <span>{registering ? "khai — register" : "khai — sign in"}</span>
+          <span />
+        </div>
+        <div className={styles.inner}>
+          <div className={styles.head}>
+            <span className={styles.eyebrow}>Khai-Agents</span>
+            <h2 className={styles.title}>
+              {registering
+                ? t("account.join", "Join")
+                : t("account.welcomeTo", "Welcome to")}{" "}
+              <span className={styles.brand}>Khai</span>
+            </h2>
+          </div>
 
           <form className={styles.form} onSubmit={submit} noValidate>
             {notice || error ? (
@@ -207,7 +196,7 @@ export function SignIn({ onSignedIn }: { onSignedIn(account: Account): void }) {
             ) : null}
 
             <div className={styles.group}>
-              <Field icon={<User size={22} />} label={t("account.username", "Username")}>
+              <Field icon={<User size={18} />} label={t("account.username", "Username")}>
                 <input
                   className={styles.input}
                   autoComplete="username"
@@ -222,7 +211,7 @@ export function SignIn({ onSignedIn }: { onSignedIn(account: Account): void }) {
               </Field>
               {registering ? (
                 <Field
-                  icon={<IdCard size={22} />}
+                  icon={<IdCard size={18} />}
                   label={t("account.displayName", "Display name")}
                 >
                   <input
@@ -235,7 +224,7 @@ export function SignIn({ onSignedIn }: { onSignedIn(account: Account): void }) {
                   />
                 </Field>
               ) : null}
-              <Field icon={<Lock size={22} />} label={t("account.password", "Password")}>
+              <Field icon={<Lock size={18} />} label={t("account.password", "Password")}>
                 <input
                   className={styles.input}
                   type="password"
@@ -249,7 +238,7 @@ export function SignIn({ onSignedIn }: { onSignedIn(account: Account): void }) {
               </Field>
               {registering ? (
                 <Field
-                  icon={<LockKeyhole size={22} />}
+                  icon={<LockKeyhole size={18} />}
                   label={t("account.confirmPassword", "Confirm password")}
                 >
                   <input
@@ -294,7 +283,7 @@ export function SignIn({ onSignedIn }: { onSignedIn(account: Account): void }) {
               {registering
                 ? t("account.register", "Create account")
                 : t("account.signIn", "Log In")}
-              <SendHorizontal size={22} aria-hidden="true" />
+              <SendHorizontal size={17} aria-hidden="true" />
             </button>
 
             <div className={styles.divider} role="separator">
@@ -332,10 +321,6 @@ export function SignIn({ onSignedIn }: { onSignedIn(account: Account): void }) {
               </button>
             </p>
           </form>
-        </div>
-
-        <div className={styles.image}>
-          <img src={loginArt} alt="" className={styles.img} ref={image} />
         </div>
       </div>
     </section>
