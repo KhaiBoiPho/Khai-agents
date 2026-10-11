@@ -22,9 +22,7 @@
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-xl);
   background: var(--surface-raised);
-  box-shadow:
-    0 18px 46px rgb(27 34 30 / 10%),
-    0 3px 12px rgb(27 34 30 / 5%);
+  box-shadow: var(--shadow-float);
   transition:
     border-color 150ms ease,
     box-shadow 150ms ease,
@@ -36,7 +34,7 @@
   border-color: var(--signal);
   box-shadow:
     0 0 0 3px var(--signal-soft),
-    0 22px 52px rgb(27 34 30 / 13%);
+    var(--shadow-float);
   transform: translateY(-1px);
 }
 
@@ -572,7 +570,7 @@
   height: 38px;
   background: var(--text-primary);
   color: var(--text-inverse);
-  box-shadow: 0 5px 13px rgb(27 34 30 / 16%);
+  box-shadow: var(--shadow-soft);
 }
 
 .sendButton:hover:not(:disabled) {

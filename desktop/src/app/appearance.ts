@@ -73,7 +73,9 @@ export interface AppearanceState {
 
 export const APPEARANCE_DEFAULTS: AppearanceState = {
   conversationWidth: 100,
-  theme: "system",
+  // Dark by default: the graphite palette is the app's own look. Light and
+  // "follow the OS" stay one pick away in Settings ▸ Appearance.
+  theme: "dark",
   fontSize: 14,
   fontFamily: "",
   importedTheme: null,
@@ -194,7 +196,7 @@ export function sanitizeAppearance(value: unknown): AppearanceState {
     { ...APPEARANCE_DEFAULTS, importedTheme },
   );
   return state.theme === "imported" && !importedTheme
-    ? { ...state, theme: "system" }
+    ? { ...state, theme: APPEARANCE_DEFAULTS.theme }
     : state;
 }
 
