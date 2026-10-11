@@ -371,6 +371,29 @@ class DeepCodeApplication:
                     definition.id, status=AutomationActivationStatus.PAUSED
                 )
 
+    def remove_project(self, project_id: str) -> bool:
+        """Remove a project and its chats; the folder on disk is untouched.
+
+        Chats are canonical Sessions, and reconciliation re-creates a project
+        for any Session whose workspace has none, so deleting only the project
+        row brought it back on the next load. Each chat goes through the
+        Session deletion cascade first (tombstoned, never resurrected).
+        """
+
+        attempted: set[str] = set()
+        while True:
+            pending = [
+                thread
+                for thread in self.threads.list(project_id, include_archived=True, limit=500)
+                if thread.id not in attempted
+            ]
+            if not pending:
+                break
+            for thread in pending:
+                attempted.add(thread.id)
+                self.deletions.delete(thread.id)
+        return self.projects.remove(project_id)
+
     def close(self) -> None:
         errors: list[Exception] = []
 

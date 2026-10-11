@@ -482,7 +482,7 @@ class Dispatcher:
     def _project_remove(self, params: Params) -> dict[str, bool]:
         params.only("projectId")
         return {
-            "removed": self.application.projects.remove(str(params.string("projectId")))
+            "removed": self.application.remove_project(str(params.string("projectId")))
         }
 
     def _settings_read(self, params: Params) -> dict[str, Any]:
