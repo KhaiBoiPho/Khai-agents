@@ -245,3 +245,28 @@
   border-color: var(--signal, var(--border-strong));
   background: var(--signal-faint, var(--surface-hover));
 }
+
+/* A link to a workspace file ([PDF](reports/x.pdf)): opens it in the Files tab. */
+.fileLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--signal, var(--text-link, inherit));
+  font: inherit;
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, currentColor 40%, transparent);
+  text-underline-offset: 3px;
+  vertical-align: baseline;
+  cursor: pointer;
+}
+
+.fileLink:hover {
+  text-decoration-color: currentColor;
+}
+
+.fileLink svg {
+  flex-shrink: 0;
+}

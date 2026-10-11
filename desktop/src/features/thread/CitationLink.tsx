@@ -1,8 +1,33 @@
-import { FileCode2 } from "lucide-react";
+import { FileCode2, FileText } from "lucide-react";
 import type { ReactNode } from "react";
 
 import type { LineRange } from "../inspector/filePreviewRequests";
 import styles from "./MarkdownContent.module.css";
+
+/** A Markdown link to a workspace file: opens it in the Files tab. */
+export function FileLink({
+  path,
+  lines,
+  onOpen,
+  children,
+}: {
+  path: string;
+  lines?: LineRange;
+  onOpen(path: string, lines?: LineRange): void;
+  children: ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      className={styles.fileLink}
+      onClick={() => onOpen(path, lines)}
+      title={`Open ${path}`}
+    >
+      <FileText size={12} aria-hidden="true" />
+      {children}
+    </button>
+  );
+}
 
 /** A citation in a reply: opens the cited file at those lines. */
 export function CitationLink({

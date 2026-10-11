@@ -35,8 +35,11 @@ Chromium and produces:
    that nothing is cut off. Fix every lint warning and everything that looks
    off, rebuild, and look again. Two or three rounds are normal; do not
    report done before a clean build *and* a visual pass.
-5. **Deliver** the PDF and PPTX paths (and the HTML source). The PDF is the
-   faithful version; the PPTX is for editing text in PowerPoint/Keynote.
+5. **Deliver**: the chat shows the built PDF and PPTX as file cards. Link
+   files with workspace-relative paths, e.g.
+   `[PDF](decks/<name>/<name>.pdf)` — they open in the Files tab; never
+   absolute paths or `file://` URLs. The PDF is the faithful version; the
+   PPTX is for editing text in PowerPoint/Keynote.
 
 ## Deck structure
 

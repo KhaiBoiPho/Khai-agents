@@ -12,8 +12,13 @@ import ReactMarkdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
 
 import { useThemeIsDark } from "../../app/useThemeIsDark";
-import { CitationLink } from "./CitationLink";
-import { linkCitations, parseCitationHref, useCitationHandler } from "./citations";
+import { CitationLink, FileLink } from "./CitationLink";
+import {
+  linkCitations,
+  parseCitationHref,
+  parseFileHref,
+  useCitationHandler,
+} from "./citations";
 import styles from "./MarkdownContent.module.css";
 
 interface MarkdownContentProps {
@@ -102,6 +107,14 @@ function MarkdownLink({
       <CitationLink {...citation} onOpen={openCitation}>
         {props.children}
       </CitationLink>
+    );
+  }
+  const file = openCitation ? parseFileHref(props.href) : null;
+  if (file && openCitation) {
+    return (
+      <FileLink path={file.path} lines={file.lines} onOpen={openCitation}>
+        {props.children}
+      </FileLink>
     );
   }
   return <ExternalLink {...props} />;

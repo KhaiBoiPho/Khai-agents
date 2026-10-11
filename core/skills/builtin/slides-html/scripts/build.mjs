@@ -11,7 +11,7 @@
 
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
-import { basename, dirname, extname, join, resolve } from "node:path";
+import { basename, dirname, extname, join, relative, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 const SKILL_DIR = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -484,7 +484,12 @@ async function main() {
 
   const warned = report.slides.filter((s) => s.warnings.length || s.note);
   report.ok = !warned.length && !report.problems.length;
-  console.log(JSON.stringify(report, null, 2));
+  // Deliverables first, as `output_path` entries: Khai turns those into file
+  // cards in the chat (the tool result preview is cut after a few KB).
+  const files = [report.outputs.pdf, report.outputs.pptx]
+    .filter(Boolean)
+    .map((file) => ({ output_path: relative(process.cwd(), file) || file }));
+  console.log(JSON.stringify({ ok: report.ok, files, ...report }, null, 2));
   if (!report.ok) {
     console.error(
       `\n${warned.length} slide(s) with warnings${report.problems.length ? ` and ${report.problems.length} problem(s)` : ""}: fix them, rebuild, and look at the previews again.`,

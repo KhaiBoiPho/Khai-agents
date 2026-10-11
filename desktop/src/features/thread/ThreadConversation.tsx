@@ -216,7 +216,7 @@ export function ThreadConversation({
 
   // A citation in a reply (【file:12-30】) opens that file at those lines.
   const openCitation = useCallback(
-    (path: string, lines: LineRange) => {
+    (path: string, lines?: LineRange) => {
       requestFilePreview(path, lines);
       handleOpenInspector("files");
     },

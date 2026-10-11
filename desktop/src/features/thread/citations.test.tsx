@@ -1,7 +1,7 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
-import { CitationContext, linkCitations, parseCitationHref } from "./citations";
+import { CitationContext, linkCitations, parseCitationHref, parseFileHref } from "./citations";
 import { MarkdownContent } from "./MarkdownContent";
 
 describe("citations", () => {
@@ -36,5 +36,29 @@ describe("citations", () => {
 
     render(<MarkdownContent>{"Plain 【notes.md:1】."}</MarkdownContent>);
     expect(screen.getByText(/Plain 【notes\.md:1】\./)).toBeTruthy();
+  });
+
+  it("treats relative links as workspace files and leaves URLs alone", () => {
+    expect(parseFileHref("decks/a/deck.pptx")).toEqual({ path: "decks/a/deck.pptx" });
+    expect(parseFileHref("./reports/b%20c.pdf")).toEqual({ path: "reports/b c.pdf" });
+    expect(parseFileHref("src/x.ts#L3-L9")).toEqual({
+      path: "src/x.ts",
+      lines: { start: 3, end: 9 },
+    });
+    for (const href of ["https://a.com", "mailto:x@y.z", "/abs/path", "#top", "../up.md", ""]) {
+      expect(parseFileHref(href)).toBeNull();
+    }
+  });
+
+  it("opens a file link in the Files tab instead of navigating", () => {
+    const open = vi.fn();
+    render(
+      <CitationContext.Provider value={open}>
+        <MarkdownContent>{"[PDF](decks/a/deck.pdf) and [site](https://a.com)"}</MarkdownContent>
+      </CitationContext.Provider>,
+    );
+    fireEvent.click(screen.getByRole("button", { name: /PDF/ }));
+    expect(open).toHaveBeenCalledWith("decks/a/deck.pdf", undefined);
+    expect(screen.getByRole("link", { name: "site" }).getAttribute("href")).toBe("https://a.com");
   });
 });
