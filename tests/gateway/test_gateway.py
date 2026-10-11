@@ -375,7 +375,7 @@ def test_signed_out_visitors_get_the_landing_page_and_members_the_app(
     async def scenario(client, gateway, backend):
         landing = await client.get("/")
         assert landing.status == 200
-        assert "Agent làm việc thật" in await landing.text()
+        assert "Khai — agent làm việc thật" in await landing.text()
         assert (await client.get("/landing/landing.js")).status == 200
         assert (await client.get("/landing/fonts/BeVietnamPro-Regular.ttf")).status == 200
         assert (await client.get("/landing/../gateway/server.py")).status == 404
@@ -383,9 +383,9 @@ def test_signed_out_visitors_get_the_landing_page_and_members_the_app(
         await _register(client, "khai")
         assert (await _login(client, "khai")).status == 200
         app = await client.get("/")
-        assert "Agent làm việc thật" not in await app.text()
+        assert "Khai — agent làm việc thật" not in await app.text()
         # /app is the app (and its sign-in screen) whoever asks.
         client.session.cookie_jar.clear()
-        assert "Agent làm việc thật" not in await (await client.get("/app")).text()
+        assert "Khai — agent làm việc thật" not in await (await client.get("/app")).text()
 
     _run(scenario, tmp_path)

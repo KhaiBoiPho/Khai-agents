@@ -1,8 +1,8 @@
 /**
  * Sign-in and registration for the hosted web app.
  *
- * Styled as a sheet of the landing page (graphite, hairlines, a faint
- * blueprint grid, one lifted card). The entrance follows Bedimcode's
+ * Styled after the landing page (its ground, cyan → teal accent, IBM Plex,
+ * a faint grid and one framed card). The entrance follows Bedimcode's
  * "Responsive login form with GSAP" (github.com/bedimcode/
  * responsive-login-form-with-gsap; no license file), re-created with the Web
  * Animations API because the Content Security Policy only loads same-origin
@@ -79,22 +79,15 @@ function GitHubMark() {
   );
 }
 
-function Field({
-  icon,
-  label,
-  children,
-}: {
-  icon: ReactNode;
-  label: string;
-  children: ReactNode;
-}) {
+/** An input with a leading icon. Its label is the input's own placeholder,
+ *  which the browser hides for typed and autofilled values alike. */
+function Field({ icon, children }: { icon: ReactNode; children: ReactNode }) {
   return (
     <div className={styles.box}>
       <span className={styles.icon} aria-hidden="true">
         {icon}
       </span>
       {children}
-      <span className={styles.label}>{label}</span>
     </div>
   );
 }
@@ -196,14 +189,14 @@ export function SignIn({ onSignedIn }: { onSignedIn(account: Account): void }) {
             ) : null}
 
             <div className={styles.group}>
-              <Field icon={<User size={18} />} label={t("account.username", "Username")}>
+              <Field icon={<User size={18} />}>
                 <input
                   className={styles.input}
                   autoComplete="username"
                   autoCapitalize="none"
                   spellCheck={false}
                   required
-                  placeholder=" "
+                  placeholder={t("account.username", "Username")}
                   aria-label={t("account.username", "Username")}
                   value={username}
                   onChange={(event) => setUsername(event.target.value)}
@@ -211,26 +204,24 @@ export function SignIn({ onSignedIn }: { onSignedIn(account: Account): void }) {
               </Field>
               {registering ? (
                 <Field
-                  icon={<IdCard size={18} />}
-                  label={t("account.displayName", "Display name")}
-                >
+                  icon={<IdCard size={18} />}>
                   <input
                     className={styles.input}
                     autoComplete="name"
-                    placeholder=" "
+                    placeholder={t("account.displayName", "Display name")}
                     aria-label={t("account.displayName", "Display name")}
                     value={displayName}
                     onChange={(event) => setDisplayName(event.target.value)}
                   />
                 </Field>
               ) : null}
-              <Field icon={<Lock size={18} />} label={t("account.password", "Password")}>
+              <Field icon={<Lock size={18} />}>
                 <input
                   className={styles.input}
                   type="password"
                   autoComplete={registering ? "new-password" : "current-password"}
                   required
-                  placeholder=" "
+                  placeholder={t("account.password", "Password")}
                   aria-label={t("account.password", "Password")}
                   value={password}
                   onChange={(event) => setPassword(event.target.value)}
@@ -238,15 +229,13 @@ export function SignIn({ onSignedIn }: { onSignedIn(account: Account): void }) {
               </Field>
               {registering ? (
                 <Field
-                  icon={<LockKeyhole size={18} />}
-                  label={t("account.confirmPassword", "Confirm password")}
-                >
+                  icon={<LockKeyhole size={18} />}>
                   <input
                     className={styles.input}
                     type="password"
                     autoComplete="new-password"
                     required
-                    placeholder=" "
+                    placeholder={t("account.confirmPassword", "Confirm password")}
                     aria-label={t("account.confirmPassword", "Confirm password")}
                     value={confirm}
                     onChange={(event) => setConfirm(event.target.value)}

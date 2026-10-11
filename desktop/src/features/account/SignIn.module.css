@@ -1,53 +1,54 @@
-/* The sign-in sheet: the landing page's graphite, hairlines and faint
-   blueprint grid, with one lifted card (see SignIn.tsx for the entrance). */
+/* The sign-in sheet: the landing page's ground, glow and faint grid, with
+   one framed card (see SignIn.tsx for the entrance). */
 
-/* The landing's fonts, served by the gateway; elsewhere the stack falls back. */
+/* The landing's fonts (IBM Plex), served by the gateway; elsewhere the
+   stack falls back. */
 @font-face {
-  font-family: "Be Vietnam Pro";
-  src: url("/landing/fonts/BeVietnamPro-Regular.ttf") format("truetype");
+  font-family: "IBM Plex Sans";
+  src: url("/landing/fonts/IBMPlexSans[wdth,wght].ttf") format("truetype");
+  font-weight: 100 700;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "IBM Plex Mono";
+  src: url("/landing/fonts/IBMPlexMono-Regular.ttf") format("truetype");
   font-weight: 400;
   font-display: swap;
 }
 
 @font-face {
-  font-family: "Be Vietnam Pro";
-  src: url("/landing/fonts/BeVietnamPro-Medium.ttf") format("truetype");
-  font-weight: 500;
+  font-family: "IBM Plex Mono";
+  src: url("/landing/fonts/IBMPlexMono-SemiBold.ttf") format("truetype");
+  font-weight: 600;
   font-display: swap;
 }
 
 @font-face {
-  font-family: "JetBrains Mono";
-  src: url("/landing/fonts/JetBrainsMono[wght].ttf") format("truetype");
-  font-weight: 100 800;
+  font-family: "IBM Plex Mono";
+  src: url("/landing/fonts/IBMPlexMono-Bold.ttf") format("truetype");
+  font-weight: 700;
   font-display: swap;
 }
 
 .login {
-  --bg: #0b0c0e;
-  --bg-1: #101114;
-  --bg-2: #15161a;
-  --bg-3: #1b1c21;
-  --ink: #ececee;
-  --ink-2: #a3a5ab;
-  --ink-3: #6c6f76;
-  --ink-4: #45474d;
-  --line: rgb(255 255 255 / 7.5%);
-  --line-2: rgb(255 255 255 / 13%);
-  --accent: #8aa8ff;
-  --grid: rgb(255 255 255 / 3%);
-  --lift:
-    0 0 0 1px rgb(0 0 0 / 55%),
-    0 1px 0 0 rgb(255 255 255 / 5%) inset,
-    0 2px 4px rgb(0 0 0 / 35%),
-    0 24px 48px -12px rgb(0 0 0 / 70%),
-    0 60px 120px -30px rgb(0 0 0 / 65%);
-  --lift-sm:
-    0 0 0 1px rgb(0 0 0 / 50%),
-    0 1px 0 0 rgb(255 255 255 / 5%) inset,
-    0 8px 20px -6px rgb(0 0 0 / 60%);
-  --sans: "Be Vietnam Pro", var(--font-ui, system-ui), sans-serif;
-  --mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  /* The landing's palette: ground, panels, and sky → cyan → teal. */
+  --bg: #0b1116;
+  --bg-1: #0c141c;
+  --bg-2: #0f1922;
+  --bg-3: #122029;
+  --ink: #e9f1f3;
+  --ink-2: #94a8b2;
+  --ink-3: #6f8590;
+  --ink-4: #586e79;
+  --line: rgb(233 241 243 / 8%);
+  --line-2: rgb(233 241 243 / 16%);
+  --accent: #06b6d4;
+  --sky: #0ea5e9;
+  --teal: #4ecdc4;
+  --grid: rgb(233 241 243 / 2.5%);
+  --sans: "IBM Plex Sans", var(--font-ui, system-ui), sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
 
   position: relative;
   display: grid;
@@ -55,7 +56,10 @@
   place-items: center;
   padding: 5rem 1rem 2.5rem;
   overflow: hidden;
-  background: var(--bg);
+  background:
+    radial-gradient(52rem 30rem at 82% -6rem, rgb(14 165 233 / 13%), transparent 62%),
+    radial-gradient(38rem 26rem at -8% 22rem, rgb(78 205 196 / 7%), transparent 60%),
+    var(--bg);
   color: var(--ink-2);
   color-scheme: dark;
   font-family: var(--sans);
@@ -105,15 +109,14 @@
   text-decoration: none;
 }
 
+.mark {
+  font-family: var(--mono);
+  font-weight: 600;
+}
+
 .mark span {
-  display: grid;
-  width: 22px;
-  height: 22px;
-  place-items: center;
-  border-radius: 5px;
-  background: var(--bg-3);
-  box-shadow: var(--lift-sm);
-  font-size: 0.8rem;
+  color: var(--teal);
+  font-weight: 700;
 }
 
 /* The card: the one thing that floats, framed like the landing's window. */
@@ -122,9 +125,12 @@
   z-index: 1;
   width: min(420px, 100%);
   overflow: hidden;
+  border: 1px solid var(--line-2);
   border-radius: 12px;
   background: var(--bg-1);
-  box-shadow: var(--lift);
+  box-shadow:
+    0 24px 70px rgb(0 0 0 / 50%),
+    0 0 0 1px rgb(6 182 212 / 5%);
 }
 
 .bar {
@@ -133,9 +139,8 @@
   grid-template-columns: 1fr auto 1fr;
   align-items: center;
   padding: 0 0.9rem;
-  border-bottom: 1px solid rgb(0 0 0 / 60%);
-  background: var(--bg-2);
-  box-shadow: 0 1px 0 var(--line);
+  border-bottom: 1px solid var(--line);
+  background: rgb(233 241 243 / 2%);
   color: var(--ink-3);
   font-family: var(--mono);
   font-size: 0.72rem;
@@ -147,11 +152,10 @@
 }
 
 .dots i {
-  width: 11px;
-  height: 11px;
+  width: 10px;
+  height: 10px;
   border-radius: 50%;
-  background: var(--bg-3);
-  box-shadow: inset 0 0 0 1px var(--line-2);
+  background: var(--line-2);
 }
 
 .inner {
@@ -169,29 +173,31 @@
   color: var(--ink-3);
   font-family: var(--mono);
   font-size: 0.72rem;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.14em;
   text-transform: uppercase;
 }
 
 .eyebrow::before {
-  width: 6px;
-  height: 6px;
-  background: var(--accent);
-  box-shadow: 0 0 0 3px rgb(138 168 255 / 14%);
-  content: "";
+  color: var(--accent);
+  content: "●";
+  letter-spacing: 0;
 }
 
 .title {
   margin: 0.85rem 0 0;
   color: var(--ink);
-  font-size: 1.9rem;
-  font-weight: 500;
-  letter-spacing: -0.035em;
+  font-family: var(--mono);
+  font-size: 1.85rem;
+  font-weight: 700;
+  letter-spacing: -0.03em;
   line-height: 1.1;
 }
 
 .brand {
-  color: var(--ink-3);
+  background: linear-gradient(92deg, var(--sky), var(--accent) 46%, var(--teal));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
   white-space: nowrap;
 }
 
@@ -211,16 +217,17 @@
   display: flex;
   height: 46px;
   align-items: center;
+  border: 1px solid var(--line-2);
   border-radius: 8px;
   background: var(--bg-2);
-  box-shadow: var(--lift-sm);
-  transition: box-shadow 0.2s;
+  transition:
+    border-color 0.2s,
+    box-shadow 0.2s;
 }
 
 .box:focus-within {
-  box-shadow:
-    0 0 0 1px var(--accent),
-    0 0 0 4px rgb(138 168 255 / 14%);
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgb(6 182 212 / 16%);
 }
 
 .icon {
@@ -234,12 +241,9 @@
   color: var(--accent);
 }
 
-.label {
-  position: absolute;
-  left: 2.65rem;
+.input::placeholder {
   color: var(--ink-3);
-  pointer-events: none;
-  transition: opacity 0.3s;
+  opacity: 1;
 }
 
 .input {
@@ -255,12 +259,10 @@
   font: inherit;
 }
 
-.input:focus + .label,
-.input:not(:placeholder-shown) + .label {
-  opacity: 0;
-}
-
-.input:autofill {
+.input:autofill,
+.input:-webkit-autofill {
+  -webkit-text-fill-color: var(--ink);
+  caret-color: var(--ink);
   transition:
     background-color 6000s,
     color 6000s;
@@ -271,7 +273,7 @@
   padding: 0;
   border: none;
   background: none;
-  color: var(--ink-2);
+  color: var(--teal);
   cursor: pointer;
   font: inherit;
 }
@@ -306,21 +308,20 @@
   margin-bottom: 1.1rem;
   border: none;
   border-radius: 8px;
-  background: var(--ink);
-  box-shadow:
-    0 1px 0 rgb(255 255 255 / 40%) inset,
-    0 6px 16px -6px rgb(0 0 0 / 80%);
-  color: var(--bg);
+  background: linear-gradient(92deg, var(--sky), var(--accent) 46%, var(--teal));
+  box-shadow: 0 10px 30px -10px rgb(6 182 212 / 55%);
+  color: #071016;
   cursor: pointer;
   font: inherit;
-  font-weight: 500;
+  font-family: var(--mono);
+  font-weight: 600;
   transition:
-    background-color 0.15s,
+    filter 0.15s,
     transform 0.15s;
 }
 
 .button:hover:not(:disabled) {
-  background: #fff;
+  filter: brightness(1.08);
   transform: translateY(-1px);
 }
 
@@ -371,10 +372,9 @@
   align-items: center;
   justify-content: center;
   gap: 0.55rem;
-  border: none;
+  border: 1px solid var(--line-2);
   border-radius: 8px;
   background: var(--bg-2);
-  box-shadow: var(--lift-sm);
   color: var(--ink-2);
   cursor: pointer;
   font: inherit;
@@ -385,6 +385,7 @@
 }
 
 .provider:hover {
+  border-color: var(--accent);
   background: var(--bg-3);
   color: var(--ink);
 }
@@ -417,9 +418,9 @@
 }
 
 .notice {
-  background: rgb(138 168 255 / 10%);
-  box-shadow: inset 0 0 0 1px rgb(138 168 255 / 22%);
-  color: #b9caff;
+  background: rgb(6 182 212 / 10%);
+  box-shadow: inset 0 0 0 1px rgb(6 182 212 / 24%);
+  color: #8ee3f0;
 }
 
 @media (width < 480px) {

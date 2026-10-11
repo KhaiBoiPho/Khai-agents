@@ -424,7 +424,12 @@ class Gateway:
         return self._static(LANDING_DIRECTORY.resolve(), request.match_info["path"])
 
     async def landing_font(self, request) -> web.FileResponse:
-        return self._static(LANDING_FONTS.resolve(), request.match_info["path"])
+        # The landing's own fonts first, then the shared slide fonts.
+        own = (LANDING_DIRECTORY / "fonts").resolve()
+        try:
+            return self._static(own, request.match_info["path"])
+        except web.HTTPNotFound:
+            return self._static(LANDING_FONTS.resolve(), request.match_info["path"])
 
     async def index(self, _request) -> web.StreamResponse:
         index = self.settings.assets / "index.html"
