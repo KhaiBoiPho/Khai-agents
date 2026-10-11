@@ -224,6 +224,26 @@ export function Composer({
     initialLaunch?.prompt,
   );
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const regionRef = useRef<HTMLElement | null>(null);
+
+  // The composer floats over the conversation's bottom. Its height changes
+  // (task progress, chips, a taller prompt), so publish it for the
+  // conversation to leave that much room and keep its last turn's actions
+  // (Retry, Review changes) clear of it.
+  useEffect(() => {
+    const region = regionRef.current;
+    const host = region?.parentElement;
+    if (!region || !host || typeof ResizeObserver === "undefined") return;
+    const publish = () =>
+      host.style.setProperty("--composer-height", `${Math.ceil(region.offsetHeight)}px`);
+    publish();
+    const observer = new ResizeObserver(publish);
+    observer.observe(region);
+    return () => {
+      observer.disconnect();
+      host.style.removeProperty("--composer-height");
+    };
+  }, []);
   const caretRef = useRef<number | null>(null);
   const [contextError, setContextError] = useState<string | null>(null);
   const [commandError, setCommandError] = useState<string | null>(null);
@@ -557,6 +577,7 @@ export function Composer({
 
   return (
     <footer
+      ref={regionRef}
       className={styles.region}
       data-centered={!conversationStarted || undefined}
     >

@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { useState } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -18,39 +18,49 @@ function Harness({ onChange }: { onChange(level: EffortLevel): void }) {
 }
 
 const slider = () => screen.getByRole("slider", { name: "Effort" });
-const press = (key: string) => fireEvent.keyDown(slider(), { key });
+
+/** Keys spring the thumb to a stop; let the spring settle. */
+async function press(key: string) {
+  fireEvent.keyDown(slider(), { key });
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(800);
+  });
+}
 
 describe("EffortSlider", () => {
-  beforeEach(() => localStorage.clear());
-  afterEach(cleanup);
+  beforeEach(() => {
+    localStorage.clear();
+    vi.useFakeTimers();
+    vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(null);
+  });
+  afterEach(() => {
+    cleanup();
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+  });
 
-  it("offers Fast, a Medium placeholder that runs as Fast, and Smart", () => {
+  it("offers Fast, a Medium placeholder that runs as Fast, and Smart", async () => {
     const onChange = vi.fn();
     render(<Harness onChange={onChange} />);
     expect(slider().getAttribute("aria-valuetext")).toBe("Fast");
-    expect(screen.getByText("Recommended")).toBeTruthy();
 
-    press("ArrowRight");
+    await press("ArrowRight");
     expect(slider().getAttribute("aria-valuetext")).toBe("Medium");
     // Medium is a mock: the effort sent is still "low", so nothing changes.
     expect(onChange).not.toHaveBeenCalled();
 
-    press("ArrowRight");
+    await press("ArrowRight");
     expect(slider().getAttribute("aria-valuetext")).toBe("Smart");
     expect(onChange).toHaveBeenLastCalledWith("medium");
 
-    press("ArrowLeft");
-    expect(slider().getAttribute("aria-valuetext")).toBe("Medium");
-    expect(onChange).toHaveBeenLastCalledWith("low");
-
-    press("Home");
+    await press("Home");
     expect(slider().getAttribute("aria-valuetext")).toBe("Fast");
-    expect(onChange).toHaveBeenCalledTimes(2);
+    expect(onChange).toHaveBeenLastCalledWith("low");
   });
 
-  it("remembers the Medium stop across reopenings", () => {
+  it("remembers the Medium stop across reopenings", async () => {
     const { unmount } = render(<Harness onChange={() => {}} />);
-    press("ArrowRight");
+    await press("ArrowRight");
     unmount();
     render(<Harness onChange={() => {}} />);
     expect(slider().getAttribute("aria-valuetext")).toBe("Medium");

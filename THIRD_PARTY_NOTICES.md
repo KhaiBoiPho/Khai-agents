@@ -186,3 +186,36 @@ in that folder for their grammar licenses.
 The agent system prompt in `core/agent_setup.py` and the `/init` prompt in
 `desktop/src/features/execution/commands.ts` adapt prompts from OpenAI Codex
 (https://github.com/openai/codex, Apache-2.0).
+
+## Auraxis (effort selector, ambient backdrop)
+
+The effort selector in `desktop/src/features/execution/effort/`
+(`ThinkingDepthSelector`, `useThinkingDepthSelector`, `ThinkingDepthCanvas`,
+its stylesheet and tests) is ported from Auraxis
+(https://github.com/yth1120/Auraxis-Agent), and the ambient "Aqua" backdrop
+and glass surfaces in `desktop/src/App.module.css`,
+`DesktopSidebar.module.css` and `HomeView.module.css` follow its Aqua theme.
+
+```
+MIT License
+
+Copyright (c) 2026 Auraxis Contributors
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```

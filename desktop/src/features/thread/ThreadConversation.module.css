@@ -16,11 +16,13 @@
 .conversation {
   width: var(--conversation-width);
   margin: 0 auto;
-  padding: 42px 30px 202px;
+  /* Room for the floating composer (its measured height, published by
+     Composer), so the last turn's actions are never under it. */
+  padding: 42px 30px max(202px, calc(var(--composer-height, 0px) + 28px));
 }
 
 .conversationFrame[data-plan-expanded="true"] .conversation {
-  padding-bottom: 280px;
+  padding-bottom: max(280px, calc(var(--composer-height, 0px) + 28px));
 }
 
 .turnBlock {

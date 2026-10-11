@@ -357,3 +357,25 @@
     box-shadow: var(--shadow-float);
   }
 }
+
+/* Ambient "Aqua" backdrop, after Auraxis (MIT, see THIRD_PARTY_NOTICES.md):
+   soft violet/green light over the shell, with the workspace as frosted
+   glass floating on it. */
+.shell {
+  background:
+    radial-gradient(1100px 720px at 8% -12%, rgb(124 108 240 / 30%), transparent 62%),
+    radial-gradient(960px 680px at 104% 12%, rgb(79 174 134 / 22%), transparent 58%),
+    radial-gradient(900px 900px at 55% 120%, rgb(124 108 240 / 26%), transparent 64%),
+    radial-gradient(700px 500px at 30% 60%, rgb(234 120 34 / 8%), transparent 70%),
+    var(--surface-shell);
+}
+
+.workspace {
+  background: color-mix(in srgb, var(--surface-raised) 38%, transparent);
+  backdrop-filter: blur(18px) saturate(1.35);
+  -webkit-backdrop-filter: blur(18px) saturate(1.35);
+  box-shadow:
+    0 1px 2px rgb(20 24 30 / 4%),
+    0 12px 32px -8px rgb(20 24 30 / 14%),
+    inset 0 1px 0 rgb(255 255 255 / 8%);
+}
