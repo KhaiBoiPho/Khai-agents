@@ -11,7 +11,7 @@
   cursor: default;
 }
 
-/* A thin, long track; the fill (the text colour) is what the key has left. */
+/* A thin, long track; the sky → cyan → teal fill is what the key has left. */
 .track {
   position: relative;
   height: 6px;
@@ -19,14 +19,14 @@
   flex: 1;
   overflow: hidden;
   border-radius: 999px;
-  background: color-mix(in srgb, var(--text-primary) 14%, transparent);
+  background: rgb(6 182 212 / 15%);
 }
 
 .fill {
   position: absolute;
   inset: 0 auto 0 0;
   border-radius: inherit;
-  background: linear-gradient(90deg, color-mix(in srgb, var(--text-primary) 55%, transparent), var(--text-primary));
+  background: linear-gradient(90deg, #0ea5e9, #06b6d4 46%, #4ecdc4);
   transition: width 400ms ease;
 }
 

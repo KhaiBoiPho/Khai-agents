@@ -5,10 +5,10 @@
    theme. The canvas reads --color-violet and --color-bg-elevated as hex, so
    those two are literal per theme (Auraxis's own values). */
 .ax-effort {
-  /* Monochrome: the ember stream in graphite on light, white on dark. */
-  --color-violet: #2a2a2a;
-  --color-violet-soft: rgba(42, 42, 42, 0.12);
-  --color-violet-border: rgba(42, 42, 42, 0.3);
+  /* DeepCode's cyan: the ember stream and fill, like the credit bar. */
+  --color-violet: #0891b2;
+  --color-violet-soft: rgba(8, 145, 178, 0.14);
+  --color-violet-border: rgba(8, 145, 178, 0.35);
   --color-bg-elevated: #ffffff;
   --color-bg-tertiary: var(--surface-inset);
   --color-border-dim: var(--border-subtle);
@@ -21,17 +21,17 @@
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) .ax-effort {
-    --color-violet: #e8e8e8;
-    --color-violet-soft: rgba(232, 232, 232, 0.14);
-    --color-violet-border: rgba(232, 232, 232, 0.32);
+    --color-violet: #22d3ee;
+    --color-violet-soft: rgba(34, 211, 238, 0.16);
+    --color-violet-border: rgba(34, 211, 238, 0.38);
     --color-bg-elevated: #262626;
   }
 }
 
 :root[data-theme="dark"] .ax-effort {
-  --color-violet: #e8e8e8;
-  --color-violet-soft: rgba(232, 232, 232, 0.14);
-  --color-violet-border: rgba(232, 232, 232, 0.32);
+  --color-violet: #22d3ee;
+  --color-violet-soft: rgba(34, 211, 238, 0.16);
+  --color-violet-border: rgba(34, 211, 238, 0.38);
   --color-bg-elevated: #262626;
 }
 
@@ -136,10 +136,12 @@
   left: 0;
   width: 0;
   opacity: 0;
+  /* DeepCode's sky → cyan → teal, washed so the ember stream reads on it. */
   background: linear-gradient(
     90deg,
-    var(--color-violet-soft),
-    color-mix(in srgb, var(--color-violet) 16%, transparent)
+    rgb(14 165 233 / 22%),
+    rgb(6 182 212 / 30%) 46%,
+    rgb(78 205 196 / 38%)
   );
   pointer-events: none;
   will-change: width, opacity;
