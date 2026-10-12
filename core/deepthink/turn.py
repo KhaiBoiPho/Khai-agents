@@ -18,6 +18,7 @@ from __future__ import annotations
 from collections.abc import AsyncIterator
 from typing import Any
 
+from core.deepthink.attachments import inline_attachments
 from core.deepthink.limits import DeepThinkLimits
 from core.deepthink.runner import DeepThinkRunner
 from core.deepthink.search import (
@@ -128,7 +129,14 @@ def deepthink_event_stream(
         deliver=agent_handoff(session, prompt),
         code_search=code_backend is not None,
     )
-    return runner.events(prompt, history=getattr(session, "history", None))
+    # DeepThink has no file tools: attached files go in as text. The agent
+    # handoff above keeps the original prompt and reads them itself.
+    question = inline_attachments(
+        prompt,
+        workspace=_session_attr(session, "workspace", "_workspace"),
+        char_budget=active_limits.attachment_char_budget,
+    )
+    return runner.events(question, history=getattr(session, "history", None))
 
 
 __all__ = [
