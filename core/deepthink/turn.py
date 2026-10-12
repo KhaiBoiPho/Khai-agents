@@ -15,10 +15,15 @@ the agent's tool calls and outputs, and follow-ups work as usual.
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import AsyncIterator
+from dataclasses import replace
+from pathlib import Path
 from typing import Any
 
-from core.deepthink.attachments import inline_attachments
+from loguru import logger
+
+from core.attachments.prepare import PreparedAttachments
 from core.deepthink.limits import DeepThinkLimits
 from core.deepthink.runner import DeepThinkRunner
 from core.deepthink.search import (
@@ -82,6 +87,7 @@ def deepthink_event_stream(
     prompt: str,
     execution_profile: Any | None,
     limits: DeepThinkLimits | None = None,
+    attachments: PreparedAttachments | None = None,
 ) -> AsyncIterator[Event]:
     provider = _session_attr(session, "provider", "_provider")
     if provider is None:
@@ -93,6 +99,15 @@ def deepthink_event_stream(
         _session_attr(session, "approval_callback", "_approval_callback"),
     )
     active_limits = limits or DeepThinkLimits()
+    prepared = attachments or PreparedAttachments.unchanged(prompt)
+    if prepared.attachments:
+        # The answer step reads the attached text on top of its usual input.
+        active_limits = replace(
+            active_limits,
+            max_input_tokens=active_limits.max_input_tokens
+            + prepared.attachment_tokens
+            + active_limits.document_passage_char_budget // 4,
+        )
     # A Session with a project can research its code with its own grep/read.
     tool_names = set(getattr(registry, "tool_names", ()) or ())
     code_backend = (
@@ -126,17 +141,75 @@ def deepthink_event_stream(
         resolve_backend=resolve_backend if registry is not None else None,
         limits=active_limits,
         max_output_tokens=getattr(execution_profile, "max_output_tokens", None),
-        deliver=agent_handoff(session, prompt),
+        deliver=agent_handoff(session, prepared.full),
         code_search=code_backend is not None,
+        attachments=prepared.attachments,
+        document_passages=_document_passages(
+            registry,
+            gate,
+            prepared,
+            workspace=_session_attr(session, "workspace", "_workspace"),
+            limits=active_limits,
+        ),
     )
-    # DeepThink has no file tools: attached files go in as text. The agent
-    # handoff above keeps the original prompt and reads them itself.
-    question = inline_attachments(
-        prompt,
-        workspace=_session_attr(session, "workspace", "_workspace"),
-        char_budget=active_limits.attachment_char_budget,
-    )
-    return runner.events(question, history=getattr(session, "history", None))
+    # Plan and check read the brief (attached files as summaries and
+    # openings); the answer step reads the files themselves.
+    return runner.events(prepared.brief, history=getattr(session, "history", None))
+
+
+def _document_passages(
+    registry: Any,
+    gate: ToolGate,
+    prepared: PreparedAttachments,
+    *,
+    workspace: Path | None,
+    limits: DeepThinkLimits,
+):
+    """Passages of attached files that are not included whole, found with
+    the Session's ``search_documents`` per sub-question; None without them."""
+
+    partial = [item for item in prepared.files if item.mode != "inline"]
+    if not partial or registry is None:
+        return None
+    if "search_documents" not in set(getattr(registry, "tool_names", ()) or ()):
+        return None
+    paths = [
+        item.path.relative_to(workspace).as_posix()
+        for item in partial
+        if workspace is not None and item.path.is_relative_to(workspace)
+    ]
+
+    async def passages(queries: list[str]) -> str:
+        found: list[str] = []
+        used = 0
+        for query in queries[: limits.max_sub_questions]:
+            arguments: dict[str, Any] = {"query": query, "k": 4}
+            if paths:
+                arguments["paths"] = paths
+            if not await gate.allows("search_documents", arguments):
+                break
+            try:
+                result = await asyncio.wait_for(
+                    registry.execute("search_documents", arguments),
+                    timeout=limits.tool_timeout_s,
+                )
+            except asyncio.CancelledError:
+                raise
+            except Exception as exc:  # noqa: BLE001 - passages are optional
+                logger.warning("DeepThink document search failed: {}", exc)
+                continue
+            text = str(result or "").strip()
+            if not text or getattr(result, "is_error", False):
+                continue
+            room = limits.document_passage_char_budget - used
+            if room <= 0:
+                break
+            block = f"Search: {query}\n{text[:room]}"
+            found.append(block)
+            used += len(block)
+        return "\n\n".join(found)
+
+    return passages
 
 
 __all__ = [

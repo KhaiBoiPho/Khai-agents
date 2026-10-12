@@ -50,6 +50,14 @@ from core.application.goal_turn_port import (
     GoalTurnAssociation,
 )
 from core.application.llm_configuration_service import LLMConfigurationService
+from core.attachments.content import split_attached
+from core.attachments.digest import DigestCache
+from core.attachments.prepare import (
+    PreparedAttachments,
+    ProviderDigestLLM,
+    prepare_attachments,
+    stream_with_attachments,
+)
 from core.application.input_identity import submission_fingerprint
 from core.application.session_runtime import SessionRuntimeRegistry
 from core.application.turn_input_service import (
@@ -1670,21 +1678,47 @@ class TurnService:
                 # titling below stay on the normal path.
                 turn_identity_metadata[TURN_MODE_PAYLOAD_KEY] = TurnMode.DEEPTHINK.value
                 deepthink_history_before = list(getattr(session, "history", ()))
-                event_stream = self.deepthink_stream_factory(
-                    session,
-                    prompt=turn.prompt,
-                    execution_profile=execution_profile,
-                )
-            else:
-                event_stream = session.run_stream(
+
+            def run_turn(prepared: PreparedAttachments) -> AsyncIterator[Event]:
+                if deepthink:
+                    extra = {"attachments": prepared} if prepared.attachments else {}
+                    return self.deepthink_stream_factory(
+                        session,
+                        prompt=turn.prompt,
+                        execution_profile=execution_profile,
+                        **extra,
+                    )
+                return session.run_stream(
                     UserInput(
-                        text=turn.prompt,
+                        text=prepared.full,
                         skills=tuple(
                             SkillSelection(skill_id=skill_id)
                             for skill_id in turn.skill_ids
                         ),
                     )
                 )
+
+            if split_attached(turn.prompt)[1]:
+                # Attached files go in whole when they fit, else as a summary
+                # tree the chat's own model writes (asking first above the
+                # cost threshold); the same for agent and DeepThink Turns.
+                event_stream = stream_with_attachments(
+                    lambda emit: _prepare_turn_attachments(
+                        session,
+                        turn.prompt,
+                        execution_profile=execution_profile,
+                        approve=(
+                            None
+                            if turn.execution_class is ExecutionClass.GOAL_CONTINUATION
+                            else approve
+                        ),
+                        emit=emit,
+                    ),
+                    run_turn,
+                    prompt=turn.prompt,
+                )
+            else:
+                event_stream = run_turn(PreparedAttachments.unchanged(turn.prompt))
             async for event in event_stream:
                 if isinstance(event.msg, TurnStarted):
                     for invocation in event.msg.skill_invocations:
@@ -2555,6 +2589,7 @@ def _default_deepthink_stream(
     *,
     prompt: str,
     execution_profile: ExecutionProfile | None,
+    attachments: PreparedAttachments | None = None,
 ) -> AsyncIterator[Event]:
     # Imported lazily: LangGraph loads only when a DeepThink Turn runs.
     from core.deepthink.turn import deepthink_event_stream
@@ -2563,6 +2598,41 @@ def _default_deepthink_stream(
         session,
         prompt=prompt,
         execution_profile=execution_profile,
+        attachments=attachments,
+    )
+
+
+async def _prepare_turn_attachments(
+    session: Any,
+    prompt: str,
+    *,
+    execution_profile: ExecutionProfile | None,
+    approve: Callable[..., Any] | None,
+    emit: Callable[[Any], None],
+) -> PreparedAttachments:
+    from core.config import deepcode_home
+
+    provider = getattr(session, "_provider", None)
+    model = getattr(session, "_model", None) or getattr(execution_profile, "model_id", None)
+    llm = (
+        ProviderDigestLLM(
+            provider,
+            model=str(model),
+            reasoning_effort=getattr(execution_profile, "reasoning_effort", None),
+            emit=emit,
+        )
+        if provider is not None and model
+        else None
+    )
+    return await prepare_attachments(
+        prompt,
+        workspace=getattr(session, "_workspace", None),
+        context_window=int(getattr(session, "_context_window_tokens", 0) or 128_000),
+        max_output_tokens=getattr(execution_profile, "max_output_tokens", None),
+        llm=llm,
+        approve=approve,
+        emit=emit,
+        cache=DigestCache(deepcode_home() / "document_digests"),
     )
 
 

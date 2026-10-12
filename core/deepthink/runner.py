@@ -45,6 +45,8 @@ from core.events.protocol import (
 BackendResolver = Callable[[], Awaitable[SearchBackend | None]]
 #: Runs the agent loop for a deliverable; receives the research brief.
 DeliverRunner = Callable[[str], AsyncIterator[Event]]
+#: Passages of attached files for the given sub-questions.
+PassageFinder = Callable[[list[str]], Awaitable[str]]
 
 _AGENT_FAILED = {
     "error",
@@ -96,6 +98,8 @@ class DeepThinkRunner:
         max_output_tokens: int | None = None,
         deliver: DeliverRunner | None = None,
         code_search: bool = False,
+        attachments: str = "",
+        document_passages: PassageFinder | None = None,
     ) -> None:
         self.provider = provider
         self.model = model
@@ -105,6 +109,8 @@ class DeepThinkRunner:
         self.max_output_tokens = max_output_tokens
         self.deliver = deliver
         self.code_search = code_search
+        self.attachments = attachments
+        self.document_passages = document_passages
         self.llm: DeepThinkLLM | None = None
 
     async def events(
@@ -149,6 +155,8 @@ class DeepThinkRunner:
             emit_delta=on_delta,
             can_deliver=self.deliver is not None,
             code_search=self.code_search,
+            attachments=self.attachments,
+            document_passages=self.document_passages,
         )
         graph = build_graph(context)
 

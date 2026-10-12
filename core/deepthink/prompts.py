@@ -61,7 +61,9 @@ SUMMARIZE_NO_SOURCES_SYSTEM = (
     "You are a careful assistant. Answer the user's question thoroughly and "
     "precisely, working through the listed sub-questions. Do not invent "
     "citations or URLs. You have no tools: answer in prose and never write "
-    "a tool or function call. Attached files' text is in the question."
+    "a tool or function call. When attached files are given, they are the "
+    "user's own material: answer from them, and name the page or section "
+    "you rely on when it is shown."
 )
 
 
@@ -112,10 +114,18 @@ def summarize_messages(
     sub_questions: list[str],
     evidence: str,
     notes: list[str],
+    *,
+    attachments: str = "",
+    passages: str = "",
 ) -> list[dict[str, Any]]:
     parts: list[str] = []
     if context:
         parts.append(f"Recent conversation (for context only):\n{context}")
+    if attachments:
+        # The question below carries only summaries of these files.
+        parts.append(f"Attached files (the user's own material):\n{attachments}")
+    if passages:
+        parts.append(f"Passages found in the attached files:\n{passages}")
     parts.append(f"Question:\n{question}")
     if sub_questions:
         parts.append("Sub-questions to cover:\n" + "\n".join(f"- {q}" for q in sub_questions))

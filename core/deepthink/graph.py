@@ -92,6 +92,10 @@ class DeepThinkContext:
     #: The research brief for the agent phase; set only by ``deliver``.
     brief: str | None = None
     deliverable: str = ""
+    #: Attached files as the answer step reads them (whole or summarized).
+    attachments: str = ""
+    #: Finds passages of summarized attachments for the sub-questions.
+    document_passages: Any = None
 
     async def backend_or_none(self) -> SearchBackend | None:
         if not self.backend_resolved:
@@ -694,6 +698,19 @@ def build_graph(ctx: DeepThinkContext):
         context = state.get("context", "")
         sub_questions = list(state.get("sub_questions") or [])
 
+        passages = ""
+        if ctx.document_passages is not None:
+            progress.update("summarize", "running", detail="Searching the attached files")
+            try:
+                passages = await asyncio.wait_for(
+                    ctx.document_passages(sub_questions or [question]),
+                    timeout=limits.search_timeout_s,
+                )
+            except asyncio.CancelledError:
+                raise
+            except Exception as exc:  # noqa: BLE001 - passages are optional
+                logger.warning("DeepThink attachment search failed: {}", exc)
+            progress.update("summarize", "running", detail="Writing the answer")
         used: list[dict[str, Any]] = []
         messages: list[dict[str, Any]] | None = None
         attempts: list[tuple[int, bool]] = [
@@ -704,7 +721,15 @@ def build_graph(ctx: DeepThinkContext):
         ]
         for budget, excerpts in attempts:
             evidence, used = build_evidence(sources, budget, excerpts=excerpts) if budget else ("", [])
-            candidate = summarize_messages(question, context, sub_questions, evidence, notes)
+            candidate = summarize_messages(
+                question,
+                context,
+                sub_questions,
+                evidence,
+                notes,
+                attachments=ctx.attachments,
+                passages=passages,
+            )
             if ctx.llm.fits(candidate):
                 messages = candidate
                 break

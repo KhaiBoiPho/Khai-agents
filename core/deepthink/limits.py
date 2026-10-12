@@ -39,8 +39,9 @@ class DeepThinkLimits:
     evidence_char_budget: int = 20_000
     #: Ceiling for the research brief handed to the agent for deliverables.
     deliver_brief_char_budget: int = 6_000
-    #: Characters of attached files' text inlined into the question.
-    attachment_char_budget: int = 24_000
+    #: Characters of attached-file passages found by document search for the
+    #: answer step, when a file is summarized rather than included whole.
+    document_passage_char_budget: int = 16_000
     # Conversation context handed to plan/summarize
     history_messages: int = 4
     history_char_budget: int = 2_400
