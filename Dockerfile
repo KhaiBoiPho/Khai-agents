@@ -25,6 +25,21 @@ COPY protocol ./protocol
 COPY core/version.py ./core/version.py
 COPY desktop ./desktop
 RUN mkdir -p app_server && npm --prefix desktop run build:web
+# Pre-compressed siblings: aiohttp's FileResponse serves file.br / file.gz
+# when the client accepts them, so the bundle crosses the Funnel relay at
+# about a quarter of its size.
+RUN node -e ' \
+  const fs = require("fs"), path = require("path"), zlib = require("zlib"); \
+  const walk = (d) => fs.readdirSync(d, {withFileTypes: true}).forEach((e) => { \
+    const p = path.join(d, e.name); \
+    if (e.isDirectory()) return walk(p); \
+    if (!/\.(js|mjs|css|html|json|svg|txt|map|wasm)$/.test(p)) return; \
+    const raw = fs.readFileSync(p); \
+    if (raw.length < 1024) return; \
+    fs.writeFileSync(p + ".br", zlib.brotliCompressSync(raw, {params: {[zlib.constants.BROTLI_PARAM_QUALITY]: 11}})); \
+    fs.writeFileSync(p + ".gz", zlib.gzipSync(raw, {level: 9})); \
+  }); \
+  walk("app_server/web_assets");'
 
 # ---------------------------------------------------------------- GenOffice
 # Default: empty. Replaced by `--build-context genoffice-src=<checkout>`.
