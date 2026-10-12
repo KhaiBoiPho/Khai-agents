@@ -829,6 +829,13 @@
   min-width: 300px;
 }
 
+/* Portalled to <body> and placed from the trigger's rect. */
+.popover[data-anchored] {
+  position: fixed;
+  z-index: 1000;
+  max-width: calc(100vw - 16px);
+}
+
 .popover > button {
   display: flex;
   align-items: center;

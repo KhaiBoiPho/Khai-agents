@@ -177,11 +177,18 @@ export function ConnectionSettings({
     modelFetchState?.editorId === editingId
       ? modelFetchState
       : { loading: false, error: null, models: null };
-  const eligibleModels = useMemo(
-    () =>
-      (modelFetch.models ?? []).filter(isTextGenerationModel),
-    [modelFetch.models],
-  );
+  const [modelQuery, setModelQuery] = useState("");
+  const eligibleModels = useMemo(() => {
+    const query = modelQuery.trim().toLocaleLowerCase();
+    return (modelFetch.models ?? [])
+      .filter(isTextGenerationModel)
+      .filter(
+        (model) =>
+          !query ||
+          model.id.toLocaleLowerCase().includes(query) ||
+          model.name.toLocaleLowerCase().includes(query),
+      );
+  }, [modelFetch.models, modelQuery]);
   const contextGroups = useMemo(
     () => [
       { label: "Context under 1M", models: eligibleModels.filter((model) => model.contextWindow < 1_000_000) },
@@ -567,6 +574,19 @@ export function ConnectionSettings({
                       <p className={styles.modelFetchError} role="alert">
                         {modelFetch.error}
                       </p>
+                    ) : null}
+                    {(modelFetch.models?.length ?? 0) > 0 ? (
+                      <input
+                        type="search"
+                        className={styles.modelSearch}
+                        value={modelQuery}
+                        onChange={(event) => setModelQuery(event.target.value)}
+                        placeholder={`Filter ${modelFetch.models?.length} models by name or id`}
+                        aria-label="Filter fetched models"
+                      />
+                    ) : null}
+                    {(modelFetch.models?.length ?? 0) > 0 && contextGroups.length === 0 ? (
+                      <p className={styles.modelFetchError}>No model matches “{modelQuery}”.</p>
                     ) : null}
                     {contextGroups.length > 0 ? (
                       <>

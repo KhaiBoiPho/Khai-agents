@@ -33,6 +33,7 @@ import {
   X,
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
+import { createPortal } from "react-dom";
 
 import type {
   ExecutionAccessPreset,
@@ -1044,10 +1045,15 @@ export function Composer({
 function usePopover() {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement | null>(null);
+  // A menu portalled out of the root (see ModeMenu) still counts as inside.
+  const menuRef = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
     if (!open) return;
     const close = (event: MouseEvent) => {
-      if (!rootRef.current?.contains(event.target as Node)) setOpen(false);
+      const target = event.target as Node;
+      if (!rootRef.current?.contains(target) && !menuRef.current?.contains(target)) {
+        setOpen(false);
+      }
     };
     const escape = (event: globalThis.KeyboardEvent) => {
       if (event.key === "Escape") setOpen(false);
@@ -1059,7 +1065,7 @@ function usePopover() {
       document.removeEventListener("keydown", escape);
     };
   }, [open]);
-  return { open, setOpen, rootRef };
+  return { open, setOpen, rootRef, menuRef };
 }
 
 interface PlusMenuProps {
@@ -1204,6 +1210,8 @@ interface ModeMenuProps {
   onChange(preset: ExecutionAccessPreset | null): void;
 }
 
+const MODE_MENU_WIDTH = 300;
+
 /** Access mode for new submissions, with numbered shortcuts while open. */
 function ModeMenu({
   value,
@@ -1212,7 +1220,8 @@ function ModeMenu({
   disabled,
   onChange,
 }: ModeMenuProps) {
-  const { open, setOpen, rootRef } = usePopover();
+  const { open, setOpen, rootRef, menuRef } = usePopover();
+  const [anchor, setAnchor] = useState<{ left: number; bottom: number } | null>(null);
   const choose = (preset: ExecutionAccessPreset | null) => {
     setOpen(false);
     if (preset !== value) onChange(preset);
@@ -1243,7 +1252,16 @@ function ModeMenu({
         type="button"
         className={styles.modeTrigger}
         data-access={effective ?? "inherit"}
-        onClick={() => setOpen((current) => !current)}
+        onClick={(event) => {
+          // The toolbar clips sideways, so the menu is placed against the
+          // viewport instead, kept inside it on narrow windows.
+          const rect = event.currentTarget.getBoundingClientRect();
+          setAnchor({
+            left: Math.max(8, Math.min(rect.left, window.innerWidth - MODE_MENU_WIDTH - 8)),
+            bottom: window.innerHeight - rect.top + 6,
+          });
+          setOpen((current) => !current);
+        }}
         disabled={disabled}
         aria-haspopup="menu"
         aria-expanded={open}
@@ -1253,8 +1271,15 @@ function ModeMenu({
         {label}
         <ChevronDown size={12} />
       </button>
-      {open ? (
-        <div className={styles.popover} data-wide role="menu">
+      {open && anchor ? createPortal(
+        <div
+          ref={menuRef}
+          className={styles.popover}
+          data-wide
+          data-anchored
+          role="menu"
+          style={{ left: anchor.left, bottom: anchor.bottom, width: MODE_MENU_WIDTH }}
+        >
           <p className={styles.popoverTitle}>Mode</p>
           {MODE_OPTIONS.map((option, index) => {
             const selected = option.value === value;
@@ -1292,7 +1317,8 @@ function ModeMenu({
               {value === "full_access" ? "Disable" : "Enable"}
             </button>
           </div>
-        </div>
+        </div>,
+        document.body,
       ) : null}
     </div>
   );
