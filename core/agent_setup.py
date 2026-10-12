@@ -196,12 +196,14 @@ def _compose_tool_filters(*filters: Any) -> Any:
     return chained
 
 
-def _document_search_tool(workspace: Any, runtime: Any) -> Any:
+def _document_search_tool(workspace: Any, runtime: Any, *, khaidocs: bool = False) -> Any:
     """``search_documents`` over this workspace, embedding through the
     OpenRouter connection (key from Settings or ``OPENROUTER_API_KEY``).
 
     Plain chats search every document in their workspace; a code project
-    searches only the files the user uploaded (its code is read directly)."""
+    searches only the files the user uploaded (its code is read directly).
+    ``khaidocs``: the user's KhaiDocs pages join the plain-chat search (not a
+    code project's: there they are reached through the ``khaidocs_read`` tool)."""
 
     from core.harness.tools.documents import SearchDocumentsTool
     from core.rag.service import is_document_workspace, openrouter_embedder_factory
@@ -216,6 +218,7 @@ def _document_search_tool(workspace: Any, runtime: Any) -> Any:
         workspace,
         openrouter_embedder_factory(resolve_key),
         uploads_only=not is_document_workspace(workspace),
+        khaidocs=khaidocs,
     )
 
 
@@ -503,10 +506,18 @@ def build_agent_session(
         goal_runtime=goal_runtime,
         execution_security_profile=resolved_security_profile,
     )
-    tool_registry.register(_document_search_tool(workspace, active_runtime))
+    from core.harness.tools.khaidocs import default_store, khaidocs_tools
+
+    docs_store = default_store()  # None where KhaiDocs is not available
+    tool_registry.register(
+        _document_search_tool(workspace, active_runtime, khaidocs=docs_store is not None)
+    )
     from core.harness.tools.codemap import RepoMapTool
 
     tool_registry.register(RepoMapTool(str(workspace)))
+    # The user's KhaiDocs wiki: present only where a user-bound store exists.
+    for khaidocs_tool in khaidocs_tools(docs_store):
+        tool_registry.register(khaidocs_tool)
     for extra_tool in extra_tools:
         tool_registry.register(extra_tool)
     _wire_code_mode(

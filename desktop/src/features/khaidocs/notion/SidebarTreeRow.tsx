@@ -1,11 +1,11 @@
 /*
  * Original KhaiDocs code, MIT.
  *
- * A Notion-style row for Docmost's sidebar page tree (used in single-user
+ * A Notion-style row for the client's sidebar page tree (used in single-user
  * mode instead of SpaceTreeRow): compact, icon + title, the expand chevron
  * takes the icon's place on hover, "…" and "+" on hover. Folders show a
  * folder / open-folder icon. Drag and drop, keyboard navigation and
- * selection stay with Docmost's DocTree (this only renders the row).
+ * selection stay with the client's DocTree (this only renders the row).
  */
 
 import { useRef } from "react";

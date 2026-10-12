@@ -2,7 +2,7 @@
  * Original KhaiDocs code, MIT.
  *
  * The page-icon picker: an "Icons" tab (curated Tabler line icons, search,
- * colour swatches) next to Docmost's emoji picker (emoji-mart), plus Remove.
+ * colour swatches) next to the client's emoji picker (emoji-mart), plus Remove.
  * Icons are the default tab. The value handed to onChange is what goes into
  * the page's `icon` field: an emoji, or "ti:<name>:<colour>".
  */
@@ -276,7 +276,7 @@ function EmojiTab({ onSelect }: { onSelect: (icon: string) => void }) {
   const scheme = useComputedColorScheme("light");
   const [host, setHost] = useState<HTMLDivElement | null>(null);
 
-  // Focus emoji-mart's search without scrolling the page (see Docmost's
+  // Focus emoji-mart's search without scrolling the page (see the client's
   // emoji-picker.tsx for why).
   useEffect(() => {
     if (!host) return;

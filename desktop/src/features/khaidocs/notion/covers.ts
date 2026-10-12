@@ -1,8 +1,8 @@
 /*
  * Original KhaiDocs code, MIT.
  *
- * Page covers. The stock Docmost server has a `coverPhoto` column but its
- * page update endpoint ignores it (checked against docmost/docmost:0.96.0),
+ * Page covers. The stock server has a `coverPhoto` column but its
+ * page update endpoint ignores it,
  * so KhaiDocs keeps each page's cover choice on this device, in localStorage
  * keyed by page id. A cover is either a built-in one ("g:<id>", CSS
  * gradients written for KhaiDocs) or an image uploaded as an attachment of

@@ -12,9 +12,10 @@
 }
 
 .greeting {
-  font-size: 32px;
-  font-weight: 700;
-  letter-spacing: -0.02em;
+  font-family: var(--font-display);
+  font-size: var(--text-3xl);
+  font-weight: var(--weight-display);
+  letter-spacing: var(--tracking-display);
   text-align: left;
   margin: 8px 0 40px;
 }
@@ -27,14 +28,14 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 12px;
-  font-weight: 500;
+  font-size: var(--text-xs);
+  font-weight: var(--weight-medium);
   color: var(--kd-text-secondary);
   margin: 0 0 10px 2px;
 }
 
 .emptyText {
-  font-size: 14px;
+  font-size: var(--text-sm);
   color: var(--kd-text-tertiary);
   margin: 0 2px;
 }
@@ -97,8 +98,8 @@
 }
 
 .cardTitle {
-  font-size: 14px;
-  font-weight: 600;
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
   line-height: 1.3;
   display: -webkit-box;
   -webkit-line-clamp: 2;
@@ -108,7 +109,7 @@
 
 .cardMeta {
   margin-top: auto;
-  font-size: 12px;
+  font-size: var(--text-xs);
   color: var(--kd-text-tertiary);
 }
 
@@ -131,8 +132,8 @@
   border: 1px solid var(--kd-card-border);
   box-shadow: none;
   color: var(--kd-text);
-  font-size: 14px;
-  font-weight: 500;
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
   cursor: pointer;
   text-align: left;
 }
@@ -168,15 +169,15 @@
 .rowTitle {
   flex: 1;
   min-width: 0;
-  font-size: 14px;
-  font-weight: 500;
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .rowMeta {
-  font-size: 12px;
+  font-size: var(--text-xs);
   color: var(--kd-text-tertiary);
   white-space: nowrap;
 }

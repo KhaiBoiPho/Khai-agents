@@ -10,10 +10,10 @@
 #
 # Networks keep each piece to what it needs:
 #   edge     caddy <-> gateway                    (the only published ports)
-#   core     gateway <-> postgres, redis, qdrant, docmost   (internal)
+#   core     gateway <-> postgres, redis, qdrant          (internal)
 #   workers  gateway <-> each user's worker, workers -> postgres, qdrant,
 #            and the internet (LLM providers, git). Workers never reach
-#            Redis, Docmost, Docker or another user's files.
+#            Redis, Docker or another user's files.
 #
 # The gateway holds the Docker socket to start workers; it runs no user code.
 
@@ -51,8 +51,6 @@ services:
       KHAI_REDIS_URL: redis://:${KHAI_REDIS_PASSWORD}@redis:6379/0
       KHAI_QDRANT_URL: http://qdrant:6333
       KHAI_QDRANT_API_KEY: ${KHAI_QDRANT_API_KEY}
-      KHAI_DOCMOST_URL: http://docmost:3000
-      KHAI_DOCMOST_ACCOUNT_SECRET: ${KHAI_DOCMOST_ACCOUNT_SECRET:?run ./setup.sh}
       KHAI_WORKER_BACKEND: docker
       KHAI_WORKER_IMAGE: ${KHAI_IMAGE:-khai-agents:latest}
       KHAI_WORKER_NETWORK: khai_workers
@@ -92,7 +90,6 @@ services:
       POSTGRES_PASSWORD: ${KHAI_PG_SUPERUSER_PASSWORD:?run ./setup.sh}
       POSTGRES_DB: postgres
       KHAI_PG_APP_PASSWORD: ${KHAI_PG_APP_PASSWORD:?run ./setup.sh}
-      KHAI_PG_DOCMOST_PASSWORD: ${KHAI_PG_DOCMOST_PASSWORD:?run ./setup.sh}
     # Tuned for a small host; KHAI_PG_SHARED_BUFFERS etc. override.
     command:
       - postgres
@@ -153,28 +150,12 @@ services:
       - qdrant-data:/qdrant/storage
     networks: [core, workers]
 
-  docmost:
-    image: docmost/docmost:0.96.0
-    restart: unless-stopped
-    environment:
-      APP_URL: ${KHAI_PUBLIC_ORIGIN:-https://${KHAI_DOMAIN}}
-      APP_SECRET: ${KHAI_DOCMOST_APP_SECRET:?run ./setup.sh}
-      DATABASE_URL: postgresql://docmost:${KHAI_PG_DOCMOST_PASSWORD}@postgres:5432/docmost
-      REDIS_URL: redis://:${KHAI_REDIS_PASSWORD}@redis:6379/1
-    volumes:
-      - docmost-data:/app/data/storage
-    networks: [core]
-    depends_on:
-      postgres: {condition: service_healthy}
-      redis: {condition: service_healthy}
-
 volumes:
   caddy-data:
   caddy-config:
   pg-data:
   redis-data:
   qdrant-data:
-  docmost-data:
 
 networks:
   edge:

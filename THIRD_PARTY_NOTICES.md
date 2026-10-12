@@ -42,7 +42,7 @@ Session, protocol, or execution behavior.
 
 The KhaiDocs page vendors the web client and editor extensions of
 **Docmost** 0.96.0, modified to run inside the desktop app, and the KhaiDocs
-server is the stock `docmost/docmost` container image.
+server is Khai's own Python backend (no Docmost server code).
 
 - Source: https://github.com/docmost/docmost
 - License: GNU Affero General Public License v3.0 — Copyright (c) Docmost, Inc.
@@ -51,7 +51,7 @@ server is the stock `docmost/docmost` container image.
 
 Distributing the desktop app with KhaiDocs subjects the distributed work to
 the AGPL-3.0. Docmost's Enterprise Edition is not included; the files under
-`desktop/src/features/khaidocs/docmost/ee/` are original MIT stand-ins.
+`desktop/src/features/khaidocs/client/ee/` are original MIT stand-ins.
 
 ## Yuvomi planner modules
 

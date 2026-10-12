@@ -21,8 +21,8 @@ GET  /api/rpc              session    WebSocket, relayed to the user's worker
 POST /api/uploads          session    relayed to the user's worker
 GET  /api/download         session    relayed to the user's worker
 GET  /api/preview-pdf      session    relayed to the user's worker
-*    /api/*, /socket.io/*,  session    KhaiDocs (Docmost), as the user's own
-     /collab                           Docmost account (gateway/khaidocs.py)
+*    /api/*, /socket.io/*,  session    KhaiDocs, native (app_server/khaidocs)
+     /collab
 =========================  =========  ========================================
 
 Browser state-changing requests must come from the public origin (CSRF), the
@@ -46,7 +46,9 @@ import aiohttp
 from aiohttp import WSMsgType, web
 from redis.asyncio import Redis
 
-from app_server.gateway.khaidocs import DocmostAccounts, KhaiDocsRelay
+from app_server.khaidocs.api import KhaiUser
+from app_server.khaidocs.context import KhaiDocsContext
+from app_server.khaidocs.routes import install as install_khaidocs
 from app_server.gateway.qdrant import QdrantProvisioner
 from app_server.gateway.workers import (
     DockerBackend,
@@ -124,11 +126,10 @@ class Gateway:
         database: Database,
         redis: Redis,
         workers: WorkerManager,
-        khaidocs: DocmostAccounts | None = None,
     ) -> None:
         self.settings = settings
-        self.khaidocs = KhaiDocsRelay(khaidocs) if khaidocs else None
         self.database = database.system()
+        self.docs = KhaiDocsContext(self.database, self._docs_user)
         self.users = UserService(self.database)
         self.roles = WorkerRoles(self.database)
         self.redis = redis
@@ -193,16 +194,9 @@ class Gateway:
                 web.get("/api/preview-pdf", self.download),
             ]
         )
-        if self.khaidocs is not None:
-            # After the gateway's own /api routes, which keep priority.
-            app.add_routes(
-                [
-                    web.route("*", "/api/{tail:.*}", self.docs),
-                    web.route("*", "/socket.io/{tail:.*}", self.docs),
-                    web.route("*", "/collab", self.docs),
-                    web.route("*", "/collab/{tail:.*}", self.docs),
-                ]
-            )
+        # Native KhaiDocs: after the gateway's own /api routes, which keep
+        # priority, and with no catch-all behind them.
+        install_khaidocs(app, self.docs)
         app.on_response_prepare.append(self._headers)
         app.on_startup.append(self._startup)
         app.on_shutdown.append(self._shutdown)
@@ -217,15 +211,11 @@ class Gateway:
         for sockets in list(self._sockets.values()):
             for socket in list(sockets):
                 await socket.close(code=1001, message=b"Server shutting down")
-        if self.khaidocs is not None:
-            await self.khaidocs.close_sockets()
 
     async def _cleanup(self, _app) -> None:
         await self.workers.close()
         if self._http is not None:
             await self._http.close()
-        if self.khaidocs is not None:
-            await self.khaidocs.accounts.close()
         await self.redis.aclose()
 
     # -- middleware -----------------------------------------------------------
@@ -396,6 +386,22 @@ class Gateway:
     def _clear_cookie(self, response: web.Response) -> None:
         response.del_cookie(self.settings.cookie_name, path="/")
 
+    async def _docs_user(self, request: web.Request) -> KhaiUser:
+        """The only identity KhaiDocs knows: the signed-in Khai account."""
+
+        user = self._require_user(request)
+        return KhaiUser(
+            user.id, user.username, user.display_name, user.role, user.created_at,
+            session=request[SESSION],
+        )
+
+    async def _close_docs(self, user_id: str, session_id: str | None = None) -> None:
+        """Close the user's KhaiDocs sockets (one session's, or all of them)."""
+
+        if self.docs.collab is not None:
+            await self.docs.collab.close_user(user_id, session_id)
+        await self.docs.sockets.close_user(user_id, session_id)
+
     async def _end_user(self, user_id: str) -> None:
         """Cut a user off: sessions, open sockets, worker and database role."""
 
@@ -403,10 +409,9 @@ class Gateway:
         await self.sessions.revoke_all(user_id)
         for socket in list(self._sockets.get(user_id, ())):
             await socket.close(code=4401, message=b"Signed out")
+        await self._close_docs(user_id)
         await self.workers.stop(user_id)
         await asyncio.to_thread(self.roles.lock, user_id)
-        if self.khaidocs is not None:
-            self.khaidocs.accounts.forget(user_id)
 
     # -- public ---------------------------------------------------------------
 
@@ -515,6 +520,8 @@ class Gateway:
 
     async def logout(self, request: web.Request) -> web.Response:
         await self.sessions.revoke(request.cookies.get(self.settings.cookie_name))
+        if request[USER] is not None:
+            await self._close_docs(request[USER].id, request[SESSION])
         response = web.json_response({"authenticated": False})
         self._clear_cookie(response)
         return response
@@ -524,6 +531,7 @@ class Gateway:
         await self.sessions.revoke_all(user.id)
         for socket in list(self._sockets.get(user.id, ())):
             await socket.close(code=4401, message=b"Signed out")
+        await self._close_docs(user.id)
         response = web.json_response({"authenticated": False})
         self._clear_cookie(response)
         return response
@@ -615,6 +623,7 @@ class Gateway:
         for socket in list(self._sockets.get(user_id, ())):
             if self._socket_sessions.get(socket) == session_id:
                 await socket.close(code=4401, message=b"Signed out")
+        await self._close_docs(user_id, session_id)
         return True
 
     async def list_sessions(self, request: web.Request) -> web.Response:
@@ -751,11 +760,6 @@ class Gateway:
             await response.write_eof()
             return response
 
-    async def docs(self, request: web.Request) -> web.StreamResponse:
-        """KhaiDocs, always as the signed-in user's own Docmost account."""
-
-        return await self.khaidocs.forward(request, self._require_user(request))
-
     async def upload(self, request: web.Request) -> web.StreamResponse:
         return await self._relay(request, self._require_user(request))
 
@@ -774,20 +778,13 @@ def build_gateway() -> Gateway:
         if os.environ.get("KHAI_WORKER_BACKEND", "docker") == "process"
         else DockerBackend(DockerSettings.from_environment())
     )
-    docmost_url = os.environ.get("KHAI_DOCMOST_URL", "").strip()
-    docmost_secret = os.environ.get("KHAI_DOCMOST_ACCOUNT_SECRET", "").strip()
-    khaidocs = (
-        DocmostAccounts(docmost_url, docmost_secret)
-        if docmost_url and docmost_secret
-        else None
-    )
     workers = WorkerManager(
         worker_settings,
         WorkerRoles(database),
         backend,
         qdrant=QdrantProvisioner.from_environment(),
     )
-    return Gateway(settings, database, redis, workers, khaidocs)
+    return Gateway(settings, database, redis, workers)
 
 
 def main() -> int:

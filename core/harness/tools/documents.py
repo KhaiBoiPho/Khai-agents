@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 import asyncio
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
 from core.agent_runtime.tools.base import Tool, ToolResult, tool_parameters
 from core.rag.embeddings import EmbeddingError, EmbeddingNotConfigured
+from core.rag.khaidocs_source import KHAIDOCS_ROOT, enabled as khaidocs_enabled
 from core.rag.service import (
     EmbedderFactory,
     RagService,
@@ -88,10 +90,13 @@ class SearchDocumentsTool(Tool):
         service: RagService | None = None,
         index_wait_s: float = INDEX_WAIT_S,
         uploads_only: bool = False,
+        khaidocs: bool = False,
     ) -> None:
         self._workspace = Path(workspace)
         # A code project: search (and index) only the user's uploaded files.
         self._uploads_only = uploads_only
+        # The user's KhaiDocs pages are searched with the workspace's documents.
+        self._khaidocs = khaidocs and not uploads_only and khaidocs_enabled()
         self._factory = embedder_factory
         self._service = service
         self._wait = index_wait_s
@@ -166,6 +171,8 @@ class SearchDocumentsTool(Tool):
                 only=only,
                 wait_s=self._wait,
             )
+            if self._khaidocs and not paths:
+                outcome = await self._with_khaidocs(service, query.strip(), k, outcome)
         except EmbeddingNotConfigured as exc:
             return ToolResult(
                 f"Document search is unavailable: {exc} Read the files directly instead.",
@@ -179,6 +186,28 @@ class SearchDocumentsTool(Tool):
                 metadata={"resultCount": 0},
             )
         return render_search_result(query.strip(), outcome)
+
+
+    async def _with_khaidocs(self, service, query: str, k: int, outcome):  # noqa: ANN001, ANN202
+        """Merge the KhaiDocs pages' hits into the workspace outcome. Never
+        fails the search: a problem on the wiki side just means no wiki hits."""
+
+        try:
+            wiki = await asyncio.to_thread(
+                service.search, KHAIDOCS_ROOT, self._factory, query, k=k, wait_s=self._wait
+            )
+        except Exception:  # noqa: BLE001 - the workspace results still stand
+            return outcome
+        hits = sorted([*outcome.hits, *wiki.hits], key=lambda h: h.score, reverse=True)[:k]
+        return replace(
+            outcome,
+            hits=hits,
+            indexed=outcome.indexed + wiki.indexed,
+            pending=outcome.pending + wiki.pending,
+            failed=outcome.failed + wiki.failed,
+            indexing=outcome.indexing or wiki.indexing,
+            error=outcome.error or wiki.error,
+        )
 
 
 def render_search_result(query: str, outcome) -> ToolResult:  # noqa: ANN001
@@ -211,6 +240,11 @@ def render_search_result(query: str, outcome) -> ToolResult:  # noqa: ANN001
         elif hit.heading and hit.heading not in hit.locator:
             header += f"\nSection: {hit.heading}"
         lines.extend(["", header, text])
+    if any(hit.path.startswith("khaidocs/") for hit in hits):
+        lines.append(
+            "\nkhaidocs/... hits are the user's KhaiDocs pages: the id after the "
+            "last '-' of the path opens the full page with khaidocs_read."
+        )
     if hits:
         lines.extend(
             ["", "Cite sources as (file, locator), e.g. (" + format_locator(hits[0].path, hits[0].locator).replace(" · ", ", ") + ")."]

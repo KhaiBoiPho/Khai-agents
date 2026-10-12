@@ -2,7 +2,7 @@
  * Original KhaiDocs code, MIT.
  *
  * Pure helpers for page templates: placeholder filling, the title/body
- * split, the Markdown file sent to Docmost's import, and gallery filtering.
+ * split, the Markdown file sent to the client's import, and gallery filtering.
  */
 
 import type { PageTemplate, TemplateCategory } from "./manifest";
@@ -29,7 +29,7 @@ export function splitTitle(markdown: string): { title: string; body: string } {
   return { title: match[1].trim(), body: text.slice(match[0].length).trim() };
 }
 
-/** A safe file name for the import; Docmost falls back to it as the title. */
+/** A safe file name for the import; the client falls back to it as the title. */
 export function templateFileName(title: string): string {
   const base = title
     .replace(/[\\/:*?"<>|\u0000-\u001f]+/g, " ")

@@ -5,9 +5,10 @@
   position: relative;
   height: 100%;
   overflow: hidden;
-  color-scheme: var(--mantine-color-scheme);
-  background-color: var(--mantine-color-body);
-  color: var(--mantine-color-text);
+  /* color-scheme is inherited from the host's <html>, so native controls and
+     light-dark() follow the host theme. The host canvas shows through. */
+  background-color: transparent;
+  color: var(--text-primary);
   font-family: var(--mantine-font-family);
   font-size: var(--mantine-font-size-md);
   line-height: var(--mantine-line-height);
@@ -29,7 +30,7 @@
   text-transform: none;
 }
 
-/* Docmost's shell pins its header and navbar with position: fixed. Layout
+/* the client's shell pins its header and navbar with position: fixed. Layout
    containment makes this box their containing block, so they sit inside the
    page area instead of over the app's sidebar; the same goes for modals,
    which portal into this box (see theme.ts). */
@@ -37,7 +38,7 @@
   contain: layout paint;
 }
 
-/* Viewport units inside Docmost and Mantine size things to the whole window.
+/* Viewport units inside the client and Mantine size things to the whole window.
    As a size container, the root gives its descendants cqh/cqw units that
    measure the KhaiDocs area instead; the overrides below swap them in. */
 .khaidocs-root {
@@ -95,4 +96,15 @@
   overflow: visible;
   contain: none;
   background-color: transparent;
+}
+
+/* Containers that are focused programmatically (the aside, dialogs) keep the
+   browser's blue ring otherwise; the host draws none on them. */
+.khaidocs-root :where(aside, main, section, [tabindex="-1"]):focus {
+  outline: none;
+}
+
+.khaidocs-root :where(a, button, input, textarea, select, summary):focus-visible {
+  outline: 3px solid var(--signal-soft);
+  outline-offset: 1px;
 }

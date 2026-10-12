@@ -1,13 +1,13 @@
 /*
  * Original KhaiDocs code, MIT.
  *
- * How a page icon is stored. Docmost keeps a page's icon as a free string in
+ * How a page icon is stored. the client keeps a page's icon as a free string in
  * `pages.icon` (an emoji). KhaiDocs also stores line icons from its curated
  * Tabler set there, as `ti:<name>:<colour>` (e.g. `ti:notebook:blue`); the
  * server keeps any string, so emoji icons keep working untouched.
  *
  * A "folder" is an ordinary page whose icon is `ti:folder:<colour>`: it nests
- * pages through Docmost's own parent/child pages, so nothing new is needed on
+ * pages through the upstream parent/child pages, so nothing new is needed on
  * the server.
  */
 

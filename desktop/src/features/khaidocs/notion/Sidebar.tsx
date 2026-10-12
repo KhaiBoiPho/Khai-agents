@@ -4,10 +4,11 @@
  * The single-user sidebar, laid out like AFFiNE's: workspace row, a search
  * field beside the new-page button, Home, then Recents, Favorites, "Private"
  * (the default space's page tree, with folders) and Others (Templates,
- * Trash). Replaces Docmost's space
+ * Trash). Replaces the client's space
  * sidebar in single-user mode (see space-sidebar.tsx).
  */
 
+import { NotificationPopover } from "@/features/notification/components/notification-popover.tsx";
 import { ReactNode, useEffect, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { useAtom } from "jotai";
@@ -29,7 +30,6 @@ import {
   IconEdit,
 } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
-import { WorkspaceBadge } from "./WorkspaceBadge";
 import SpaceTree from "@/features/page/tree/components/space-tree.tsx";
 import PageImportModal from "@/features/page/components/page-import-modal.tsx";
 import ExportModal from "@/components/common/export-modal";
@@ -108,32 +108,11 @@ export function KhaiDocsSidebar({
 
   return (
     <div className={classes.sidebar}>
-      <div className={classes.workspaceRow}>
-        <div className={classes.workspaceMenu}>
-          <WorkspaceBadge />
-        </div>
-        <Tooltip label={t("Close sidebar")} openDelay={400}>
-          <button
-            type="button"
-            className={classes.collapseButton}
-            onClick={() => {
-              if (mobileOpened) toggleMobile();
-              else toggleDesktop();
-            }}
-            aria-label={t("Close sidebar")}
-          >
-            {/* The sidebar sits on the right and closes toward that edge. */}
-            <IconChevronsRight size={18} stroke={1.75} />
-          </button>
-        </Tooltip>
-      </div>
-
-      {/* AFFiNE-style: a search field beside the new-page button. */}
+      {/* A compact search field, the new-page button, notifications and the collapse arrow share one row. */}
       <div className={classes.quickRow}>
         <button type="button" className={classes.quickSearch} onClick={searchSpotlight.open}>
           <IconSearch size={16} stroke={1.75} className={classes.quickSearchIcon} />
           <span className={classes.quickSearchLabel}>{t("Search")}</span>
-          <kbd className={classes.quickSearchKey}>⌘K</kbd>
         </button>
         {canManagePages && (
           <Tooltip label={t("New page")} openDelay={400}>
@@ -150,6 +129,22 @@ export function KhaiDocsSidebar({
             </button>
           </Tooltip>
         )}
+        {/* The page header that normally carries the bell is gone in this layout. */}
+        <NotificationPopover />
+        <Tooltip label={t("Close sidebar")} openDelay={400}>
+          <button
+            type="button"
+            className={classes.collapseButton}
+            onClick={() => {
+              if (mobileOpened) toggleMobile();
+              else toggleDesktop();
+            }}
+            aria-label={t("Close sidebar")}
+          >
+            {/* The sidebar sits on the right and closes toward that edge. */}
+            <IconChevronsRight size={18} stroke={1.75} />
+          </button>
+        </Tooltip>
       </div>
 
       <nav className={classes.navRows}>

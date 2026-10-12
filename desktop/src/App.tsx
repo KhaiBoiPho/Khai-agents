@@ -49,7 +49,7 @@ const Inspector = lazy(() =>
     default: module.Inspector,
   })),
 );
-// Docmost's client and its editor stack are large; load them only when
+// the client's client and its editor stack are large; load them only when
 // KhaiDocs is opened. See src/khaidocs-app.d.ts for the typed boundary.
 const KhaiDocsApp = lazy(() => import("khaidocs-app"));
 // The planner pages (and their stylesheets) are opened rarely; keep them,

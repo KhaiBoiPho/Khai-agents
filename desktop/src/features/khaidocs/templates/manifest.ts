@@ -3,8 +3,8 @@
  *
  * The built-in page templates. Each one is a Markdown file in ./builtin,
  * written for KhaiDocs; "New page from template" imports it through
- * Docmost's core Markdown import (POST /api/pages/import). This is not
- * Docmost Enterprise's template feature.
+ * the client's core Markdown import (POST /api/pages/import). This is not
+ * an enterprise tier's template feature.
  */
 
 import bugReport from "./builtin/bug-report.md?raw";

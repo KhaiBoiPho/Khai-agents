@@ -1,5 +1,5 @@
 # Khai-Agents data services: one Postgres (application state with row-level
-# security, plus Docmost's database), Redis (browser sessions, rate limits,
+# security), Redis (browser sessions, rate limits,
 # per-user event fan-out) and Qdrant (RAG vectors).
 #
 #   docker/stack/up.sh        # first run writes .env with random secrets
@@ -19,7 +19,6 @@ services:
       POSTGRES_DB: postgres
       # Read by initdb/01-roles.sh on the first start only.
       KHAI_PG_APP_PASSWORD: ${KHAI_PG_APP_PASSWORD:?run ./up.sh to create .env}
-      KHAI_PG_DOCMOST_PASSWORD: ${KHAI_PG_DOCMOST_PASSWORD:?run ./up.sh to create .env}
     command: ["postgres", "-c", "password_encryption=scram-sha-256"]
     ports:
       - "127.0.0.1:${KHAI_PG_PORT:-5452}:5432"
@@ -63,24 +62,7 @@ services:
     volumes:
       - qdrant-data:/qdrant/storage
 
-  docmost:
-    image: docmost/docmost:0.96.0
-    restart: unless-stopped
-    depends_on:
-      postgres: {condition: service_healthy}
-      redis: {condition: service_healthy}
-    environment:
-      APP_URL: ${KHAI_DOCMOST_APP_URL:-http://127.0.0.1:8090}
-      APP_SECRET: ${KHAI_DOCMOST_APP_SECRET:?run ./up.sh to create .env}
-      DATABASE_URL: postgresql://docmost:${KHAI_PG_DOCMOST_PASSWORD}@postgres:5432/docmost
-      REDIS_URL: redis://:${KHAI_REDIS_PASSWORD}@redis:6379/1
-    ports:
-      - "127.0.0.1:${KHAI_DOCMOST_PORT:-3466}:3000"
-    volumes:
-      - docmost-data:/app/data/storage
-
 volumes:
-  docmost-data:
   pg-data:
   redis-data:
   qdrant-data:

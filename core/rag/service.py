@@ -38,6 +38,7 @@ from core.rag.index import (
 )
 from core.persistence.database import Database
 from core.rag.enrich import Enrichment, default_enrichment
+from core.rag.khaidocs_source import KHAIDOCS_ROOT, KhaiDocsIndex
 from core.rag.store import DocumentStore, SearchHit, workspace_key
 from loguru import logger
 
@@ -95,8 +96,10 @@ class RagService:
         database: Database | None = None,
         store_factory: StoreFactory | None = None,
         enrichment_factory: EnrichmentFactory | None = None,
+        khaidocs_source: Callable[[], object] | None = None,
     ) -> None:
         self._database = database
+        self._khaidocs_source = khaidocs_source
         self._store_factory = store_factory
         self._enrichment_factory = enrichment_factory or default_enrichment
         self._lock = threading.RLock()
@@ -107,6 +110,8 @@ class RagService:
 
     @staticmethod
     def _key(root: str | Path) -> str:
+        if str(root) == KHAIDOCS_ROOT:  # the user's KhaiDocs pages, not a directory
+            return KHAIDOCS_ROOT
         return str(Path(root).expanduser().resolve())
 
     def index_for(self, root: str | Path) -> DocumentIndex:
@@ -115,9 +120,21 @@ class RagService:
             index = self._indexes.get(key)
             if index is None:
                 store = self._open_store(key)
-                index = DocumentIndex(key, store)
+                if key == KHAIDOCS_ROOT:
+                    index = KhaiDocsIndex(key, store, self._open_khaidocs())
+                else:
+                    index = DocumentIndex(key, store)
                 self._indexes[key] = index
             return index
+
+    def _open_khaidocs(self):  # noqa: ANN202
+        if self._khaidocs_source is not None:
+            return self._khaidocs_source()
+        from core.khaidocs import KhaiDocsStore
+
+        if self._database is None:
+            self._database = Database()
+        return KhaiDocsStore(self._database)
 
     def _open_store(self, key: str) -> DocumentStore:
         if self._store_factory is not None:

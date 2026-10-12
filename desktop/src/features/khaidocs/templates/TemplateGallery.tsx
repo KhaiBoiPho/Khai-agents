@@ -25,7 +25,7 @@ import { IconFilePlus, IconSearch, IconTrash } from "@tabler/icons-react";
 import { modals } from "@mantine/modals";
 import { useTranslation } from "react-i18next";
 import DOMPurify from "dompurify";
-import { markdownToHtml } from "@docmost/editor-ext";
+import { markdownToHtml } from "@khaidocs/editor-ext";
 import { PageIcon } from "../notion/PageIcon";
 import { BUILTIN_TEMPLATES, PageTemplate, TEMPLATE_CATEGORIES } from "./manifest";
 import {

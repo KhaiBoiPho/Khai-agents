@@ -59,3 +59,6 @@ user accepts.
   office-* skill with a `document-design` style; Markdown stays as the
   workspace file.
 - Present the file path, a two-line summary, and any remaining open points.
+- If `khaidocs_write` is among your tools and the user wants the document in
+  their KhaiDocs ("save as a KhaiDocs page"), create it there from the
+  Markdown (`khaidocs_write` create) and refine with append / replace_section.
