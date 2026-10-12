@@ -319,6 +319,7 @@
   min-height: 0;
   flex: 1;
   overflow: auto;
+  padding: 20px 24px 28px;
   background: var(--surface-inset);
 }
 
@@ -367,7 +368,7 @@
 
 .previewMessage,
 .plainPreview {
-  margin: 16px;
+  margin: 0;
   color: var(--text-secondary);
   font-size: var(--text-sm);
   line-height: 1.6;
@@ -379,6 +380,10 @@
 }
 
 @media (max-width: 900px) {
+  .previewBody {
+    padding: 16px;
+  }
+
   .documentsWithPreview {
     grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.15fr);
   }
