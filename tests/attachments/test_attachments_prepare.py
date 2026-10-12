@@ -305,3 +305,25 @@ def test_budget_scales_with_the_context_window(window: int) -> None:
     budget = DigestBudget.for_context(window)
     assert 4_000 <= budget.group_tokens <= 24_000
     assert 300 <= budget.output_tokens <= 1_200
+
+
+def test_workspace_relative_paths_and_trailing_search_text(tmp_path: Path) -> None:
+    """The web composer lists uploads relative to the workspace and may add
+    search instructions after the list."""
+
+    workspace = tmp_path / "chats"
+    workspace.mkdir()
+    (workspace / f"{UPLOAD}lo-trinh.md").write_text("# Plan\nStage 0", encoding="utf-8")
+    prompt = (
+        "Strategy?\n\nAttached workspace context:\n"
+        f"- {UPLOAD}lo-trinh.md\n\nSearch the web with the available web-search tools."
+    )
+
+    question, paths = split_attached(prompt)
+    assert paths == [f"{UPLOAD}lo-trinh.md"]
+    assert question == "Strategy?\n\nSearch the web with the available web-search tools."
+
+    prepared, _ = asyncio.run(_prepare(prompt, workspace=workspace, cache_root=tmp_path / "c"))
+    assert [f.mode for f in prepared.files] == ["inline"]
+    assert "Stage 0" in prepared.full
+    assert "Search the web" in prepared.full

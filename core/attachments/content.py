@@ -59,16 +59,28 @@ def estimate_tokens(text: str) -> int:
 
 
 def split_attached(prompt: str) -> tuple[str, list[str]]:
-    """``(question, paths)``; no paths when the prompt has no attachment list."""
+    """``(prompt without the list, paths)``; no paths without a list.
+
+    Paths are workspace-relative or absolute. Text the composer appends after
+    the list (search or research instructions) stays in the prompt."""
 
     at = prompt.rfind(ATTACHED_HEADING)
     if at < 0:
         return prompt, []
     lines = prompt[at + len(ATTACHED_HEADING):].split("\n")
-    if not lines or not all(line.startswith("- ") for line in lines):
+    paths: list[str] = []
+    consumed = 0
+    for line in lines:
+        if not line.startswith("- "):
+            break
+        consumed += 1
+        if line[2:].strip():
+            paths.append(line[2:].strip())
+    if not paths:
         return prompt, []
-    paths = [line[2:].strip() for line in lines if line[2:].strip()]
-    return prompt[:at], paths
+    rest = "\n".join(lines[consumed:]).strip("\n")
+    question = prompt[:at] + (f"\n\n{rest}" if rest else "")
+    return question, paths
 
 
 def display_name(path: Path) -> str:
@@ -106,8 +118,14 @@ def _decode(data: bytes) -> str | None:
 def read_attached(raw_path: str, workspace: Path | None) -> AttachedText | None:
     """The file's text, or None when it is not a readable text attachment."""
 
+    candidate = Path(raw_path).expanduser()
+    if not candidate.is_absolute():
+        # The composer lists files inside the workspace relative to it.
+        if workspace is None:
+            return None
+        candidate = workspace / candidate
     try:
-        path = Path(raw_path).expanduser().resolve(strict=True)
+        path = candidate.resolve(strict=True)
     except (OSError, RuntimeError):
         return None
     if not path.is_file() or not _readable(path, workspace):
