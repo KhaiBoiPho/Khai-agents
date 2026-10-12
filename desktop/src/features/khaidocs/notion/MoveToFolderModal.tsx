@@ -2,7 +2,7 @@
  * Original KhaiDocs code, MIT.
  *
  * "Move to folder…": pick one of the space's folders (or the top level) for
- * a page. Docmost's own "Move" moves between spaces, which single-user mode
+ * a page. the upstream "Move" moves between spaces, which single-user mode
  * doesn't have.
  */
 

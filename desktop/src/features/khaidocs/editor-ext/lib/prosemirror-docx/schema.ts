@@ -120,7 +120,7 @@ export const defaultAsyncNodes: NodeSerializerAsync = {
   async table(state, node) {
     await state.table(node);
   },
-  // Docmost stores LaTeX in attrs.text.
+  // the client stores LaTeX in attrs.text.
   mathInline(state, node) {
     state.math(node.attrs?.text ?? '', { inline: true });
   },

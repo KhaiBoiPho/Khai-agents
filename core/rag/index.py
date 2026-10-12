@@ -245,7 +245,7 @@ class DocumentIndex:
     ) -> None:
         full = self.root / path
         try:
-            digest = _sha256(full)
+            digest = self._digest_of(path)
         except OSError as exc:
             report.failed[path] = f"cannot read file: {exc.strerror or exc}"
             self._record_failure(path, state, "", report.failed[path], embedder.model)
@@ -269,7 +269,7 @@ class DocumentIndex:
                 return reader.read_pages(file, pages, cache=self.store)
 
         try:
-            sections = extract_document(full, visual=visual, stats=stats)
+            sections = self._sections_of(path, visual, stats)
         except ExtractionError as exc:
             report.failed[path] = str(exc)
             self._record_failure(path, state, digest, str(exc), embedder.model)
@@ -325,6 +325,14 @@ class DocumentIndex:
         report.visual_pages += stats.visual_pages
         report.visual_failed += stats.visual_failed
         report.contextualized += contextualized
+
+    # Where a document's content comes from. Overridden by sources that are not
+    # files (core.rag.khaidocs_source).
+    def _digest_of(self, path: str) -> str:
+        return _sha256(self.root / path)
+
+    def _sections_of(self, path: str, visual, stats: ExtractStats):  # noqa: ANN001
+        return extract_document(self.root / path, visual=visual, stats=stats)
 
     def _record_failure(
         self, path: str, state: FileState, digest: str, error: str, model: str

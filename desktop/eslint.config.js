@@ -11,8 +11,8 @@ export default tseslint.config(
       "src/generated",
       "src-tauri/target",
       "src-tauri/gen",
-      // Vendored Docmost (KhaiDocs); linted upstream, not against this config.
-      "src/features/khaidocs/docmost",
+      // Vendored the client (KhaiDocs); linted upstream, not against this config.
+      "src/features/khaidocs/client",
       "src/features/khaidocs/editor-ext",
     ],
   },

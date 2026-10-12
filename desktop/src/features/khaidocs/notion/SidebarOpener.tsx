@@ -1,7 +1,7 @@
 /*
  * Original KhaiDocs code, MIT.
  *
- * With Docmost's top header gone (single-user mode), this is how a closed
+ * With the client's top header gone (single-user mode), this is how a closed
  * sidebar comes back: a small "»" button in the top-left corner, like
  * Notion's.
  */

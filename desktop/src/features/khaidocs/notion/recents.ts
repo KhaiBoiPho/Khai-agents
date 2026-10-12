@@ -2,7 +2,7 @@
  * Original KhaiDocs code, MIT.
  *
  * Recently visited pages, like Notion's "Recents": kept on this device in
- * localStorage (Docmost has no visit history; its "recent" API lists recent
+ * localStorage (the client has no visit history; its "recent" API lists recent
  * edits, which the home page uses to fill the list up).
  */
 

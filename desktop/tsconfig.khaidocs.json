@@ -1,4 +1,4 @@
-// KhaiDocs vendors Docmost's client, which is written against Docmost's own
+// KhaiDocs vendors the client's client, which is written against the upstream
 // loose compiler settings; it is checked with those, separately from the app.
 {
   "compilerOptions": {
@@ -29,9 +29,9 @@
     ],
     "paths": {
       "@/*": [
-        "./src/features/khaidocs/docmost/*"
+        "./src/features/khaidocs/client/*"
       ],
-      "@docmost/editor-ext": [
+      "@khaidocs/editor-ext": [
         "./src/features/khaidocs/editor-ext/index.ts"
       ]
     }

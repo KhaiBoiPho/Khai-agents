@@ -1,9 +1,9 @@
 /*
  * Original KhaiDocs code, MIT.
  *
- * Page/folder actions on Docmost's sidebar tree: create a page or folder
+ * Page/folder actions on the client's sidebar tree: create a page or folder
  * (optionally inside a folder), move a page into a folder, and list every
- * folder of a space. Same steps as Docmost's own tree mutations: API call,
+ * folder of a space. Same steps as the upstream tree mutations: API call,
  * optimistic tree update, websocket event.
  */
 

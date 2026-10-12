@@ -53,7 +53,7 @@ def test_desktop_ci_runs_when_any_changed_path_has_desktop_impact() -> None:
         "docs/CI.md",
         "assets/readme/demo.png",
         "assets/logo.svg",
-        "website/package-lock.json",
+        "docs/guide/getting-started.md",
         ".github/ISSUE_TEMPLATE/bug_report.yml",
     ],
 )

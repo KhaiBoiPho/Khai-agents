@@ -17,7 +17,7 @@ import {
   deleteUserTemplate,
   loadUserTemplates,
 } from "./user-templates";
-import { pickDefaultSpace } from "../docmost/lib/khaidocs-mode";
+import { pickDefaultSpace } from "../client/lib/khaidocs-mode";
 
 class MemoryStorage {
   data = new Map<string, string>();

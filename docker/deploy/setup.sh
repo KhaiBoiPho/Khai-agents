@@ -15,11 +15,8 @@ if [ ! -f .env ]; then
     echo "KHAI_DATA_DIR=$KHAI_DATA_DIR"
     echo "KHAI_PG_SUPERUSER_PASSWORD=$(openssl rand -hex 24)"
     echo "KHAI_PG_APP_PASSWORD=$(openssl rand -hex 24)"
-    echo "KHAI_PG_DOCMOST_PASSWORD=$(openssl rand -hex 24)"
     echo "KHAI_REDIS_PASSWORD=$(openssl rand -hex 24)"
     echo "KHAI_QDRANT_API_KEY=$(openssl rand -hex 32)"
-    echo "KHAI_DOCMOST_APP_SECRET=$(openssl rand -hex 32)"
-    echo "KHAI_DOCMOST_ACCOUNT_SECRET=$(openssl rand -hex 32)"
     echo "# Optional: KHAI_WORKER_RUNTIME=runsc (gVisor), KHAI_WORKER_MEMORY_GB=1,"
     echo "# KHAI_WORKER_CPUS=1, KHAI_MAX_WORKERS=12, KHAI_WORKER_IDLE_SECONDS=1800"
   } > .env

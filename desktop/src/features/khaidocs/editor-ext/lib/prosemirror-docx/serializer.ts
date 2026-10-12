@@ -825,7 +825,7 @@ export class DocxSerializerStateAsync {
   }
 
   // Fills the footnote body for an already-referenced footnote number from a
-  // node holding block content (Docmost keeps footnote text in a trailing
+  // node holding block content (the client keeps footnote text in a trailing
   // list, separate from the inline reference).
   async footnoteDefinition(node: Node, number: number) {
     const { current, children, nextRunOpts, nextParentParagraphOpts } = this;

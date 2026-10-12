@@ -1,118 +1,97 @@
 /* Original KhaiDocs code, MIT.
-   KhaiDocs look, modelled on AFFiNE's: its neutral palette, blue accent,
-   Inter type, 15px body text and 40px titles. Everything is scoped to
-   .khaidocs-root. */
+   KhaiDocs look: the host app's tokens, fonts, radii and surfaces. Everything
+   is scoped to .khaidocs-root. */
 
 .khaidocs-root {
-  --kd-font: "Inter Variable", Inter, "Source Sans 3 Variable", -apple-system,
-    BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif,
-    "Apple Color Emoji", "Segoe UI Emoji";
-  --kd-text: #141414;
-  --kd-text-secondary: #7a7a7a;
-  --kd-text-tertiary: #929292;
-  --kd-icon-muted: #77757d;
-  --kd-sidebar-bg: #fafafa;
-  --kd-sidebar-text: #141414;
-  --kd-search-bg: #ffffff;
-  --kd-hover: rgba(0, 0, 0, 0.04);
-  --kd-hover-strong: rgba(0, 0, 0, 0.08);
-  --kd-selected: rgba(0, 0, 0, 0.04);
-  --kd-divider: #e6e6e6;
-  --kd-floating: #ffffff;
-  --kd-card: #ffffff;
-  --kd-card-border: #e6e6e6;
-  --kd-shadow-sm: 0 0 0 0.5px rgba(0, 0, 0, 0.08), 0 4px 12px rgba(66, 65, 73, 0.14);
-  --kd-shadow-card: 0 0 0 1px rgba(0, 0, 0, 0.02), 0 2px 6px rgba(0, 0, 0, 0.04);
-  --kd-accent: #1e96eb;
+  /* The only palette: the host's tokens (src/styles/tokens.css). The --kd-*
+     names are KhaiDocs' own aliases and hold no colours of their own, so
+     every host theme applies live. */
+  --kd-font: var(--font-ui-preferred) "Source Sans 3 Variable", "Source Sans 3",
+    -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --kd-text: var(--text-primary);
+  --kd-text-secondary: var(--text-secondary);
+  --kd-text-tertiary: var(--text-tertiary);
+  --kd-icon-muted: var(--text-tertiary);
+  /* Same surface and frosting as the host's sidebar. */
+  --kd-sidebar-bg: color-mix(in srgb, var(--surface-sidebar) 40%, transparent);
+  --kd-sidebar-text: var(--text-primary);
+  --kd-search-bg: color-mix(in srgb, var(--surface-inset) 78%, transparent);
+  --kd-hover: var(--surface-hover);
+  --kd-hover-strong: var(--surface-selected);
+  --kd-selected: var(--surface-selected);
+  --kd-divider: var(--border-subtle);
+  --kd-floating: var(--surface-raised);
+  --kd-card: var(--surface-raised);
+  --kd-card-border: var(--border-subtle);
+  --kd-shadow-sm: var(--shadow-menu);
+  --kd-shadow-card: var(--shadow-soft);
+  --kd-accent: var(--signal);
 
-  /* Page icon colours (Notion's text palette). */
-  --kd-icon-default: #37352f;
-  --kd-icon-gray: #9b9a97;
-  --kd-icon-brown: #9f6b53;
-  --kd-icon-orange: #d9730d;
-  --kd-icon-yellow: #cb912f;
-  --kd-icon-green: #448361;
-  --kd-icon-blue: #337ea9;
-  --kd-icon-purple: #9065b0;
-  --kd-icon-pink: #c14c8a;
-  --kd-icon-red: #d44c47;
+  /* Page icon colours: Notion's text palette, light and dark by the host's
+     color-scheme. */
+  --kd-icon-default: var(--text-primary);
+  --kd-icon-gray: var(--text-tertiary);
+  --kd-icon-brown: light-dark(#9f6b53, #ba856f);
+  --kd-icon-orange: light-dark(#d9730d, #c77d48);
+  --kd-icon-yellow: light-dark(#cb912f, #ca9849);
+  --kd-icon-green: light-dark(#448361, #529e72);
+  --kd-icon-blue: light-dark(#337ea9, #379ad3);
+  --kd-icon-purple: light-dark(#9065b0, #9d68d3);
+  --kd-icon-pink: light-dark(#c14c8a, #d15796);
+  --kd-icon-red: light-dark(#d44c47, #df5452);
 
-  --mantine-color-dimmed: #7a7a7a;
-  --mantine-color-anchor: var(--kd-accent);
   font-family: var(--kd-font);
-}
-
-.khaidocs-root[data-mantine-color-scheme="dark"] {
-  --kd-text: #e6e6e6;
-  --kd-text-secondary: #9d9d9d;
-  --kd-text-tertiary: #6e6e6e;
-  --kd-icon-muted: #9d9d9d;
-  --kd-sidebar-bg: #1a1a1a;
-  --kd-sidebar-text: #e6e6e6;
-  --kd-search-bg: #232323;
-  --kd-hover: rgba(255, 255, 255, 0.06);
-  --kd-hover-strong: rgba(255, 255, 255, 0.1);
-  --kd-selected: rgba(255, 255, 255, 0.06);
-  --kd-divider: #2e2e2e;
-  --kd-floating: #232323;
-  --kd-card: #1e1e1e;
-  --kd-card-border: #2e2e2e;
-  --kd-shadow-sm: 0 0 0 0.5px rgba(255, 255, 255, 0.08), 0 4px 12px rgba(0, 0, 0, 0.45);
-  --kd-shadow-card: 0 0 0 1px rgba(255, 255, 255, 0.05);
-  --kd-accent: #1e96eb;
-
-  --kd-icon-default: #d4d4d4;
-  --kd-icon-gray: #9b9b9b;
-  --kd-icon-brown: #ba856f;
-  --kd-icon-orange: #c77d48;
-  --kd-icon-yellow: #ca9849;
-  --kd-icon-green: #529e72;
-  --kd-icon-blue: #379ad3;
-  --kd-icon-purple: #9d68d3;
-  --kd-icon-pink: #d15796;
-  --kd-icon-red: #df5452;
-
-  --mantine-color-dimmed: #9d9d9d;
 }
 
 /* ---------- Shell ---------- */
 
 .khaidocs-root .mantine-AppShell-navbar {
   background-color: var(--kd-sidebar-bg);
+  backdrop-filter: blur(28px) saturate(1.5);
   border-right: 1px solid var(--kd-divider);
 }
 
 .khaidocs-root .mantine-AppShell-aside {
-  background-color: var(--mantine-color-body);
+  background-color: var(--kd-sidebar-bg);
+  backdrop-filter: blur(28px) saturate(1.5);
   border-left: 1px solid var(--kd-divider);
 }
 
+.khaidocs-root .mantine-AppShell-main,
+.khaidocs-root .mantine-AppShell-root {
+  background-color: transparent;
+}
+
 .khaidocs-root .mantine-AppShell-header {
-  background-color: var(--mantine-color-body);
+  background-color: color-mix(in srgb, var(--surface-raised) 60%, transparent);
+  backdrop-filter: blur(12px);
   border-bottom: 1px solid var(--kd-divider);
 }
 
 /* The page header (breadcrumb bar) floats over the page like Notion's. */
 .khaidocs-root [data-page-header="true"] {
   height: 45px;
-  background-color: var(--mantine-color-body);
+  /* The breadcrumb sits close to the host sidebar's edge. */
+  padding-left: 0;
+  background-color: color-mix(in srgb, var(--surface-raised) 60%, transparent);
+  backdrop-filter: blur(12px);
 }
 
-/* Menus and popovers: AFFiNE's floating surfaces. */
+/* Menus and popovers: the host's floating surfaces. */
 .khaidocs-root .mantine-Menu-dropdown,
 .khaidocs-root .mantine-Popover-dropdown {
   background-color: var(--kd-floating);
-  border: 0;
-  box-shadow: var(--kd-shadow-sm);
-  border-radius: 8px;
-  padding: 8px;
+  border: 1px solid var(--border-subtle);
+  box-shadow: var(--shadow-menu);
+  border-radius: var(--radius-lg);
+  padding: 6px;
 }
 
 .khaidocs-root .mantine-Menu-item {
-  font-size: 14px;
+  font-size: var(--text-sm);
   min-height: 30px;
-  padding: 4px 12px;
-  border-radius: 4px;
+  padding: 4px 10px;
+  border-radius: var(--radius-sm);
 }
 
 .khaidocs-root .mantine-Menu-item:hover,
@@ -123,7 +102,7 @@
 /* ---------- Page ---------- */
 
 .khaidocs-root .kd-editor {
-  font-size: 15px;
+  font-size: calc(var(--text-base) * 1.07);
 }
 
 .khaidocs-root .kd-page[data-has-cover] .kd-editor {
@@ -163,10 +142,11 @@
 
 /* The page title (after the body rules so it wins). */
 .khaidocs-root .kd-editor .page-title .ProseMirror h1 {
+  font-family: var(--font-display);
   font-size: 40px;
   line-height: 1.2;
-  font-weight: 700;
-  letter-spacing: -0.015em;
+  font-weight: var(--weight-display);
+  letter-spacing: var(--tracking-display);
   margin-top: 0;
   margin-bottom: 0.35em;
   color: var(--kd-text);
@@ -182,18 +162,31 @@
 }
 
 .khaidocs-root .kd-editor .ProseMirror :not(pre) > code {
-  background: rgba(0, 0, 0, 0.05);
-  color: #e3484f;
-  border-radius: 4px;
+  background: var(--surface-code);
+  border: 1px solid var(--border-subtle);
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  border-radius: var(--radius-sm);
   padding: 0.2em 0.4em;
-  font-size: 85%;
+  font-size: 90%;
 }
 
 .khaidocs-root .kd-editor .ProseMirror a {
-  color: var(--kd-accent);
+  color: var(--text-primary);
   border-bottom: 0;
-  text-decoration: none;
+  text-decoration: underline;
+  text-decoration-color: var(--border-emphasis);
+  text-underline-offset: 2px;
   font-weight: 400;
+}
+
+/* With the host sidebar hidden, its floating "show" button (10px in, 30px wide,
+   centred 27px down) takes the corner: start the breadcrumb after it and put
+   the header's content on the same centre line. */
+[data-sidebar="hidden"] .khaidocs-root [data-page-header="true"] {
+  padding-left: 28px;
+  padding-top: 11px;
+  box-sizing: border-box;
 }
 
 /* Headerless single-user shell: room for the "»" sidebar opener. */
@@ -201,12 +194,7 @@
   padding-right: 48px;
 }
 
-.khaidocs-root[data-mantine-color-scheme="dark"] .kd-editor .ProseMirror :not(pre) > code {
-  background: rgba(255, 255, 255, 0.08);
-  color: #f0646c;
-}
-
-/* Text selection and focus in AFFiNE's blue. */
+/* Text selection and focus follow the host. */
 .khaidocs-root ::selection {
-  background: color-mix(in srgb, var(--kd-accent) 22%, transparent);
+  background: color-mix(in srgb, var(--signal) 28%, transparent);
 }

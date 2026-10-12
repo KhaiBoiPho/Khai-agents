@@ -9,7 +9,7 @@
   flex-direction: column;
   user-select: none;
   color: var(--kd-sidebar-text);
-  font-size: 14px;
+  font-size: var(--text-sm);
 }
 
 /* ---------- Workspace row ---------- */
@@ -40,8 +40,8 @@
 }
 
 .workspaceMenu > button :global(.mantine-Text-root) {
-  font-size: 14px;
-  font-weight: 600;
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
   color: var(--kd-text);
 }
 
@@ -61,16 +61,9 @@
 }
 
 .collapseButton {
-  width: 28px;
-  height: 28px;
-  opacity: 0;
-  transition: opacity 100ms ease;
-}
-
-.collapseButton[data-always],
-.sidebar:hover .collapseButton,
-.collapseButton:focus-visible {
-  opacity: 1;
+  width: 30px;
+  height: 32px;
+  flex-shrink: 0;
 }
 
 .collapseButton:hover,
@@ -85,8 +78,8 @@
 .quickRow {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 4px 12px 8px;
+  gap: 4px;
+  padding: 10px 8px 8px 12px;
   flex-shrink: 0;
 }
 
@@ -97,14 +90,15 @@
   height: 32px;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   padding: 0 8px;
+  margin-right: 4px;
   border: 1px solid var(--kd-divider);
   border-radius: 8px;
   background: var(--kd-search-bg);
   color: var(--kd-text-secondary);
   font: inherit;
-  font-size: 14px;
+  font-size: var(--text-sm);
   cursor: pointer;
   text-align: left;
   transition: background 120ms ease, border-color 120ms ease;
@@ -129,7 +123,7 @@
 
 .quickSearchKey {
   font: inherit;
-  font-size: 12px;
+  font-size: var(--text-xs);
   color: var(--kd-text-tertiary);
 }
 
@@ -238,9 +232,9 @@
   border: 0;
   background: transparent;
   font: inherit;
-  font-size: 12px;
-  font-weight: 500;
-  letter-spacing: 0.01em;
+  font: var(--weight-bold) var(--text-micro) var(--font-mono);
+  letter-spacing: var(--tracking-caps);
+  text-transform: uppercase;
   color: var(--kd-text-tertiary);
   padding: 0;
   cursor: pointer;
@@ -269,7 +263,7 @@
 
 /* ---------- The page tree ---------- */
 
-/* The tree grows to its full height and scrolls with the sidebar (Docmost
+/* The tree grows to its full height and scrolls with the sidebar (the client
    gives it its own scroll box). */
 .treeHost > div,
 .treeHost > div > div {
@@ -395,8 +389,8 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 14px;
-  font-weight: 500;
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
 }
 
 .rowActions {
@@ -433,7 +427,7 @@
   width: 100%;
   padding: 7px 10px;
   border-radius: 6px;
-  font-size: 14px;
+  font-size: var(--text-sm);
 }
 
 .pickRow:hover:not(:disabled) {
@@ -458,7 +452,7 @@
   flex: 1;
   min-width: 0;
   text-align: right;
-  font-size: 12px;
+  font-size: var(--text-xs);
   color: var(--kd-text-tertiary);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -489,7 +483,7 @@
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  font-size: 13px;
+  font-size: var(--text-xs);
   padding: 4px 8px;
   border-radius: 6px;
   color: var(--kd-text-secondary);
@@ -528,12 +522,12 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 15px;
-  font-weight: 500;
+  font-size: var(--text-base);
+  font-weight: var(--weight-medium);
 }
 
 .folderRowMeta {
-  font-size: 12px;
+  font-size: var(--text-xs);
   color: var(--kd-text-tertiary);
   white-space: nowrap;
 }
@@ -554,8 +548,8 @@
 .workspaceBadge span {
   overflow: hidden;
   color: var(--kd-text);
-  font-size: 14px;
-  font-weight: 600;
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
   text-overflow: ellipsis;
   white-space: nowrap;
 }

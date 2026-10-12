@@ -3,10 +3,10 @@
 CI checks the complete pull request from its merge base, so unrelated changes
 added to the target branch do not count as changes in the PR. A README update
 inside a PR that also changes runtime code still receives the runtime checks.
-A PR containing only top-level Markdown files, `docs/`, `assets/`, `website/`,
-or issue templates skips runtime tests and builds, while formatting, secret
-scanning, and dependency review remain active. Unknown paths and missing
-comparison history run checks.
+A PR containing only top-level Markdown files, `docs/`, `assets/`, or issue
+templates skips runtime tests and builds, while formatting, secret scanning,
+and dependency review remain active. Unknown paths and missing comparison
+history run checks.
 
 Pushes to `main` run the Python suite on 3.13 only; pull requests and manual
 runs cover 3.12–3.14. Desktop pushes and PRs run the quality gates; the four

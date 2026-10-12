@@ -1,23 +1,29 @@
 # KhaiDocs
 
-KhaiDocs is the [Docmost](https://github.com/docmost/docmost) wiki running
-inside the desktop app, under the **KhaiDocs** sidebar entry.
+KhaiDocs is the wiki inside Khai, under the **KhaiDocs** sidebar entry. Its
+browser client is derived from an AGPL-3.0 open-source wiki client (see
+`LICENSE`, `UPSTREAM_COMMIT` and `THIRD_PARTY_NOTICES.md`); its server is Khai's own, written in Python: `core/khaidocs`
+(storage, importers/exporters, Yjs) and `app_server/khaidocs` (REST under
+`/api`, Hocuspocus-compatible `/collab`, `/socket.io`). Pages live in the
+user's own `kd_*` tables in Khai's PostgreSQL database. There is no upstream
+server, and KhaiDocs has no login of its own: the signed-in Khai account is
+the only identity. See `app_server/khaidocs/README.md` and `INTERFACE.md`.
 
 ## What is here
 
 | Path | What | License |
 |---|---|---|
-| `docmost/` | Docmost's web client (`apps/client/src`), core only | AGPL-3.0 (see `LICENSE`) |
-| `editor-ext/` | Docmost's editor extensions (`packages/editor-ext/src`) | AGPL-3.0 |
-| `docmost/ee/` | Original stand-ins for Docmost Enterprise imports — **not** Docmost EE code | MIT |
-| `KhaiDocsApp.tsx`, `mantine.css`, `khaidocs-baseline.css` | The host side: providers, scoped Mantine styles | MIT |
-| `templates/` | KhaiDocs page templates: built-in Markdown templates, gallery, "Save as template" — **not** Docmost EE's template feature | MIT |
-| `docmost/lib/khaidocs-mode.ts`, `docmost/components/khaidocs/` | Single-user mode flag and default-space helpers | MIT |
+| `client/` | The upstream web client (`apps/client/src`), core only | AGPL-3.0 (see `LICENSE`) |
+| `editor-ext/` | The upstream editor extensions (`packages/editor-ext/src`) | AGPL-3.0 |
+| `client/ee/` | Original stand-ins for the imports of the upstream's enterprise tier — **not** that code | MIT |
+| `KhaiDocsApp.tsx`, `mantine.css`, `khaidocs-baseline.css`, `notion/theme.ts`, `notion/host-scheme.ts` | The host side: providers, scoped Mantine styles. No palette of its own: colours, fonts, radii and shadows come from the host tokens (`src/styles/tokens.css`), so every host theme applies live | MIT |
+| `templates/` | KhaiDocs page templates: built-in Markdown templates, gallery, "Save as template" — **not** the upstream enterprise template feature | MIT |
+| `client/lib/khaidocs-mode.ts`, `client/components/khaidocs/` | Single-user mode flag and default-space helpers | MIT |
 | `notion/` | The Notion-style look: sidebar, home, page cover/icon, line-icon set and picker, folders | MIT |
 
-Upstream commit: see `UPSTREAM_COMMIT` (Docmost 0.96.0). Docmost's Enterprise
-Edition (`packages/ee`, `apps/client/src/ee`) is licensed under the Docmost
-Enterprise License and is deliberately not included; every Enterprise feature
+Upstream commit: see `UPSTREAM_COMMIT` (0.96.0). The upstream Enterprise
+Edition (`packages/ee`, `apps/client/src/ee`) is under a separate commercial
+licence and is deliberately not included; every Enterprise feature
 reports as unavailable.
 
 **Licensing note.** Distributing the desktop app with this folder makes the
@@ -25,20 +31,28 @@ distributed work subject to the AGPL-3.0, including its source-offer terms.
 
 ## Running it
 
-1. `docker/khaidocs/up.sh` — starts the stock `docmost/docmost:0.96.0` server
-   with Postgres and Redis (first run writes random secrets to
-   `docker/khaidocs/.env`). Set `KHAIDOCS_APP_URL` to the dev server origin.
+The Khai gateway (hosted) and the single-user service (`python -m
+app_server.service`) both serve the KhaiDocs backend directly, behind the Khai
+session; the built web client (`npm run build:web`) talks to it on its own
+origin. For development:
+
+1. Start Khai's server (gateway or service) and sign in to it in this browser.
 2. `npm run dev` in `desktop/` — Vite proxies `/api`, `/socket.io` and
-   `/collab` to the server (`KHAIDOCS_SERVER_URL`, default
-   `http://localhost:3456`).
-3. Open **KhaiDocs** in the sidebar; the first visit creates the workspace.
+   `/collab` to it (`KHAIDOCS_SERVER_URL`, default `http://localhost:8080`;
+   the service listens on 3081 by default).
+3. Open **KhaiDocs** in the sidebar.
 
-Packaged builds have no dev proxy yet (TODO).
+## Language
 
-Type-check with `npm run typecheck:khaidocs` (TypeScript 5.9, Docmost's loose
-settings); the app's own `tsc` sees only `src/khaidocs-app.d.ts`.
+English (`en-US`) and Vietnamese (`vi-VN`) only, from
+`public/khaidocs/locales/<lng>/translation.json`. KhaiDocs follows Khai's
+interface language (`KhaiDocsApp.tsx`); the language picker in KhaiDocs'
+account preferences changes Khai's language too. English strings are the
+keys, so a missing Vietnamese key falls back to English.
 
-## Modifications to Docmost (2026-10-06)
+Type-check with `npm run typecheck:khaidocs` (TypeScript 5.9, loose settings); the app's own `tsc` sees only `src/khaidocs-app.d.ts`.
+
+## Modifications to the client (2026-10-06)
 
 Made so the client runs embedded instead of owning the whole page:
 
@@ -71,22 +85,22 @@ Made so the client runs embedded instead of owning the whole page:
 ### Single-user mode and templates (2026-10-06)
 
 KhaiDocs is used by one person, so `SINGLE_USER` in
-`docmost/lib/khaidocs-mode.ts` (new, MIT) hides everything about other people
+`client/lib/khaidocs-mode.ts` (new, MIT) hides everything about other people
 and choosing between spaces. Nothing is deleted on the server. The oldest
 space is the "default space"; `/home` lands on it, and the hidden routes
 (`/spaces`, `/settings/members`, `/settings/groups[/:id]`, `/settings/spaces`,
-`/settings/sharing`) redirect there. `docmost/components/khaidocs/default-space.tsx`
+`/settings/sharing`) redirect there. `client/components/khaidocs/default-space.tsx`
 (new, MIT) holds `useDefaultSpace` and the redirect.
 
 Templates are original KhaiDocs code in `templates/` (MIT): eight built-in
 Markdown templates (`templates/builtin/*.md`, listed in `manifest.ts`), a
 gallery (search, categories, preview), "New page from template" through the
 core Markdown import (`POST /api/pages/import`), and "Save as template" from a
-page's menu, kept in localStorage under "My templates". Docmost Enterprise's
-template code is not used; its stand-ins in `docmost/ee/template/` are no
+page's menu, kept in localStorage under "My templates". an enterprise tier's
+template code is not used; its stand-ins in `client/ee/template/` are no
 longer routed to.
 
-Changed Docmost files (each change marked `KhaiDocs:`):
+Changed the client files (each change marked `KhaiDocs:`):
 
 - `App.tsx` — `/home` redirects to the default space; the hidden routes
   above redirect; `/templates` is the KhaiDocs gallery page and
@@ -122,16 +136,15 @@ Original KhaiDocs code in `notion/` (MIT):
   `brown`, `orange`, `yellow`, `green`, `blue`, `purple`, `pink`, `red`).
   `page-icon-codec.ts` parses/encodes them, `icon-set.ts` is the set,
   `PageIcon.tsx` renders either kind, `IconPicker.tsx` is the picker
-  ("Icons" tab — search, colours, grid — next to Docmost's emoji picker).
+  ("Icons" tab — search, colours, grid — next to the client's emoji picker).
   The built-in templates use these icons.
 - **Folders.** A folder is a page whose icon is `ti:folder:<colour>`; it nests
-  pages through Docmost's own parent/child pages. Folders sort before pages
+  pages through the upstream parent/child pages. Folders sort before pages
   on every level, open to a list of their contents (`FolderView.tsx`), and
   "Move to folder…" (`MoveToFolderModal.tsx`, `tree-actions.ts`) replaces
-  Docmost's move-to-space in single-user mode. "Turn into folder/page" just
+  the client's move-to-space in single-user mode. "Turn into folder/page" just
   changes the icon.
-- **Covers** (`covers.ts`, `PageTop.tsx`). The stock server keeps
-  `coverPhoto` but its update endpoint ignores it, so the cover choice is
+- **Covers** (`covers.ts`, `PageTop.tsx`). The cover choice is
   stored on this device (localStorage, `khaidocs:cover:<pageId>`): built-in
   CSS gradients/colours written for KhaiDocs, or an image uploaded as an
   attachment of the page.
@@ -140,7 +153,7 @@ Original KhaiDocs code in `notion/` (MIT):
   `SidebarOpener.tsx`, `Home.tsx`, `theme.ts`, `notion.css` and the CSS
   modules.
 
-Changed Docmost files (each change marked `KhaiDocs:`):
+Changed the client files (each change marked `KhaiDocs:`):
 
 - `theme.ts` — Notion-like neutral palette, text colour and font stack
   (`notion/theme.ts`).

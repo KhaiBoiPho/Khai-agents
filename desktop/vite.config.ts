@@ -1,20 +1,39 @@
 import { defineConfig, configDefaults } from "vitest/config";
 import react from "@vitejs/plugin-react";
-import { loadEnv, type Plugin } from "vite";
+import { type Plugin, type ProxyOptions } from "vite";
 import { createHash } from "node:crypto";
 import { readFileSync, readdirSync } from "node:fs";
 import { join, resolve } from "node:path";
 import postcss, { type AcceptedPlugin } from "postcss";
 import mantinePreset from "postcss-preset-mantine";
 import simpleVars from "postcss-simple-vars";
-import { khaiDocsDevSignOn } from "./khaidocs-dev-sso";
 
 const host = process.env.TAURI_DEV_HOST;
 
-/** Where the KhaiDocs (Docmost) server listens; docker/khaidocs starts it. */
-const khaiDocsServer = process.env.KHAIDOCS_SERVER_URL ?? "http://localhost:3456";
+/**
+ * Where Khai's server (the gateway, which serves KhaiDocs natively under
+ * /api, /socket.io and /collab) listens. Sign in to it in this browser first:
+ * cookies are shared across ports of one host, so the session cookie it sets
+ * reaches the dev server's proxy too. The proxy only re-presents the request
+ * as coming from that server's own origin, which its CSRF check requires.
+ */
+const khaiDocsServer = process.env.KHAIDOCS_SERVER_URL ?? "http://localhost:8080";
 
-// Docmost's stylesheets are written for postcss-preset-mantine, whose
+function khaiDocsProxy(): ProxyOptions {
+  return {
+    target: khaiDocsServer,
+    changeOrigin: true,
+    ws: true,
+    configure: (proxy) => {
+      const origin = (req: { setHeader(name: string, value: string): void }) =>
+        req.setHeader("origin", khaiDocsServer);
+      proxy.on("proxyReq", origin);
+      proxy.on("proxyReqWs", origin);
+    },
+  };
+}
+
+// the client's stylesheets are written for postcss-preset-mantine, whose
 // light-dark() and rem() rewrites would break the rest of the app's CSS
 // (tokens.css uses the native light-dark()). So the preset runs only on
 // files under features/khaidocs/.
@@ -88,17 +107,9 @@ export default defineConfig(({ mode }) => {
   const version = readFileSync("../core/version.py", "utf8").match(
     /__version__\s*=\s*["']([^"']+)/,
   )?.[1];
-  // KhaiDocs single sign-on with the checkout's .env (see khaidocs-dev-sso.ts).
-  const khaiDocsEnv = { ...loadEnv(mode, "..", "KHAIDOCS_"), ...process.env };
-  const khaiDocsSso = khaiDocsDevSignOn(
-    khaiDocsServer,
-    khaiDocsEnv.KHAIDOCS_EMAIL?.trim() ?? "",
-    khaiDocsEnv.KHAIDOCS_PASSWORD ?? "",
-  );
   return {
     plugins: [
       react(),
-      khaiDocsSso.plugin,
       ...(web
         ? [
             {
@@ -128,9 +139,9 @@ export default defineConfig(({ mode }) => {
     },
     resolve: {
       alias: {
-        "@docmost/editor-ext": resolve("src/features/khaidocs/editor-ext/index.ts"),
+        "@khaidocs/editor-ext": resolve("src/features/khaidocs/editor-ext/index.ts"),
         "khaidocs-app": resolve("src/features/khaidocs/KhaiDocsApp.tsx"),
-        "@": resolve("src/features/khaidocs/docmost"),
+        "@": resolve("src/features/khaidocs/client"),
       },
     },
     css: { postcss: { plugins: [khaiDocsPostcss] } },
@@ -153,19 +164,9 @@ export default defineConfig(({ mode }) => {
         ignored: ["**/src-tauri/**"],
       },
       proxy: {
-        "/api": { target: khaiDocsServer, changeOrigin: true, configure: khaiDocsSso.configure },
-        "/socket.io": {
-          target: khaiDocsServer,
-          changeOrigin: true,
-          ws: true,
-          configure: khaiDocsSso.configure,
-        },
-        "/collab": {
-          target: khaiDocsServer,
-          changeOrigin: true,
-          ws: true,
-          configure: khaiDocsSso.configure,
-        },
+        "/api": khaiDocsProxy(),
+        "/socket.io": khaiDocsProxy(),
+        "/collab": khaiDocsProxy(),
       },
     },
     test: {

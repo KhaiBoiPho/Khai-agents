@@ -49,13 +49,12 @@ def affects_desktop(paths: Iterable[str]) -> bool:
 
 RUNTIME_EXEMPT_FILES = frozenset({"LICENSE", "CITATION.cff"})
 
-# Documentation, marketing assets and the docs website have their own checks
-# (or none) and never feed the Python runtime, so they do not trigger the
-# runtime suites. Anything else, including unknown paths, does.
+# Documentation and marketing assets never feed the Python runtime, so they
+# do not trigger the runtime suites. Anything else, including unknown paths,
+# does.
 RUNTIME_EXEMPT_PREFIXES = (
     "docs/",
     "assets/",
-    "website/",
     ".github/ISSUE_TEMPLATE/",
 )
 

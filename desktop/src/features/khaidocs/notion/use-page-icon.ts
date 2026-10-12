@@ -1,7 +1,7 @@
 /*
  * Original KhaiDocs code, MIT.
  *
- * Sets or clears a page's icon the way Docmost's sidebar does: optimistic
+ * Sets or clears a page's icon the way the client's sidebar does: optimistic
  * tree update, POST /api/pages/update, then a websocket "updateOne" so other
  * open tabs follow.
  */

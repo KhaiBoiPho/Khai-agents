@@ -2,13 +2,13 @@
  * Original KhaiDocs code, MIT.
  *
  * A page's Markdown for "Save as template": from the open editor when it is
- * live (the same conversion as "Copy as Markdown"), otherwise from Docmost's
+ * live (the same conversion as "Copy as Markdown"), otherwise from the client's
  * core export (POST /api/pages/export, format "markdown"), which returns the
  * saved page as a single .md file with its title heading.
  */
 
 import type { Editor } from "@tiptap/core";
-import { htmlToMarkdown } from "@docmost/editor-ext";
+import { htmlToMarkdown } from "@khaidocs/editor-ext";
 import api from "@/lib/api-client.ts";
 import { pageToTemplateMarkdown } from "./template-markdown";
 

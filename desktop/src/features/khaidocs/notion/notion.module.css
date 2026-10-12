@@ -20,7 +20,7 @@
   border: 0;
   background: none;
   font: inherit;
-  font-size: 14px;
+  font-size: var(--text-sm);
   color: var(--kd-text-secondary);
   padding: 6px 8px 8px;
   cursor: pointer;
@@ -35,7 +35,7 @@
 
 .pickerTab[data-active] {
   color: var(--kd-text);
-  font-weight: 500;
+  font-weight: var(--weight-medium);
 }
 
 .pickerTab[data-active]::after {
@@ -107,7 +107,7 @@
   padding: 40px 0;
   text-align: center;
   color: var(--kd-text-secondary);
-  font-size: 13px;
+  font-size: var(--text-xs);
 }
 
 .emojiTab {
@@ -172,7 +172,7 @@
   border: 0;
   background: transparent;
   font: inherit;
-  font-size: 12px;
+  font-size: var(--text-xs);
   color: var(--kd-text-secondary);
   padding: 5px 10px;
   cursor: pointer;
@@ -262,7 +262,7 @@
   align-items: center;
   gap: 6px;
   font: inherit;
-  font-size: 14px;
+  font-size: var(--text-sm);
   color: var(--kd-text-tertiary);
   padding: 4px 8px;
   border-radius: 6px;

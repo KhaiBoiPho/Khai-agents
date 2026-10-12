@@ -1,7 +1,7 @@
 /*
  * Original KhaiDocs code, MIT.
  *
- * "New page from template": sends the template's Markdown to Docmost's core
+ * "New page from template": sends the template's Markdown to the client's core
  * import endpoint (POST /api/pages/import, multipart `spaceId` + `file`),
  * gives the page the template's icon, adds it to the sidebar tree and opens
  * it — the same steps the core import modal and "New page" take.

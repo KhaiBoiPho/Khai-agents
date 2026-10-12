@@ -34,6 +34,7 @@ anyio==4.14.2
     #   langsmith
     #   mcp
     #   openai
+    #   pycrdt
     #   sse-starlette
     #   starlette
 argon2-cffi==25.1.0
@@ -261,7 +262,10 @@ lxml==6.1.3
     #   python-docx
     #   python-pptx
 markdown-it-py==4.2.0
-    # via rich
+    # via
+    #   -c scripts/ci/../../desktop/sidecar-requirements.lock
+    #   deepcode-hku
+    #   rich
 mcp==1.29.0
     # via
     #   -c scripts/ci/../../desktop/sidecar-requirements.lock
@@ -270,7 +274,9 @@ mcp==1.29.0
 mcp-server-git==2026.8.18
     # via deepcode-hku
 mdurl==0.1.2
-    # via markdown-it-py
+    # via
+    #   -c scripts/ci/../../desktop/sidecar-requirements.lock
+    #   markdown-it-py
 more-itertools==11.1.0 ; platform_machine != 'ppc64le' and platform_machine != 's390x'
     # via
     #   jaraco-classes
@@ -352,6 +358,10 @@ pycparser==3.0 ; implementation_name != 'PyPy'
     # via
     #   -c scripts/ci/../../desktop/sidecar-requirements.lock
     #   cffi
+pycrdt==0.14.8
+    # via
+    #   -c scripts/ci/../../desktop/sidecar-requirements.lock
+    #   deepcode-hku
 pydantic==2.12.5
     # via
     #   -c scripts/ci/../../desktop/sidecar-requirements.lock

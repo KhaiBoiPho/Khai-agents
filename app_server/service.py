@@ -25,7 +25,9 @@ from app_server.errors import RpcError
 from app_server.protocol.codec import decode_request
 from app_server.service_client import ServiceClient, ServiceUnavailable
 from app_server.service_state import ServiceFiles, ServiceRecord, identity_proof
-from app_server.khaidocs_proxy import KhaiDocsProxy
+from app_server.khaidocs.api import KhaiUser
+from app_server.khaidocs.context import KhaiDocsContext
+from app_server.khaidocs.routes import install as install_khaidocs
 from app_server.websocket import WebSocketTransport
 from app_server.web_surface import WebSurface
 from core.application.application import DeepCodeApplication
@@ -37,6 +39,8 @@ from core.private_storage import ensure_private_directory, open_private_file
 
 logger = logging.getLogger(__name__)
 MAX_CONTROL_BYTES = 16_384
+# KhaiDocs pages and imports are larger than a control message.
+MAX_DOCS_BYTES = 10 * 1024 * 1024 + 1024
 
 
 def _remote_settings() -> tuple[str, str, str]:
@@ -75,6 +79,7 @@ class ControlServer:
             self.public_origin.split("://", 1)[-1] if self.public_origin else ""
         )
         self.lifecycle = ServiceLifecycle(host.application)
+        self._docs_account: tuple | None = None
         self.stopped = asyncio.Event()
         self.interrupt = threading.Event()
         self.phase = "ready"
@@ -108,7 +113,7 @@ class ControlServer:
         if self.worker_auth is not None:
             return self._worker_application()
         app = web.Application(
-            client_max_size=MAX_CONTROL_BYTES, middlewares=[self._local_only]
+            client_max_size=MAX_DOCS_BYTES, middlewares=[self._local_only]
         )
         app.add_routes(
             [
@@ -123,15 +128,49 @@ class ControlServer:
             ]
         )
         app.add_routes(self.web_surface.routes())
-        # After the service's own /api routes, which therefore keep priority.
-        khaidocs = KhaiDocsProxy(self.browser_auth, self.web_surface.assets)
-        self.khaidocs = khaidocs
-        app.add_routes(khaidocs.routes())
-        app.on_cleanup.append(khaidocs.close)
+        # Native KhaiDocs, after the service's own /api routes, which keep
+        # priority. Its only identity is this service's primary administrator,
+        # behind the same browser session as the rest of the web client.
+        self.docs = KhaiDocsContext(
+            self.host.application.database.system(), self._docs_user
+        )
+        install_khaidocs(app, self.docs)
+        app.router.add_get("/khaidocs/{path:.*}", self._khaidocs_asset)
         app.on_shutdown.append(self.business.shutdown)
         app.on_cleanup.append(self.business.cleanup)
         app.on_response_prepare.append(self._private_response)
         return app
+
+    async def _khaidocs_asset(self, request: web.Request) -> web.FileResponse:
+        """KhaiDocs locales and icons, copied into the web build by Vite."""
+
+        root = (self.web_surface.assets / "khaidocs").resolve()
+        relative = Path(request.match_info["path"])
+        path = (root / relative).resolve()
+        if (
+            relative.is_absolute()
+            or ".." in relative.parts
+            or not path.is_relative_to(root)
+            or not path.is_file()
+        ):
+            raise web.HTTPNotFound()
+        return web.FileResponse(path)
+
+    async def _docs_user(self, request: web.Request) -> KhaiUser:
+        session = self.browser_auth.require(request)
+        if self._docs_account is None:
+            self._docs_account = await asyncio.to_thread(self._load_docs_account)
+        return KhaiUser(*self._docs_account, session=session)
+
+    def _load_docs_account(self) -> tuple:
+        database = self.host.application.database
+        user_id = database.user_id
+        with database.system().read() as connection:
+            row = connection.execute(
+                "SELECT username, display_name, role, created_at FROM users WHERE id = ?",
+                (user_id,),
+            ).fetchone()
+        return (user_id, row["username"], row["display_name"], row["role"], row["created_at"])
 
     def _worker_application(self) -> web.Application:
         """Business RPC, uploads and downloads for one user's gateway only."""
@@ -504,14 +543,6 @@ async def serve(files: ServiceFiles, port: int) -> None:
                 continue
             installed_signals.append(sig)
         files.publish(record, token)
-        if control.worker_auth is None:
-            # KhaiDocs comes up alongside the service and signs in on its own.
-            # (In the hosted deployment the gateway serves it instead.)
-            from app_server import khaidocs_stack
-
-            khaidocs_stack.start_in_background(
-                control.khaidocs.server, control.khaidocs.set_credentials
-            )
         logger.info("Service ready at %s (pid %d)", record.url, record.pid)
         await control.stopped.wait()
     finally:
