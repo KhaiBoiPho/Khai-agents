@@ -10,6 +10,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { PLANNER_KEYS, readStore, writeStore } from "../shared/persistentState";
+import { usePlannerReload } from "../shared/plannerSync";
 import { createSeed } from "./seed";
 import * as model from "./taskModel";
 import type { Task, TasksState, TaskStatus } from "./types";
@@ -46,6 +47,12 @@ export function useTaskStore(): [TasksState, TaskActions] {
   useEffect(() => {
     writeStore(PLANNER_KEYS.tasks, state);
   }, [state]);
+  // A newer copy from the server (another tab, or the agent).
+  usePlannerReload(PLANNER_KEYS.tasks, () => {
+    const next = readTaskState();
+    latest.current = next;
+    setState(next);
+  });
 
   const commit = useCallback((next: TasksState) => {
     if (next === latest.current) return;

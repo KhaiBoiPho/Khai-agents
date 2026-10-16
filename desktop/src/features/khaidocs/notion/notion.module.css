@@ -158,13 +158,23 @@
   overflow: hidden;
   background: var(--kd-floating);
   box-shadow: var(--kd-shadow-sm);
-  opacity: 1;
+  opacity: 0;
+  pointer-events: none;
   transition: opacity 120ms ease;
 }
 
 .cover:hover .coverActions,
+.cover:focus-within .coverActions,
 .coverActions:focus-within {
   opacity: 1;
+  pointer-events: auto;
+}
+
+@media (hover: none) {
+  .coverActions {
+    opacity: 1;
+    pointer-events: auto;
+  }
 }
 
 .coverButton {

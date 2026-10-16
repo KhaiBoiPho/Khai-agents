@@ -1,0 +1,35 @@
+.handle {
+  position: absolute;
+  z-index: 7;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 9px;
+  cursor: col-resize;
+  touch-action: none;
+}
+
+.handle::after {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 2px;
+  background: transparent;
+  content: "";
+  transition: background-color 120ms ease, width 120ms ease;
+}
+
+.handle:hover::after,
+.handle:focus-visible::after,
+.handle[data-dragging]::after {
+  width: 3px;
+  background: var(--signal);
+}
+
+.handle:focus-visible { outline: 0; }
+
+:global(body:has([aria-label="Resize companion panel"][data-dragging])) {
+  cursor: col-resize;
+  user-select: none;
+}

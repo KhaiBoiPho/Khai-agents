@@ -20,6 +20,8 @@ import {
   useCitationHandler,
 } from "./citations";
 import styles from "./MarkdownContent.module.css";
+import { MermaidDiagram } from "./MermaidDiagram";
+import { splitMarkdownBlocks } from "./markdownBlocks";
 
 interface MarkdownContentProps {
   children: string;
@@ -126,6 +128,11 @@ const REMARK_PLUGINS = [remarkGfm];
 
 const MARKDOWN_COMPONENTS: Components = {
   a: MarkdownLink,
+  table: ({ children }) => (
+    <div className={styles.tableScroll}>
+      <table>{children}</table>
+    </div>
+  ),
   pre: ({ children: preChildren }) => <>{preChildren}</>,
   code: ({ node, className, children: codeChildren, ...props }) => {
     void node;
@@ -133,7 +140,9 @@ const MARKDOWN_COMPONENTS: Components = {
     const language = /language-([\w-]+)/.exec(className ?? "")?.[1] ?? "";
     const block = Boolean(language) || String(codeChildren).includes("\n");
     if (block) {
-      return <CodeBlock code={code} language={language} />;
+      const codeBlock = <CodeBlock code={code} language={language} />;
+      if (language === "mermaid") return <MermaidDiagram code={code} fallback={codeBlock} />;
+      return codeBlock;
     }
     return (
       <code {...props} className={className}>
@@ -143,24 +152,26 @@ const MARKDOWN_COMPONENTS: Components = {
   },
 };
 
+const MarkdownBlock = memo(function MarkdownBlock({ text }: { text: string }) {
+  return (
+    <ReactMarkdown remarkPlugins={REMARK_PLUGINS} skipHtml components={MARKDOWN_COMPONENTS}>
+      {text}
+    </ReactMarkdown>
+  );
+});
+
 export const MarkdownContent = memo(function MarkdownContent({
   children,
   compact = false,
 }: MarkdownContentProps) {
   const openCitation = useCitationHandler();
-  const markdown = useMemo(
-    () => (openCitation ? linkCitations(children) : children),
+  const blocks = useMemo(
+    () => splitMarkdownBlocks(openCitation ? linkCitations(children) : children),
     [children, openCitation],
   );
   return (
     <div className={styles.markdown} data-compact={compact}>
-      <ReactMarkdown
-        remarkPlugins={REMARK_PLUGINS}
-        skipHtml
-        components={MARKDOWN_COMPONENTS}
-      >
-        {markdown}
-      </ReactMarkdown>
+      {blocks.map((block, index) => <MarkdownBlock key={index} text={block} />)}
     </div>
   );
 });

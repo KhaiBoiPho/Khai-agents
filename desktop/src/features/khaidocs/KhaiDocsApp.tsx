@@ -23,7 +23,7 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { HelmetProvider } from "react-helmet-async";
 import { I18nextProvider, useTranslation } from "react-i18next";
-import { MemoryRouter, useLocation, useNavigate } from "react-router-dom";
+import { MemoryRouter, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 
 import App from "./client/App";
 import { readHostScheme, type HostScheme } from "./notion/host-scheme";
@@ -32,6 +32,8 @@ import i18n from "./client/i18n";
 import { queryClient } from "./client/main";
 import { mantineCssResolver, theme } from "./client/theme";
 import { bindKhaiDocsRouter, trackKhaiDocsLocation } from "./client/lib/khaidocs-navigation";
+import Page from "./client/pages/page/page";
+import { UserProvider } from "./client/features/user/user-provider";
 
 /** Follows the host theme: re-reads the scheme whenever the host restyles <html>. */
 function useHostColorScheme(): HostScheme {
@@ -111,10 +113,12 @@ function useServerReachable(): boolean | null {
 
 interface KhaiDocsAppProps {
   /** "settings" renders only KhaiDocs' settings, for the app's Settings window. */
-  view?: "app" | "settings";
+  view?: "app" | "settings" | "page-panel";
+  /** Open an existing KhaiDocs route, such as a page selected from chat notes. */
+  initialPath?: string;
 }
 
-export default function KhaiDocsApp({ view = "app" }: KhaiDocsAppProps) {
+export default function KhaiDocsApp({ view = "app", initialPath = "/home" }: KhaiDocsAppProps) {
   const rootRef = useRef<HTMLDivElement | null>(null);
   const [root, setRoot] = useState<HTMLDivElement | null>(null);
   useHostLanguage();
@@ -153,7 +157,7 @@ export default function KhaiDocsApp({ view = "app" }: KhaiDocsAppProps) {
       }}
     >
       {root ? (
-        <MemoryRouter initialEntries={["/home"]}>
+        <MemoryRouter initialEntries={[initialPath]}>
           <MantineProvider
             theme={scaledTheme}
             cssVariablesResolver={mantineCssResolver}
@@ -167,7 +171,11 @@ export default function KhaiDocsApp({ view = "app" }: KhaiDocsAppProps) {
                   <Notifications position="bottom-center" limit={3} zIndex={10000} />
                   <HelmetProvider>
                     <RouterBridge />
-                    {view === "settings" ? <KhaiDocsSettings /> : <App />}
+                    {view === "settings" ? <KhaiDocsSettings /> : view === "page-panel" ? (
+                      <Routes>
+                        <Route path="/s/:spaceSlug/p/:pageSlug" element={<UserProvider><Page /></UserProvider>} />
+                      </Routes>
+                    ) : <App />}
                   </HelmetProvider>
                 </QueryClientProvider>
               </ModalsProvider>

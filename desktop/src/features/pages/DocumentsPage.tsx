@@ -253,7 +253,26 @@ function DocumentPreview({
   if (error) return <p className={styles.previewMessage}>Could not load this file: {error}</p>;
   if (text === null) return <div className={styles.previewLoading}><LoadingDots /> Opening document</div>;
   // Suspends inside the preview's Suspense boundary while the renderer loads.
-  if (/\.(md|mdx|markdown)$/i.test(document.path)) return <MarkdownContent>{text}</MarkdownContent>;
+  if (/\.(md|mdx|markdown)$/i.test(document.path)) {
+    return (
+      <article className={styles.markdownPreview}>
+        <MarkdownContent>{text}</MarkdownContent>
+      </article>
+    );
+  }
+  // Render HTML pages as pages, isolated like the Files panel's preview:
+  // scripts may run (charts), but never with this app's origin.
+  if (/\.html?$/i.test(document.path)) {
+    return (
+      <iframe
+        className={styles.htmlPreview}
+        title={`Preview of ${document.name}`}
+        sandbox="allow-scripts"
+        referrerPolicy="no-referrer"
+        srcDoc={text}
+      />
+    );
+  }
   return <pre className={styles.plainPreview}>{text}</pre>;
 }
 

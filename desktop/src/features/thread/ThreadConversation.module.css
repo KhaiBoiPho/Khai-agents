@@ -10,7 +10,11 @@
   height: 100%;
   overflow-y: auto;
   overscroll-behavior: contain;
-  scroll-behavior: smooth;
+  /* Stream updates follow the newest content once per animation frame.
+     Keeping the scroller itself smooth restarts an eased scroll for every
+     token and makes the first response feel delayed and jittery. User-initiated
+     jumps still request smooth behavior explicitly in ThreadConversation. */
+  scroll-behavior: auto;
 }
 
 .conversation {
@@ -284,6 +288,17 @@
 .assistantMessage {
   min-width: 0;
   margin: 9px 0 11px;
+}
+
+.assistantMessage[data-status="in_progress"] {
+  animation: assistant-enter 180ms ease-out both;
+}
+
+@keyframes assistant-enter {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
 }
 
 .assistantMessage[data-phase="commentary"] {

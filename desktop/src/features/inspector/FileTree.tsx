@@ -1,4 +1,5 @@
 import { ChevronRight } from "lucide-react";
+import { FileName } from "./FileName";
 import { useMemo, useRef, type KeyboardEvent } from "react";
 
 import { FileIcon, FolderIcon } from "./FileIcon";
@@ -124,7 +125,7 @@ export function FileTree({
             </span>
             {isFolder ? <FolderIcon open={open} /> : <FileIcon name={node.name} />}
             <span className={styles.name} data-symlink={node.kind === "symlink" || undefined}>
-              {displayFileName(node.name)}
+              {isFolder ? displayFileName(node.name) : <FileName name={displayFileName(node.name)} />}
             </span>
             {indexState ? (
               <span

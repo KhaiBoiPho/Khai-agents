@@ -19,9 +19,6 @@ venv/
 dist/
 build/
 site/
-desktop/src-tauri/target/
-desktop/src-tauri/gen/
-desktop/build/sidecar/
 
 # Logs / Reports
 *.log
@@ -102,3 +99,7 @@ credentials.json
 
 # Bundled GenOffice CLI (scripts/setup-genoffice.sh)
 tools/genoffice/
+
+# Local runtime data and browser-automation logs
+/.local-data/
+/.playwright-mcp/

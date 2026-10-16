@@ -29,7 +29,14 @@ import { currentPageEditModeAtom } from "@/features/editor/atoms/editor-atoms.ts
 import { EmptyPageGetStarted } from "@/features/editor/components/empty-page/empty-page-get-started";
 // KhaiDocs: Notion-style icon/cover controls above the title (MIT, ../../../notion).
 import { PageHead } from "../../../notion/PageTop";
-import { usePageQuery } from "@/features/page/queries/page-query";
+import {
+  useGetSidebarPagesQuery,
+  usePageQuery,
+} from "@/features/page/queries/page-query";
+import { sortPositionKeys } from "@/features/page/tree/utils/utils";
+import { buildPageUrl } from "@/features/page/page.utils.ts";
+import { Link } from "react-router-dom";
+import { PageIcon } from "../../../notion/PageIcon";
 import { SINGLE_USER } from "@/lib/khaidocs-mode.ts";
 
 const MemoizedTitleEditor = React.memo(TitleEditor);
@@ -72,8 +79,10 @@ export function FullEditor({
 }: FullEditorProps) {
   const [user] = useAtom(userAtom);
   const fullPageWidth = user.settings?.preferences?.fullPageWidth;
+  // KhaiDocs exposes the formatting actions from its slash menu, keeping the
+  // page canvas clear even when an older account preference enabled the bar.
   const editorToolbarEnabled =
-    user.settings?.preferences?.editorToolbar ?? false;
+    !SINGLE_USER && (user.settings?.preferences?.editorToolbar ?? false);
   const [currentPageEditMode, setCurrentPageEditMode] = useAtom(
     currentPageEditModeAtom,
   );
@@ -129,8 +138,60 @@ export function FullEditor({
         content={content}
         canComment={canComment}
       />
+      {SINGLE_USER && (
+        <AutomaticChildPages
+          pageId={pageId}
+          spaceSlug={spaceSlug}
+          content={content}
+        />
+      )}
       <EmptyPageGetStarted pageId={pageId} editable={editable} />
     </Container>
+  );
+}
+
+function hasSubpagesBlock(value: unknown): boolean {
+  let document = value;
+  if (typeof document === "string") {
+    try {
+      document = JSON.parse(document);
+    } catch {
+      return false;
+    }
+  }
+  if (!document || typeof document !== "object") return false;
+  const node = document as { type?: unknown; content?: unknown };
+  if (node.type === "subpages") return true;
+  return Array.isArray(node.content) && node.content.some(hasSubpagesBlock);
+}
+
+function AutomaticChildPages({
+  pageId,
+  spaceSlug,
+  content,
+}: {
+  pageId: string;
+  spaceSlug: string;
+  content: string;
+}) {
+  const { data } = useGetSidebarPagesQuery({ pageId });
+  const children = sortPositionKeys(data?.pages.flatMap((page) => page.items) ?? []);
+
+  if (hasSubpagesBlock(content) || children.length === 0) return null;
+
+  return (
+    <div className="kd-auto-subpages" aria-label="Subpages">
+      {children.map((child) => (
+        <Link
+          className="kd-auto-subpage"
+          key={child.id}
+          to={buildPageUrl(spaceSlug, child.slugId, child.title)}
+        >
+          <PageIcon icon={child.icon} size={18} />
+          <span>{child.title || (child.isBase ? "Untitled base" : "Untitled")}</span>
+        </Link>
+      ))}
+    </div>
   );
 }
 

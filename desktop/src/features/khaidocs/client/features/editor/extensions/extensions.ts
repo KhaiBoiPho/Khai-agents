@@ -11,6 +11,7 @@ import SubScript from "@tiptap/extension-subscript";
 import { Typography } from "@tiptap/extension-typography";
 import { TextStyle } from "@tiptap/extension-text-style";
 import { Color } from "@tiptap/extension-color";
+import { BlockBackground } from "./block-background";
 import { Youtube } from "@tiptap/extension-youtube";
 import SlashCommand, {
   SlashCommandExtension as Command,
@@ -49,7 +50,6 @@ import {
   Mention,
   TableDndExtension,
   TableHandleCommandsExtension,
-  TableHeaderPin,
   TableReadonlySort,
   Subpages,
   Heading,
@@ -247,6 +247,7 @@ export const mainExtensions = [
   }),
   TextStyle,
   Color,
+  BlockBackground,
   SlashCommand,
   EmojiCommand,
   Comment.configure({
@@ -286,7 +287,6 @@ export const mainExtensions = [
   TableHeader,
   TableDndExtension,
   TableHandleCommandsExtension,
-  TableHeaderPin,
   TableReadonlySort,
   MathInline.configure({
     view: MathInlineView,

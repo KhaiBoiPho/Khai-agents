@@ -11,6 +11,7 @@ declare module "@tiptap/core" {
   interface Commands<ReturnType> {
     details: {
       setDetails: () => ReturnType;
+      setDetailsHeading: (level: number) => ReturnType;
       unsetDetails: () => ReturnType;
       toggleDetails: () => ReturnType;
     };
@@ -174,6 +175,27 @@ export const Details = Node.create<DetailsOptions>({
             .setTextSelection(range.start + 2)
             .run();
         };
+      },
+
+      setDetailsHeading: (level: number) => ({ state, chain }) => {
+        const { $from } = state.selection;
+        const depth = $from.depth;
+        const heading = $from.node(depth);
+        if (heading.type.name !== "heading" || heading.attrs.level !== level) return false;
+        const start = $from.before(depth);
+        const end = $from.after(depth);
+        const summary = { type: "detailsSummary", attrs: { level }, content: heading.content.toJSON() };
+        const content = { type: "detailsContent", content: [] as any[] };
+        const parent = $from.node(depth - 1);
+        const index = $from.index(depth - 1);
+        for (let i = index + 1; i < parent.childCount; i++) {
+          const child = parent.child(i);
+          if (child.type.name === "heading" && Number(child.attrs.level) <= level) break;
+          content.content.push(child.toJSON());
+        }
+        return chain().insertContentAt({ from: start, to: end + content.content.reduce((size, node) => size + state.schema.nodeFromJSON(node).nodeSize, 0) }, {
+          type: this.name, attrs: { open: true }, content: [summary, content],
+        }).run();
       },
 
       unsetDetails: () => {

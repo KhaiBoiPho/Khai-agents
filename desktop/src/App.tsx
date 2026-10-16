@@ -1,5 +1,6 @@
 import {
   FolderOpen,
+  MessageCircle,
   MessageSquarePlus,
   PanelLeftOpen,
   PanelRight,
@@ -35,6 +36,7 @@ import { ReviewResizer } from "./features/inspector/ReviewResizer";
 import { useReviewWidth } from "./features/inspector/useReviewWidth";
 import type { SidebarPage } from "./features/navigation/DesktopSidebar";
 import { useTranscriptMode } from "./features/thread/transcriptMode";
+import { useCompanionWidth } from "./features/thread/useCompanionWidth";
 import type { ClientRuntime } from "./rpc/contracts";
 import type { SkillInfo } from "./generated/app-server";
 import { initI18n } from "./app/i18n";
@@ -87,6 +89,11 @@ const SettingsDialog = lazy(() =>
 const ThreadConversation = lazy(() =>
   import("./features/thread/ThreadConversation").then((module) => ({
     default: module.ThreadConversation,
+  })),
+);
+const ConversationCompanion = lazy(() =>
+  import("./features/thread/ConversationCompanion").then((module) => ({
+    default: module.ConversationCompanion,
   })),
 );
 const WorkflowComposer = lazy(() =>
@@ -204,6 +211,8 @@ export function App({
   const [composerIntent, setComposerIntent] =
     useState<ComposerLaunchIntent | null>(null);
   const [expandedPlanThreadId, setExpandedPlanThreadId] = useState<string | null>(null);
+  const [companionOpen, setCompanionOpen] = useState(false);
+  const [companionWidth, setCompanionWidth] = useCompanionWidth();
   const { state, selectedProject, selectedThread } = controller;
   const [sidebarHidden, setSidebarHidden] = useState(readSidebarHidden);
   const [sidebarWidth, setSidebarWidth] = useState(readSidebarWidth);
@@ -340,6 +349,9 @@ export function App({
   const inspectorVisible = Boolean(
     showingThreads && !showHome && page === null && selectedThread && ui.inspectorOpen,
   );
+  const companionVisible = Boolean(
+    companionOpen && showingThreads && !showHome && page === null && selectedThread && selectedProject,
+  );
 
   // Entering a session reads ahead its files and the code editor, so opening
   // them is instant; a new chat or another session drops that cache.
@@ -368,9 +380,10 @@ export function App({
   return (
     <main
       className={styles.shell}
-      style={{ "--review-width": `${reviewWidth}px`, "--sidebar-width": `${sidebarWidth}px` } as CSSProperties}
+      style={{ "--review-width": `${reviewWidth}px`, "--sidebar-width": `${sidebarWidth}px`, "--companion-width": `${companionWidth}px` } as CSSProperties}
       data-inspector={inspectorVisible}
       data-sidebar={sidebarHidden ? "hidden" : "shown"}
+      data-companion={companionVisible}
     >
       {sidebarHidden ? null : (
       <DesktopSidebar
@@ -466,7 +479,7 @@ export function App({
         <SidebarResizer width={sidebarWidth} onResize={setSidebarWidth} />
       ) : null}
 
-      <section className={styles.workspace} aria-labelledby="thread-title">
+      <section className={styles.workspace} data-workspace-shell="true" aria-labelledby="thread-title">
         {sidebarHidden ? (
           <button
             type="button"
@@ -602,6 +615,19 @@ export function App({
                 {selectedThread?.title ?? selectedProject?.displayName ?? "Khai-Agents"}
               </h1>
             {selectedThread ? (
+              <>
+              <button
+                type="button"
+                className={`${styles.reviewToggle} ${styles.companionToggle}`}
+                data-active={companionOpen}
+                onClick={() => setCompanionOpen((open) => !open)}
+                aria-pressed={companionOpen}
+                aria-label={companionOpen ? "Đóng khung hỏi về chat" : "Hỏi về cuộc trò chuyện này"}
+                title={companionOpen ? "Đóng khung hỏi về chat" : "Hỏi về cuộc trò chuyện này"}
+              >
+                <MessageCircle size={16} />
+                Hỏi về chat
+              </button>
               <button
                 type="button"
                 className={styles.reviewToggle}
@@ -614,6 +640,7 @@ export function App({
                 {inspectorVisible ? <PanelRightClose size={16} /> : <PanelRight size={16} />}
                 Review
               </button>
+              </>
             ) : null}
             </header>
 
@@ -727,6 +754,7 @@ export function App({
               <Composer
                 key={selectedThread.id}
                 editable={composerEditable}
+                companionOpen={companionOpen}
                 canExecute={agentExecutionEnabled}
                 busy={state.busy}
                 conversationStarted={state.turns.some(
@@ -824,6 +852,20 @@ export function App({
                 }}
               />
             ) : null}
+            {companionOpen && selectedThread && selectedProject ? (
+              <Suspense fallback={<LoadingSurface compact>Đang mở khung hỏi…</LoadingSurface>}>
+                <ConversationCompanion
+                  key={selectedThread.id}
+                  runtime={runtime}
+                  thread={selectedThread}
+                  turns={state.turns}
+                  items={state.items}
+                  width={companionWidth}
+                  onResize={setCompanionWidth}
+                  onClose={() => setCompanionOpen(false)}
+                />
+              </Suspense>
+            ) : null}
           </>
         ) : (
           <Suspense
@@ -852,6 +894,7 @@ export function App({
           <ReviewResizer
             width={reviewWidth}
             sidebarWidth={sidebarHidden ? 0 : sidebarWidth}
+            companionWidth={companionVisible ? companionWidth : 0}
             onResize={setReviewWidth}
           />
           <Suspense fallback={<LoadingSurface>Loading review…</LoadingSurface>}>

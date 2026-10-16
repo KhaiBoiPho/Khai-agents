@@ -1432,6 +1432,17 @@ class AgentRunner:
                 f"Error: tool {tool_call.name!r} is not allowed by the active "
                 "Skill policy"
             )
+            if "request_tools" in allowed and spec.tools.has(tool_call.name):
+                # Hidden by the per-turn tool router, not forbidden.
+                from core.agent_runtime.tool_router import group_of
+
+                group = group_of(tool_call.name)
+                message = (
+                    f"Error: tool {tool_call.name!r} is not loaded for this turn. "
+                    f"Call request_tools with groups=[{group!r}] first."
+                    if group
+                    else f"Error: tool {tool_call.name!r} is not loaded for this turn."
+                )
             return (
                 message + _HINT,
                 {

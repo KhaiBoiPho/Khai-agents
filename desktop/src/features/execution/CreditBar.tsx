@@ -100,8 +100,9 @@ export function CreditBar({ runtime, threadId, connectionId, refreshKey }: Credi
       data-low={low || undefined}
     >
       <span className={styles.amount}>
-        OpenRouter <strong>{remaining !== null ? usd(remaining) : "—"}</strong>
-        {total ? ` / ${usd(total)}` : null}
+        <span className={styles.label}>OpenRouter </span>
+        <strong>{remaining !== null ? usd(remaining) : "—"}</strong>
+        {total ? <span className={styles.total}> / {usd(total)}</span> : null}
       </span>
       <span className={styles.track}>
         <span className={styles.fill} style={{ width: `${share}%` }} />

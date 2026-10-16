@@ -8,7 +8,7 @@ import postcss, { type AcceptedPlugin } from "postcss";
 import mantinePreset from "postcss-preset-mantine";
 import simpleVars from "postcss-simple-vars";
 
-const host = process.env.TAURI_DEV_HOST;
+const host = process.env.DEV_HOST;
 
 /**
  * Where Khai's server (the gateway, which serves KhaiDocs natively under
@@ -160,9 +160,6 @@ export default defineConfig(({ mode }) => {
             port: 1421,
           }
         : undefined,
-      watch: {
-        ignored: ["**/src-tauri/**"],
-      },
       proxy: {
         "/api": khaiDocsProxy(),
         "/socket.io": khaiDocsProxy(),

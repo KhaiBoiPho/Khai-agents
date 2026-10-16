@@ -98,6 +98,61 @@
   background-color: transparent;
 }
 
+/* KhaiDocs' real page editor can also run inside the chat companion. Keep its
+   route and editor contained in that narrow panel instead of mounting the
+   full workspace shell. */
+.khaidocs-root[data-view="page-panel"] {
+  height: 100%;
+  overflow: hidden;
+  contain: layout paint;
+}
+
+.khaidocs-root[data-view="page-panel"] .kd-page {
+  height: 100%;
+  overflow: auto;
+  padding-top: 45px;
+  overscroll-behavior: contain;
+}
+
+.khaidocs-root[data-view="page-panel"] [data-page-header="true"] {
+  position: absolute;
+  top: 0;
+  inset-inline: 0;
+  z-index: 99;
+}
+
+.khaidocs-root[data-view="page-panel"] [data-page-header-controls="true"] {
+  display: none;
+}
+
+.khaidocs-root[data-view="page-panel"] [data-page-header="true"] {
+  display: none;
+}
+
+.khaidocs-root[data-view="page-panel"] .kd-page {
+  padding-top: 0;
+}
+
+/* The block "+" and six-dot handle sit left of each block (~64px together).
+   The panel clips overflow, so reserve that gutter instead of the default
+   16px container padding, which pressed them against the panel edge. */
+.khaidocs-root[data-view="page-panel"] .kd-editor {
+  padding-left: 68px;
+  padding-right: 20px;
+}
+
+.khaidocs-root[data-view="page-panel"] [data-fixed-toolbar="true"] {
+  top: 0;
+}
+
+.khaidocs-root[data-view="page-panel"] [data-kd-cover] {
+  margin-top: 0;
+}
+
+.khaidocs-root[data-view="page-panel"] .kd-page:has([data-fixed-toolbar="true"]) [data-kd-cover] {
+  margin-top: 45px;
+}
+
 /* Containers that are focused programmatically (the aside, dialogs) keep the
    browser's blue ring otherwise; the host draws none on them. */
 .khaidocs-root :where(aside, main, section, [tabindex="-1"]):focus {

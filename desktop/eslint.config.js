@@ -9,8 +9,6 @@ export default tseslint.config(
     ignores: [
       "dist",
       "src/generated",
-      "src-tauri/target",
-      "src-tauri/gen",
       // Vendored the client (KhaiDocs); linted upstream, not against this config.
       "src/features/khaidocs/client",
       "src/features/khaidocs/editor-ext",

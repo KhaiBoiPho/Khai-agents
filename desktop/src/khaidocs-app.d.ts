@@ -5,6 +5,6 @@
 declare module "khaidocs-app" {
   import type { ComponentType } from "react";
 
-  const KhaiDocsApp: ComponentType<{ view?: "app" | "settings" }>;
+  const KhaiDocsApp: ComponentType<{ view?: "app" | "settings" | "page-panel"; initialPath?: string }>;
   export default KhaiDocsApp;
 }

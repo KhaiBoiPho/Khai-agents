@@ -11,6 +11,7 @@
 import { useCallback, useEffect, useState } from "react";
 
 import { isoDate, PLANNER_KEYS, readStore, writeStore } from "../shared/persistentState";
+import { usePlannerReload } from "../shared/plannerSync";
 import { dateKeysInRange, daysBetween, isDateKey } from "./dates";
 import {
   MAX_CYCLE_LENGTH,
@@ -291,6 +292,7 @@ export function useScheduleStore() {
   useEffect(() => {
     writeStore(PLANNER_KEYS.schedule, state);
   }, [state]);
+  usePlannerReload(PLANNER_KEYS.schedule, () => setState(loadScheduleState()));
   /** Applies an edit; returns the error message instead of throwing. */
   const apply = useCallback((edit: (current: ScheduleState) => ScheduleState): string | null => {
     let next: ScheduleState;

@@ -93,6 +93,7 @@ import { PlanProgress } from "../thread/PlanProgress";
 
 interface ComposerProps {
   editable: boolean;
+  companionOpen?: boolean;
   canExecute: boolean;
   busy: boolean;
   /** True once this thread has any Turn — the agent preset is then fixed. */
@@ -167,6 +168,7 @@ export interface ComposerLaunchIntent {
 
 export function Composer({
   editable,
+  companionOpen = false,
   canExecute,
   busy,
   conversationStarted,
@@ -224,6 +226,20 @@ export function Composer({
     thread?.id ?? "unselected",
     initialLaunch?.prompt,
   );
+  const promptRef = useRef(prompt);
+  const setPromptRef = useRef(setPrompt);
+  promptRef.current = prompt;
+  setPromptRef.current = setPrompt;
+  useEffect(() => {
+    const insertAnswer = (event: Event) => {
+      const detail = (event as CustomEvent<{ threadId: string; text: string }>).detail;
+      if (!thread?.id || detail?.threadId !== thread.id || !detail.text?.trim()) return;
+      const current = promptRef.current.trimEnd();
+      setPromptRef.current(current ? `${current}\n\n${detail.text.trim()}` : detail.text.trim());
+    };
+    window.addEventListener("deepcode:companion-insert", insertAnswer);
+    return () => window.removeEventListener("deepcode:companion-insert", insertAnswer);
+  }, [thread?.id]);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const regionRef = useRef<HTMLElement | null>(null);
 
@@ -581,6 +597,7 @@ export function Composer({
       ref={regionRef}
       className={styles.region}
       data-centered={!conversationStarted || undefined}
+      data-companion-open={companionOpen || undefined}
     >
       {!conversationStarted ? (
         <h2 className={styles.greeting}>

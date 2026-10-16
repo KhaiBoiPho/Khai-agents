@@ -14,9 +14,11 @@
 .tabBar {
   display: flex;
   min-width: 0;
+  min-height: var(--side-panel-row);
   align-items: center;
   gap: 6px;
-  padding: 6px 8px;
+  padding: 6px 10px;
+  background: var(--surface-inset, var(--surface-raised));
   border-bottom: 1px solid var(--border-subtle);
 }
 
@@ -35,7 +37,7 @@
 
 .fileTab {
   display: flex;
-  max-width: 220px;
+  max-width: 240px;
   flex-shrink: 0;
   align-items: center;
   border: 1px solid transparent;
@@ -65,14 +67,8 @@
   font-size: var(--text-xs);
 }
 
-.fileTab[data-active] > button:first-child span {
-  font-style: italic;
-}
-
-.fileTab span {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.fileTab > button:first-child > span {
+  min-width: 0;
 }
 
 .closeTab {
@@ -208,11 +204,13 @@
 .row {
   position: relative;
   display: flex;
-  height: 24px;
+  height: 28px;
   flex-shrink: 0;
   align-items: center;
   gap: 5px;
-  padding: 0 10px 0 8px;
+  margin: 0 6px;
+  padding: 0 8px 0 6px;
+  border-radius: var(--radius-sm);
   color: var(--text-secondary);
   font-size: var(--text-xs);
   text-align: left;
@@ -231,10 +229,11 @@
 
 .row[aria-selected="true"]::before {
   position: absolute;
-  top: 0;
-  bottom: 0;
+  top: 6px;
+  bottom: 6px;
   left: 0;
   width: 2px;
+  border-radius: 2px;
   background: var(--signal);
   content: "";
 }
@@ -274,6 +273,8 @@
 }
 
 .name {
+  display: flex;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
 }
@@ -323,7 +324,8 @@
 .viewer > header {
   display: flex;
   min-width: 0;
-  min-height: 40px;
+  min-height: var(--side-panel-row);
+  border-bottom: 1px solid var(--border-subtle);
   align-items: center;
   gap: 4px;
   padding: 4px 8px 4px 14px;
@@ -354,7 +356,10 @@
 }
 
 .breadcrumb strong {
+  display: flex;
+  min-width: 0;
   flex-shrink: 0;
+  max-width: 100%;
   color: var(--text-primary);
   font-weight: var(--weight-medium);
 }
@@ -362,6 +367,14 @@
 .editorBody {
   min-height: 0;
   flex: 1;
+}
+
+.htmlPreview {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  background: #fff;
 }
 
 .preview {
@@ -547,4 +560,42 @@
 .citedLine {
   background: rgb(234 120 34 / 16%);
   box-shadow: inset 3px 0 0 #ea7822;
+}
+
+/* Opening or rendering a file: a quiet spinner in the middle of the pane. */
+.openingFile {
+  display: flex;
+  height: 100%;
+  min-height: 160px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  color: var(--text-tertiary);
+  font-size: var(--text-xs);
+}
+
+.spinner {
+  color: var(--signal);
+  animation: filesSpin 0.9s linear infinite;
+}
+
+@keyframes filesSpin {
+  to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .spinner { animation-duration: 2.4s; }
+}
+
+.htmlFrame {
+  position: relative;
+  height: 100%;
+}
+
+.overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  background: var(--surface-raised);
 }

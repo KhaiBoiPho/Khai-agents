@@ -8,6 +8,8 @@
      every host theme applies live. */
   --kd-font: var(--font-ui-preferred) "Source Sans 3 Variable", "Source Sans 3",
     -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --kd-editor-font: "Source Sans 3 Variable", "Source Sans 3", -apple-system,
+    BlinkMacSystemFont, "Segoe UI", sans-serif;
   --kd-text: var(--text-primary);
   --kd-text-secondary: var(--text-secondary);
   --kd-text-tertiary: var(--text-tertiary);
@@ -110,8 +112,8 @@
 }
 
 .khaidocs-root .kd-editor .ProseMirror {
-  line-height: 1.6;
-  font-family: var(--kd-font);
+  line-height: 1.55;
+  font-family: var(--kd-editor-font);
   color: var(--kd-text);
   background-color: transparent;
 }
@@ -178,6 +180,38 @@
   text-decoration-color: var(--border-emphasis);
   text-underline-offset: 2px;
   font-weight: 400;
+}
+
+/* Nested pages show as linked rows in the parent document, like Notion. */
+.khaidocs-root .kd-editor .kd-auto-subpages {
+  display: grid;
+  padding: 0 3rem;
+  margin-top: 0.5rem;
+  margin-bottom: 1.5rem;
+}
+
+.khaidocs-root .kd-editor .kd-auto-subpage {
+  display: flex;
+  min-height: 42px;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 10px;
+  border-bottom: 1px solid var(--border-subtle);
+  border-radius: 5px;
+  color: var(--text-primary);
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.khaidocs-root .kd-editor .kd-auto-subpage:hover {
+  background: var(--kd-hover);
+  text-decoration: none;
+}
+
+@media (max-width: 768px) {
+  .khaidocs-root .kd-editor .kd-auto-subpages {
+    padding-inline: 1rem;
+  }
 }
 
 /* With the host sidebar hidden, its floating "show" button (10px in, 30px wide,

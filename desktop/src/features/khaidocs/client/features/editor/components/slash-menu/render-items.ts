@@ -1,118 +1,31 @@
-import { ReactRenderer, useEditor } from "@tiptap/react";
-import CommandList from "@/features/editor/components/slash-menu/command-list";
-import {
-  autoUpdate,
-  computePosition,
-  flip,
-  offset,
-  shift,
-} from "@floating-ui/dom";
+import { BLOCK_HANDLE_MENU_EVENT } from "@/features/editor/components/block-actions-menu";
 
-const renderItems = () => {
-  let component: ReactRenderer | null = null;
-  let popup: HTMLElement | null = null;
-  let cleanup: (() => void) | null = null;
-  let getReferenceClientRect: (() => DOMRect) | null = null;
+/**
+ * Slash commands and the six-dot block menu share one palette and one command
+ * handler. Removing the trigger before opening the palette also keeps the
+ * slash suggestion plugin from competing for keyboard focus with the menu.
+ */
+const renderItems = () => ({
+  onStart: (props: {
+    editor: any;
+    range: { from: number; to: number };
+    clientRect?: (() => DOMRect | null) | null;
+  }) => {
+    const { editor, range } = props;
+    const $from = editor.state.doc.resolve(range.from);
+    const position = $from.depth > 0 ? $from.before($from.depth) : range.from;
+    const rect = props.clientRect?.() ?? new DOMRect();
 
-  const updatePosition = () => {
-    if (!popup || !getReferenceClientRect) return;
-
-    // @ts-ignore
-    const rect = getReferenceClientRect();
-
-    computePosition({ getBoundingClientRect: () => rect }, popup, {
-      placement: "bottom-start",
-      middleware: [offset(0), flip(), shift()],
-    }).then(({ x, y }) => {
-      if (popup) {
-        popup.style.left = `${x}px`;
-        popup.style.top = `${y}px`;
-      }
-    });
-  };
-
-  return {
-    onStart: (props: {
-      editor: ReturnType<typeof useEditor>;
-      clientRect: DOMRect;
-    }) => {
-      component = new ReactRenderer(CommandList, {
-        props,
-        editor: props.editor,
-      });
-
-      if (!props.clientRect) {
-        return;
-      }
-
-      // @ts-ignore
-      getReferenceClientRect = props.clientRect;
-
-      popup = document.createElement("div");
-      popup.style.zIndex = "199";
-      popup.style.position = "absolute";
-      popup.style.top = "0";
-      popup.style.left = "0";
-
-      document.body.appendChild(popup);
-      popup.appendChild(component.element);
-
-      cleanup = autoUpdate(
-        // @ts-ignore
-        {
-          getBoundingClientRect: () => {
-            return getReferenceClientRect
-              ? getReferenceClientRect()
-              : new DOMRect();
-          },
-        },
-        popup,
-        updatePosition
-      );
-    },
-    onUpdate: (props: {
-      editor: ReturnType<typeof useEditor>;
-      clientRect: DOMRect;
-    }) => {
-      component?.updateProps(props);
-
-      if (!props.clientRect) {
-        return;
-      }
-
-      // @ts-ignore
-      getReferenceClientRect = props.clientRect;
-      updatePosition();
-    },
-    onKeyDown: (props: { event: KeyboardEvent }) => {
-      if (props.event.key === "Escape") {
-        if (popup) {
-          popup.style.display = "none";
-        }
-
-        return true;
-      }
-
-      // @ts-ignore
-      return component?.ref?.onKeyDown(props);
-    },
-    onExit: () => {
-      if (cleanup) {
-        cleanup();
-        cleanup = null;
-      }
-
-      if (popup) {
-        popup.remove();
-        popup = null;
-      }
-
-      if (component) {
-        component.destroy();
-        component = null;
-      }
-    },
-  };
-};
+    editor.chain().focus().deleteRange(range).run();
+    window.dispatchEvent(
+      new CustomEvent(BLOCK_HANDLE_MENU_EVENT, {
+        detail: { x: rect.left, y: rect.bottom, position },
+      }),
+    );
+  },
+  onUpdate: () => {},
+  onKeyDown: ({ event }: { event: KeyboardEvent }) => event.key === "Escape",
+  onExit: () => {},
+});
 
 export default renderItems;

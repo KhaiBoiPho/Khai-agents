@@ -32,7 +32,6 @@ DESKTOP_IMPACT_FILES = frozenset(
         "__init__.py",
         "deepcode.py",
         "requirements.txt",
-        "rust-toolchain.toml",
         "scripts/ci_scope.py",
     }
 )

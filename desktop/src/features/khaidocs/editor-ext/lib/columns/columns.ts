@@ -53,7 +53,7 @@ function defaultLayoutForCount(count: number): ColumnsLayout {
 export const Columns = Node.create<ColumnsOptions>({
   name: "columns",
   group: "block",
-  content: "column+",
+  content: "column column+",
   defining: true,
   isolating: true,
 

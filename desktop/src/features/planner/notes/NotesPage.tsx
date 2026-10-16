@@ -25,6 +25,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { Dropdown } from "../../../components/Dropdown";
 import { writeStore } from "../shared/persistentState";
+import { usePlannerReload } from "../shared/plannerSync";
 import { toggleChecklistLine } from "./checklist";
 import { NoteCard } from "./NoteCard";
 import { NoteDialog, type NoteDraft } from "./NoteDialog";
@@ -79,6 +80,12 @@ export function NotesPage() {
   useEffect(() => {
     writeStore(NOTES_KEY, data);
   }, [data]);
+  // A newer copy from the server (another tab, or the agent).
+  usePlannerReload(NOTES_KEY, () => {
+    const next = loadNotesData();
+    dataRef.current = next;
+    setData(next);
+  });
 
   useEffect(() => {
     const pending = timers.current;

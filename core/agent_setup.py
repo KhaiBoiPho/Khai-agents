@@ -518,8 +518,20 @@ def build_agent_session(
     # The user's KhaiDocs wiki: present only where a user-bound store exists.
     for khaidocs_tool in khaidocs_tools(docs_store):
         tool_registry.register(khaidocs_tool)
+    # The planner pages (tasks, calendar, notes, schedule), same condition.
+    from core.harness.tools.planner import default_store as planner_store, planner_tools
+
+    for planner_tool in planner_tools(planner_store()):
+        tool_registry.register(planner_tool)
     for extra_tool in extra_tools:
         tool_registry.register(extra_tool)
+    # Per-turn tool selection (Jev on OpenRouter): only the groups a request
+    # needs reach the model; off without a key or with KHAI_TOOL_ROUTER=off.
+    from core.agent_runtime.tool_router import RequestToolsTool, ToolRouter, router_enabled
+
+    tool_router = ToolRouter() if router_enabled() else None
+    if tool_router is not None:
+        tool_registry.register(RequestToolsTool(tool_router))
     _wire_code_mode(
         tool_registry,
         workspace,
@@ -605,7 +617,9 @@ def build_agent_session(
         tool_filter=_compose_tool_filters(
             tool_filter,
             goal_runtime.visible_tool_names if goal_runtime is not None else None,
+            tool_router.filter if tool_router is not None else None,
         ),
+        tool_router=tool_router,
         closure_callback=(
             goal_runtime.closure_prompt if goal_runtime is not None else None
         ),

@@ -18,7 +18,7 @@
 .markdown ul,
 .markdown ol,
 .markdown blockquote,
-.markdown table,
+.tableScroll,
 .markdown hr {
   margin: 0 0 12px;
 }
@@ -104,14 +104,20 @@
 }
 
 .markdown table {
-  display: block;
-  max-width: 100%;
-  overflow-x: auto;
+  width: 100%;
+  max-width: none;
   border-spacing: 0;
   border-collapse: separate;
+  font-size: 0.9em;
+}
+
+.tableScroll {
+  max-width: 100%;
+  margin: 0 0 12px;
+  overflow-x: auto;
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-md);
-  font-size: 0.9em;
+  overscroll-behavior-x: contain;
 }
 
 .markdown th,
@@ -269,4 +275,51 @@
 
 .fileLink svg {
   flex-shrink: 0;
+}
+
+/* ```mermaid diagrams: drawn once the code settles; the code stays a click away. */
+.mermaid {
+  position: relative;
+  margin: 12px 0;
+}
+
+figure.mermaid {
+  padding: 16px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md, 10px);
+  background: var(--surface-canvas);
+}
+
+.mermaidCanvas {
+  display: flex;
+  justify-content: center;
+  overflow-x: auto;
+}
+
+.mermaidCanvas svg {
+  max-width: 100%;
+  height: auto;
+}
+
+.mermaidToggle {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 1;
+  padding: 3px 9px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 999px;
+  background: var(--surface-raised);
+  color: var(--text-tertiary);
+  font-size: var(--text-2xs);
+}
+
+.mermaidToggle:hover { color: var(--text-primary); border-color: var(--border-strong); }
+
+div.mermaid > .mermaidToggle { top: 6px; right: 76px; }
+
+.mermaidNote {
+  margin: 0 0 6px;
+  color: var(--text-tertiary);
+  font-size: var(--text-2xs);
 }

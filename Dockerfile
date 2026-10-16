@@ -151,7 +151,6 @@ RUN groupadd --gid 10001 khai \
        --shell /usr/sbin/nologin khai
 WORKDIR /app
 COPY scripts/ci/requirements.lock ./scripts/ci/requirements.lock
-COPY desktop/sidecar-requirements.lock ./desktop/sidecar-requirements.lock
 RUN pip install -r scripts/ci/requirements.lock
 # Node 22 runs the GenOffice CLI (the tools/genoffice/genoffice launcher finds
 # it on PATH or at /usr/local/bin/node). The bundle is read-only at runtime:

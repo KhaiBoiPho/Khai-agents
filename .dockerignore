@@ -3,7 +3,6 @@
 
 # Node
 **/node_modules
-desktop/src-tauri/target
 desktop/build
 desktop/dist
 

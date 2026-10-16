@@ -17,6 +17,15 @@ export const DetailsSummary = Node.create<DetailsSummaryOptions>({
       HTMLAttributes: {},
     };
   },
+  addAttributes() {
+    return {
+      level: {
+        default: 0,
+        parseHTML: (element) => Number(element.getAttribute("data-level") || 0),
+        renderHTML: (attributes) => attributes.level ? { "data-level": attributes.level } : {},
+      },
+    };
+  },
   parseHTML() {
     return [
       {

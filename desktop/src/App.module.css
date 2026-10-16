@@ -287,6 +287,26 @@
   position: static;
 }
 
+.titleSlot[data-bar="true"] .companionToggle {
+  margin-right: 4px;
+}
+
+.shell[data-companion="true"] .workspace {
+  grid-template-columns: minmax(0, 1fr) minmax(280px, var(--companion-width, min(34vw, 420px)));
+}
+
+.shell[data-companion="true"] .workspace > [data-companion-panel="true"] {
+  grid-column: 2;
+  grid-row: 1 / 4;
+}
+
+/* Composer is a floating footer spanning the workspace. Keep its region
+   inside the chat column while the companion occupies the right column. */
+.shell[data-companion="true"] .workspace footer[data-companion-open="true"] {
+  right: var(--companion-width);
+  width: auto;
+}
+
 /* The Review panel always sits beside the chat and never takes more than the
    space the chat can spare, instead of floating over it on smaller windows. */
 .shell[data-inspector="true"] {
@@ -299,6 +319,20 @@
   grid-template-columns:
     minmax(340px, 1fr)
     minmax(280px, min(var(--review-width, 440px), calc(100vw - 380px)));
+}
+
+/* Reserve room for both resizable side panels and a usable transcript when
+   Review and the chat companion are open together. */
+.shell[data-inspector="true"][data-companion="true"] {
+  grid-template-columns:
+    var(--sidebar-width, 264px) 8px minmax(calc(var(--companion-width) + 460px), 1fr)
+    minmax(280px, min(var(--review-width, 440px), calc(100vw - var(--sidebar-width, 264px) - var(--companion-width) - 468px)));
+}
+
+.shell[data-sidebar="hidden"][data-inspector="true"][data-companion="true"] {
+  grid-template-columns:
+    minmax(calc(var(--companion-width) + 460px), 1fr)
+    minmax(280px, min(var(--review-width, 440px), calc(100vw - var(--companion-width) - 460px)));
 }
 
 @media (max-width: 1180px) {
@@ -333,6 +367,20 @@
   }
 }
 
+@media (max-width: 1180px) and (min-width: 721px) {
+  .shell[data-inspector="true"][data-companion="true"] {
+    grid-template-columns:
+      min(var(--sidebar-width, 264px), 32vw) 8px minmax(calc(var(--companion-width) + 320px), 1fr)
+      minmax(240px, min(var(--review-width, 440px), 40vw));
+  }
+
+  .shell[data-sidebar="hidden"][data-inspector="true"][data-companion="true"] {
+    grid-template-columns:
+      minmax(calc(var(--companion-width) + 320px), 1fr)
+      minmax(240px, min(var(--review-width, 440px), 42vw));
+  }
+}
+
 /* Phones: no room for both; the panel floats over the chat. */
 @media (max-width: 720px) {
   .shell[data-inspector="true"] {
@@ -353,6 +401,50 @@
     border: 1px solid var(--border-subtle);
     border-radius: var(--radius-lg);
     box-shadow: var(--shadow-float);
+  }
+
+  .shell[data-companion="true"] .workspace {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .shell[data-companion="true"] .workspace > [data-companion-panel="true"] {
+    position: absolute;
+    z-index: 20;
+    inset: 44px 0 0 auto;
+    width: min(420px, calc(100vw - 64px));
+    height: auto;
+    grid-column: auto;
+    grid-row: auto;
+    box-shadow: var(--shadow-float);
+  }
+
+  .shell[data-companion="true"] .workspace footer[data-companion-open="true"] {
+    right: 0;
+  }
+
+  .shell[data-inspector="true"][data-companion="true"] {
+    grid-template-columns: min(var(--sidebar-width, 264px), 32vw) 8px minmax(0, 1fr);
+  }
+
+  .shell[data-sidebar="hidden"][data-inspector="true"][data-companion="true"] {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .shell[data-inspector="true"][data-companion="true"] .reviewPane {
+    top: calc(50vh + 4px);
+    height: calc(50vh - 12px);
+  }
+
+  .shell[data-companion="true"] .workspace > [data-companion-panel="true"] {
+    position: fixed;
+    z-index: 22;
+    inset: 8px 8px auto;
+    width: auto;
+    height: calc(50vh - 12px);
+  }
+
+  .shell[data-inspector="true"][data-companion="true"] [aria-label="Resize companion panel"] {
+    display: none;
   }
 }
 

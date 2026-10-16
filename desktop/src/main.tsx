@@ -1,9 +1,7 @@
 import "./polyfills";
 
-const entry = import.meta.env.MODE === "web"
-  ? import("./webMain")
-  : import("./desktopMain");
-void entry.catch((error) => {
+// The web client is the only frontend: the browser talks to the App Server.
+void import("./webMain").catch((error) => {
   const root = document.getElementById("root");
   if (root) root.textContent = `Khai-Agents could not load: ${String(error)}`;
 });

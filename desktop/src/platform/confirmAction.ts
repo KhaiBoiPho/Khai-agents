@@ -17,10 +17,9 @@ export function setConfirmHandler(handler: ConfirmHandler): void {
 /**
  * Ask for explicit user confirmation on every supported frontend surface.
  *
- * Tauri dialogs are asynchronous. Keeping that detail behind one boundary
- * prevents callers from accidentally treating the returned Promise as a
- * truthy confirmation, while the browser fallback keeps component tests and
- * browser-rendered component tests useful.
+ * Always asynchronous, so a custom in-app dialog can replace the browser's
+ * one without callers ever treating the returned Promise as a truthy
+ * confirmation.
  */
 export async function confirmAction(
   message: string,

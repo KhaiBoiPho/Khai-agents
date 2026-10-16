@@ -6,6 +6,7 @@ import {
   IconH1,
   IconH2,
   IconH3,
+  IconH4,
   IconInfoCircle,
   IconLayoutKanban,
   IconList,
@@ -31,6 +32,26 @@ import {
   IconMoodSmile,
   IconRotate2,
   IconSuperscript,
+  IconBold,
+  IconItalic,
+  IconUnderline,
+  IconStrikethrough,
+  IconAlignLeft,
+  IconAlignCenter,
+  IconAlignRight,
+  IconAlignJustified,
+  IconArrowBackUp,
+  IconArrowForwardUp,
+  IconClearFormatting,
+  IconIndentIncrease,
+  IconIndentDecrease,
+  IconPalette,
+  IconCopyPlus,
+  IconTrash,
+  IconArrowDown,
+  IconArrowUp,
+  IconLink,
+  IconPaint,
 } from "@tabler/icons-react";
 import {
   CommandProps,
@@ -60,9 +81,175 @@ import {
   YoutubeIcon,
 } from "@/components/icons";
 import { insertBaseEmbedBlock } from "@/features/editor/components/base-embed/insert-base-embed";
+import { PAGE_INSERT_EVENT } from "@/features/editor/components/page-insert-dialog";
+
+const textColors = [
+  ["Blue", "#2563EB"], ["Green", "#008A00"], ["Purple", "#9333EA"],
+  ["Red", "#E00000"], ["Yellow", "#EAB308"], ["Orange", "#FFA500"],
+  ["Pink", "#BA4081"], ["Gray", "#A8A29E"], ["Brown", "#92400E"],
+] as const;
+const highlightColors = [
+  ["Blue", "#98d8f2"], ["Green", "#7edb6c"], ["Purple", "#e0d6ed"],
+  ["Red", "#ffc6c2"], ["Yellow", "#faf594"], ["Orange", "#f5c8a9"],
+  ["Pink", "#f5cfe0"], ["Gray", "#dfdfd7"], ["Brown", "#d7c4b7"],
+] as const;
+
+const formattingItems = [
+  { title: "Bold", description: "Make selected text bold.", icon: IconBold, searchTerms: ["bold", "strong"], command: ({ editor, range }: CommandProps) => editor.chain().focus().deleteRange(range).toggleBold().run() },
+  { title: "Italic", description: "Italicize selected text.", icon: IconItalic, searchTerms: ["italic", "emphasis"], command: ({ editor, range }: CommandProps) => editor.chain().focus().deleteRange(range).toggleItalic().run() },
+  { title: "Underline", description: "Underline selected text.", icon: IconUnderline, searchTerms: ["underline"], command: ({ editor, range }: CommandProps) => editor.chain().focus().deleteRange(range).toggleUnderline().run() },
+  { title: "Strikethrough", description: "Strike through selected text.", icon: IconStrikethrough, searchTerms: ["strike", "strikethrough"], command: ({ editor, range }: CommandProps) => editor.chain().focus().deleteRange(range).toggleStrike().run() },
+  { title: "Inline code", description: "Format selected text as code.", icon: IconCode, searchTerms: ["code", "inline code"], command: ({ editor, range }: CommandProps) => editor.chain().focus().deleteRange(range).toggleCode().run() },
+  { title: "Clear formatting", description: "Remove formatting from selected text.", icon: IconClearFormatting, searchTerms: ["clear", "reset", "format"], command: ({ editor, range }: CommandProps) => editor.chain().focus().deleteRange(range).unsetAllMarks().clearNodes().run() },
+  { title: "Increase indent", description: "Indent this paragraph.", icon: IconIndentIncrease, searchTerms: ["indent", "increase"], command: ({ editor, range }: CommandProps) => editor.chain().focus().deleteRange(range).indent().run() },
+  { title: "Decrease indent", description: "Outdent this paragraph.", icon: IconIndentDecrease, searchTerms: ["outdent", "decrease", "indent"], command: ({ editor, range }: CommandProps) => editor.chain().focus().deleteRange(range).outdent().run() },
+  ...([1, 2, 3, 4] as const).map((level) => ({ title: `Toggle heading ${level}`, description: `Create a collapsible heading ${level}.`, icon: [IconH1, IconH2, IconH3, IconH4][level - 1], searchTerms: ["toggle", "heading", `h${level}`], command: ({ editor, range }: CommandProps) => editor.chain().focus().deleteRange(range).setNode("heading", { level }).setDetailsHeading(level).run() })),
+  { title: "Align left", description: "Align this block to the left.", icon: IconAlignLeft, searchTerms: ["align", "left"], command: ({ editor, range }: CommandProps) => editor.chain().focus().deleteRange(range).setTextAlign("left").run() },
+  { title: "Align center", description: "Center this block.", icon: IconAlignCenter, searchTerms: ["align", "center"], command: ({ editor, range }: CommandProps) => editor.chain().focus().deleteRange(range).setTextAlign("center").run() },
+  { title: "Align right", description: "Align this block to the right.", icon: IconAlignRight, searchTerms: ["align", "right"], command: ({ editor, range }: CommandProps) => editor.chain().focus().deleteRange(range).setTextAlign("right").run() },
+  { title: "Justify", description: "Justify this block.", icon: IconAlignJustified, searchTerms: ["align", "justify"], command: ({ editor, range }: CommandProps) => editor.chain().focus().deleteRange(range).setTextAlign("justify").run() },
+  { title: "Undo", description: "Undo the last change.", icon: IconArrowBackUp, searchTerms: ["undo", "back"], command: ({ editor, range }: CommandProps) => editor.chain().focus().deleteRange(range).undo().run() },
+  { title: "Redo", description: "Redo the last undone change.", icon: IconArrowForwardUp, searchTerms: ["redo", "forward"], command: ({ editor, range }: CommandProps) => editor.chain().focus().deleteRange(range).redo().run() },
+];
+
+function currentBlock(editor: CommandProps["editor"], range: CommandProps["range"]) {
+  if (!editor) return null;
+  const $pos = editor.state.doc.resolve(Math.max(1, Math.min(range.from, editor.state.doc.content.size - 1)));
+  if ($pos.depth < 1) return null;
+  return { pos: $pos.before(1), node: $pos.node(1) };
+}
+
+function blockLink(editor: CommandProps["editor"], range: CommandProps["range"]) {
+  if (!editor) return;
+  const block = currentBlock(editor, range);
+  const id = block?.node.attrs.id;
+  const url = new URL(window.location.href);
+  if (typeof id === "string" && id) url.hash = id;
+  void navigator.clipboard?.writeText(url.toString());
+}
+
+function duplicateCurrentBlock(editor: CommandProps["editor"], range: CommandProps["range"]) {
+  if (!editor) return;
+  const block = currentBlock(editor, range);
+  if (!block) return;
+  const tr = editor.state.tr.delete(range.from, range.to);
+  const position = tr.mapping.map(block.pos, -1);
+  const cleanBlock = tr.doc.nodeAt(position);
+  if (!cleanBlock) return;
+  tr.insert(position + cleanBlock.nodeSize, cleanBlock);
+  editor.view.dispatch(tr);
+}
+
+function moveCurrentBlock(editor: CommandProps["editor"], range: CommandProps["range"], direction: "up" | "down") {
+  if (!editor) return;
+  const block = currentBlock(editor, range);
+  if (!block) return;
+  const nodes: Array<{ pos: number; node: typeof block.node }> = [];
+  editor.state.doc.forEach((node, pos) => nodes.push({ pos, node }));
+  const index = nodes.findIndex((item) => item.pos === block.pos);
+  const targetIndex = direction === "up" ? index - 1 : index + 1;
+  if (index < 0 || targetIndex < 0 || targetIndex >= nodes.length) {
+    editor.chain().focus().deleteRange(range).run();
+    return;
+  }
+  const tr = editor.state.tr.delete(range.from, range.to);
+  const currentPos = tr.mapping.map(block.pos, -1);
+  const currentNode = tr.doc.nodeAt(currentPos);
+  if (!currentNode) return;
+  const target = nodes[targetIndex];
+  const targetPos = tr.mapping.map(target.pos, -1);
+  const targetNode = tr.doc.nodeAt(targetPos);
+  if (!targetNode) return;
+  tr.delete(currentPos, currentPos + currentNode.nodeSize);
+  const insertionPos = direction === "up" ? targetPos : targetPos + targetNode.nodeSize;
+  tr.insert(insertionPos, currentNode);
+  editor.view.dispatch(tr);
+}
+
+function moveCurrentBlockToEdge(editor: CommandProps["editor"], range: CommandProps["range"], edge: "beginning" | "end") {
+  if (!editor) return;
+  const block = currentBlock(editor, range);
+  if (!block) return;
+  const tr = editor.state.tr.delete(range.from, range.to);
+  const position = tr.mapping.map(block.pos, -1);
+  const node = tr.doc.nodeAt(position);
+  if (!node) return;
+  tr.delete(position, position + node.nodeSize);
+  tr.insert(edge === "beginning" ? 0 : tr.doc.content.size, node);
+  editor.view.dispatch(tr);
+}
+
+const slashBlockActions = [
+  { title: "Copy link to block", description: "Copy a link to this block.", searchTerms: ["copy", "link", "block"], icon: IconLink, command: ({ editor, range }: CommandProps) => { blockLink(editor, range); editor?.chain().focus().deleteRange(range).run(); } },
+  { title: "Duplicate block", description: "Make a copy of this block.", searchTerms: ["duplicate", "copy", "block"], icon: IconCopyPlus, command: ({ editor, range }: CommandProps) => duplicateCurrentBlock(editor, range) },
+  { title: "Move block up", description: "Move this block before the previous block.", searchTerms: ["move", "up", "block"], icon: IconArrowUp, command: ({ editor, range }: CommandProps) => moveCurrentBlock(editor, range, "up") },
+  { title: "Move block down", description: "Move this block after the next block.", searchTerms: ["move", "down", "block"], icon: IconArrowDown, command: ({ editor, range }: CommandProps) => moveCurrentBlock(editor, range, "down") },
+  { title: "Move block to beginning", description: "Move this block to the start of the page.", searchTerms: ["move", "beginning", "start", "page"], icon: IconArrowUp, command: ({ editor, range }: CommandProps) => moveCurrentBlockToEdge(editor, range, "beginning") },
+  { title: "Move block to end", description: "Move this block to the end of the page.", searchTerms: ["move", "end", "page"], icon: IconArrowDown, command: ({ editor, range }: CommandProps) => moveCurrentBlockToEdge(editor, range, "end") },
+  { title: "Delete block", description: "Remove this block.", searchTerms: ["delete", "remove", "block"], icon: IconTrash, command: ({ editor, range }: CommandProps) => {
+    if (!editor) return;
+    const block = currentBlock(editor, range);
+    if (!block) return;
+    editor.view.dispatch(editor.state.tr.delete(block.pos, block.pos + block.node.nodeSize));
+  } },
+];
+
+const slashColorActions = [
+  ...textColors.map(([name, color]) => ({ title: `Text color: ${name}`, description: `Apply ${name.toLowerCase()} text color.`, searchTerms: ["color", "text", name.toLowerCase()], icon: IconPalette, command: ({ editor, range }: CommandProps) => editor?.chain().focus().deleteRange(range).setColor(color).run() })),
+  { title: "Default text color", description: "Remove text color.", searchTerms: ["color", "default", "reset"], icon: IconPalette, command: ({ editor, range }: CommandProps) => editor?.chain().focus().deleteRange(range).unsetColor().run() },
+  ...highlightColors.map(([name, color]) => ({ title: `Highlight: ${name}`, description: `Highlight text in ${name.toLowerCase()}.`, searchTerms: ["highlight", "background", name.toLowerCase()], icon: IconPalette, command: ({ editor, range }: CommandProps) => editor?.chain().focus().deleteRange(range).setHighlight({ color }).run() })),
+  { title: "Remove highlight", description: "Remove text highlight.", searchTerms: ["highlight", "remove", "reset"], icon: IconPalette, command: ({ editor, range }: CommandProps) => editor?.chain().focus().deleteRange(range).unsetHighlight().run() },
+  ...[
+    ["Gray", "#9b9b9b"], ["Brown", "#ba856f"], ["Orange", "#c77d48"], ["Green", "#529e72"],
+    ["Blue", "#379ad3"], ["Purple", "#9d68d3"], ["Red", "#df5452"],
+  ].map(([name, color]) => ({ title: `Block color: ${name}`, description: `Set this block to ${name.toLowerCase()}.`, searchTerms: ["block", "color", name.toLowerCase()], icon: IconPaint, command: ({ editor, range }: CommandProps) => {
+    if (!editor) return;
+    const block = currentBlock(editor, range);
+    editor.chain().focus().deleteRange(range).setColor(color).run();
+    if (block) editor.chain().focus().setNodeSelection(block.pos).updateAttributes(block.node.type.name, { backgroundColor: color }).run();
+  } })),
+  { title: "Default block color", description: "Reset this block color.", searchTerms: ["block", "color", "default", "reset"], icon: IconPaint, command: ({ editor, range }: CommandProps) => {
+    if (!editor) return;
+    const block = currentBlock(editor, range);
+    editor.chain().focus().deleteRange(range).unsetColor().run();
+    if (block) editor.chain().focus().setNodeSelection(block.pos).updateAttributes(block.node.type.name, { backgroundColor: null }).run();
+  } },
+  ...[
+    ["Gray", "#f1f1ef"], ["Brown", "#f4eeee"], ["Orange", "#fbecdd"], ["Yellow", "#fbf3db"],
+    ["Green", "#edf3ec"], ["Blue", "#e7f3f8"], ["Purple", "#f4f0f7"], ["Pink", "#f9eef3"], ["Red", "#fbe4e4"],
+  ].map(([name, color]) => ({ title: `Block background: ${name}`, description: `Set this block background to ${name.toLowerCase()}.`, searchTerms: ["block", "background", name.toLowerCase()], icon: IconPaint, command: ({ editor, range }: CommandProps) => {
+    if (!editor) return;
+    const block = currentBlock(editor, range);
+    if (!block) return;
+    editor.chain().focus().deleteRange(range).setNodeSelection(block.pos).updateAttributes(block.node.type.name, { backgroundColor: color }).run();
+  } })),
+  { title: "Default block background", description: "Remove this block background.", searchTerms: ["block", "background", "default", "reset"], icon: IconPaint, command: ({ editor, range }: CommandProps) => {
+    if (!editor) return;
+    const block = currentBlock(editor, range);
+    if (!block) return;
+    editor.chain().focus().deleteRange(range).setNodeSelection(block.pos).updateAttributes(block.node.type.name, { backgroundColor: null }).run();
+  } },
+];
 
 const CommandGroups: SlashMenuGroupedItemsType = {
+  text: formattingItems,
+  color: slashColorActions,
+  block: slashBlockActions,
   basic: [
+    {
+      title: "Page",
+      description: "Create a child page and link it here.",
+      searchTerms: ["child page", "new page"],
+      icon: IconAppWindow,
+      command: ({ editor, range }: CommandProps) => window.dispatchEvent(new CustomEvent(PAGE_INSERT_EVENT, { detail: { editor, range, mode: "child" } })),
+    },
+    {
+      title: "Page in",
+      description: "Create a page inside a page you choose.",
+      searchTerms: ["page in", "nested page"],
+      icon: IconSitemap,
+      command: ({ editor, range }: CommandProps) => window.dispatchEvent(new CustomEvent(PAGE_INSERT_EVENT, { detail: { editor, range, mode: "in" } })),
+    },
     {
       title: "Text",
       description: "Just start typing with plain text.",
@@ -127,6 +314,13 @@ const CommandGroups: SlashMenuGroupedItemsType = {
           .setNode("heading", { level: 3 })
           .run();
       },
+    },
+    {
+      title: "Heading 4",
+      description: "Small section heading.",
+      searchTerms: ["h4", "heading"],
+      icon: IconH4,
+      command: ({ editor, range }: CommandProps) => editor.chain().focus().deleteRange(range).setNode("heading", { level: 4 }).run(),
     },
     {
       title: "Bullet list",

@@ -49,6 +49,7 @@ from redis.asyncio import Redis
 from app_server.khaidocs.api import KhaiUser
 from app_server.khaidocs.context import KhaiDocsContext
 from app_server.khaidocs.routes import install as install_khaidocs
+from app_server.planner_api import install as install_planner
 from app_server.gateway.qdrant import QdrantProvisioner
 from app_server.gateway.workers import (
     DockerBackend,
@@ -197,6 +198,8 @@ class Gateway:
         # Native KhaiDocs: after the gateway's own /api routes, which keep
         # priority, and with no catch-all behind them.
         install_khaidocs(app, self.docs)
+        # The planner pages (Calendar, Tasks, Schedule, Notes), same identity.
+        install_planner(app, self.docs)
         app.on_response_prepare.append(self._headers)
         app.on_startup.append(self._startup)
         app.on_shutdown.append(self._shutdown)

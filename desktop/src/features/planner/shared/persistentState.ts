@@ -6,10 +6,14 @@
  * Storage can be unavailable or hold a stale shape, so every read falls back
  * to the seed and every write is best-effort.
  *
- * TODO(backend): replace with the planning service when one exists.
+ * The four page documents (PLANNER_KEYS) are also kept on the server
+ * (/api/planner, see plannerSync.ts), so they follow the user across browsers
+ * and the agent can read and change them; localStorage is the fast local copy.
  */
 
 import { useEffect, useState, type Dispatch, type SetStateAction } from "react";
+
+import { pushPlannerDocument, usePlannerReload } from "./plannerSync";
 
 // v2: the planner now starts empty. The v1 keys held the old sample data
 // (written into every browser that opened a planner page); they are removed
@@ -52,8 +56,9 @@ export function writeStore<T>(key: string, value: T): void {
   try {
     localStorage.setItem(key, JSON.stringify(value));
   } catch {
-    // Preview storage only; the page still works for this session.
+    // Storage can be unavailable; the server copy still gets the change.
   }
+  pushPlannerDocument(key, value);
 }
 
 /** useState that loads from and saves to one planner store key. */
@@ -67,6 +72,9 @@ export function usePersistentState<T>(
   useEffect(() => {
     writeStore(key, value);
   }, [key, value]);
+  usePlannerReload(key, () =>
+    setValue(readStore(key, typeof seed === "function" ? (seed as () => T)() : seed)),
+  );
   return [value, setValue];
 }
 

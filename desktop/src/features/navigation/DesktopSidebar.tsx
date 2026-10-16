@@ -34,7 +34,7 @@ import type { Project, Thread } from "../../generated/app-server";
 import type { DesktopDestination } from "../../app/useDesktopUi";
 import type { SidecarStatus } from "../../rpc/contracts";
 import { SessionRow } from "./SessionRow";
-import { groupByDay, isChatsProject } from "../../app/chats";
+import { groupByDay, isChatsProject, isCompanionThread } from "../../app/chats";
 import { useThreadMarks } from "../../app/threadMarks";
 import logoUrl from "../../assets/khai-logo.png";
 import { useProjectDisclosure } from "./useProjectDisclosure";
@@ -156,6 +156,10 @@ export function DesktopSidebar({
   // Which project row has its remove confirmation open.
   const [removing, setRemoving] = useState<string | null>(null);
   const normalizedQuery = query.trim().toLocaleLowerCase();
+  const userThreads = useMemo(
+    () => threads.filter((thread) => !isCompanionThread(thread)),
+    [threads],
+  );
   const selectedProject =
     projects.find((project) => project.id === selectedProjectId) ?? null;
   const canCreateThread = projectCanExecute(selectedProject);
@@ -171,7 +175,7 @@ export function DesktopSidebar({
         (project) => !recoveredProjectIds.has(project.id) && !isChatsProject(project),
       )
       .map((project) => {
-        const projectThreads = threads
+        const projectThreads = userThreads
           .filter((thread) => thread.projectId === project.id)
           .filter((thread) => matches(project, thread, normalizedQuery))
           .sort((left, right) =>
@@ -188,7 +192,7 @@ export function DesktopSidebar({
       })
       .filter((group) => !normalizedQuery || group.threads.length > 0);
 
-    const recoveredThreads = threads
+    const recoveredThreads = userThreads
       .filter((thread) => recoveredProjectIds.has(thread.projectId))
       .filter((thread) => {
         const project = projectById.get(thread.projectId);
@@ -208,12 +212,12 @@ export function DesktopSidebar({
       });
     }
     return regularGroups;
-  }, [normalizedQuery, projects, selectedProjectId, t, threads]);
+  }, [normalizedQuery, projects, selectedProjectId, t, userThreads]);
   const marks = useThreadMarks();
   const chatsProjectIds = new Set(
     projects.filter((project) => isChatsProject(project)).map((project) => project.id),
   );
-  const visibleThreads = threads.filter((thread) =>
+  const visibleThreads = userThreads.filter((thread) =>
     !normalizedQuery ||
     thread.title.toLocaleLowerCase().includes(normalizedQuery),
   );

@@ -36,9 +36,10 @@ import sidebarClasses from "../../../../../notion/sidebar.module.css";
 interface SpaceTreeProps {
   spaceId: string;
   readOnly: boolean;
+  hiddenRootIds?: string[];
 }
 
-export default function SpaceTree({ spaceId, readOnly }: SpaceTreeProps) {
+export default function SpaceTree({ spaceId, readOnly, hiddenRootIds = [] }: SpaceTreeProps) {
   const { t } = useTranslation();
   const { pageSlug } = useParams();
   const [data, setData] = useAtom(treeDataAtom);
@@ -189,9 +190,9 @@ export default function SpaceTree({ spaceId, readOnly }: SpaceTreeProps) {
   const filteredData = useMemo(
     () =>
       SINGLE_USER
-        ? sortFoldersFirst(spaceRoots(data, spaceId))
-        : spaceRoots(data, spaceId),
-    [data, spaceId],
+        ? sortFoldersFirst(spaceRoots(data, spaceId).filter((node) => !hiddenRootIds.includes(node.id)))
+        : spaceRoots(data, spaceId).filter((node) => !hiddenRootIds.includes(node.id)),
+    [data, spaceId, hiddenRootIds],
   );
 
   // Stable callbacks for DocTree. Without these, every parent render recreates

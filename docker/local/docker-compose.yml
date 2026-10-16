@@ -1,0 +1,41 @@
+# Khai-Agents on this machine (Colima/Docker Desktop), from this checkout.
+#
+#   docker/local/up.sh          # builds the image, starts the data stack and the app
+#   open http://127.0.0.1:8090
+#
+# The gateway joins the data services of ../stack (Postgres, Redis, Qdrant)
+# over their compose network, and runs each user's worker as a process inside
+# its own container (no Docker socket). User files live in ../../.local-data,
+# mounted at the same absolute path the database already records for them.
+
+name: khai-local
+
+services:
+  gateway:
+    image: ${KHAI_IMAGE:-khai-agents:local}
+    restart: unless-stopped
+    entrypoint: ["/app/docker/gateway-entrypoint.sh"]
+    env_file:
+      # Provider keys and default model (GEMINI_API_KEY, OPENROUTER_API_KEY, …).
+      - path: ../../.env
+        required: false
+    environment:
+      KHAI_PUBLIC_ORIGIN: http://127.0.0.1:${KHAI_LOCAL_PORT:-8090}
+      KHAI_BIND_HOST: 0.0.0.0
+      PORT: "8080"
+      KHAI_DATABASE_URL: postgresql://khai:${KHAI_PG_APP_PASSWORD:?run docker/local/up.sh}@postgres:5432/khai
+      KHAI_REDIS_URL: redis://:${KHAI_REDIS_PASSWORD:?run docker/local/up.sh}@redis:6379/0
+      KHAI_QDRANT_URL: http://qdrant:6333
+      KHAI_QDRANT_API_KEY: ${KHAI_QDRANT_API_KEY:?run docker/local/up.sh}
+      KHAI_WORKER_BACKEND: process
+      KHAI_DATA_ROOT: ${KHAI_LOCAL_DATA:?run docker/local/up.sh}
+    ports:
+      - "127.0.0.1:${KHAI_LOCAL_PORT:-8090}:8080"
+    volumes:
+      - ${KHAI_LOCAL_DATA}:${KHAI_LOCAL_DATA}
+    networks: [stack]
+
+networks:
+  stack:
+    name: khai-stack_default
+    external: true

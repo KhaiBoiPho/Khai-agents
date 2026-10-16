@@ -28,6 +28,7 @@ from app_server.service_state import ServiceFiles, ServiceRecord, identity_proof
 from app_server.khaidocs.api import KhaiUser
 from app_server.khaidocs.context import KhaiDocsContext
 from app_server.khaidocs.routes import install as install_khaidocs
+from app_server.planner_api import install as install_planner
 from app_server.websocket import WebSocketTransport
 from app_server.web_surface import WebSurface
 from core.application.application import DeepCodeApplication
@@ -135,6 +136,8 @@ class ControlServer:
             self.host.application.database.system(), self._docs_user
         )
         install_khaidocs(app, self.docs)
+        # The planner pages (Calendar, Tasks, Schedule, Notes), same identity.
+        install_planner(app, self.docs)
         app.router.add_get("/khaidocs/{path:.*}", self._khaidocs_asset)
         app.on_shutdown.append(self.business.shutdown)
         app.on_cleanup.append(self.business.cleanup)

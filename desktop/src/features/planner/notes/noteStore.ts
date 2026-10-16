@@ -48,6 +48,8 @@ export interface NoteCategory {
 
 export interface Note {
   id: string;
+  /** Chat thread that owns this note when created from the chat companion. */
+  threadId?: string;
   title: string | null;
   content: string;
   color: NoteColor;

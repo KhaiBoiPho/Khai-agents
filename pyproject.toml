@@ -43,7 +43,6 @@ ignore = [
     "desktop/**",
     "docs/**",
     "examples/**",
-    "rust-toolchain.toml",
     "scripts/**",
     "tests/**",
 ]

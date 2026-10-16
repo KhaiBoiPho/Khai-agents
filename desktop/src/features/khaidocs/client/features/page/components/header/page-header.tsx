@@ -59,7 +59,7 @@ export default function PageHeader({ readOnly }: Props) {
           )}
         </Group>
 
-        <Group justify="flex-end" h="100%" px="md" wrap="nowrap" gap="var(--mantine-spacing-xs)">
+        <Group data-page-header-controls="true" justify="flex-end" h="100%" px="md" wrap="nowrap" gap="var(--mantine-spacing-xs)">
           <PageHeaderMenu readOnly={readOnly} />
         </Group>
       </Group>

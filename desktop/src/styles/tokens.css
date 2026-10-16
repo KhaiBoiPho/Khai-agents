@@ -610,6 +610,13 @@
   box-sizing: border-box;
 }
 
+/* Side panels (Review, companion) sit next to each other; their rows share
+   these heights so the dividing lines run straight across both. */
+:root {
+  --side-panel-head: 52px;
+  --side-panel-row: 44px;
+}
+
 html,
 body,
 #root {

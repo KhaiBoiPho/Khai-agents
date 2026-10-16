@@ -1,0 +1,691 @@
+.panel {
+  position: relative;
+  z-index: 2;
+  display: grid;
+  min-width: 0;
+  min-height: 0;
+  grid-template-rows: auto auto minmax(0, 1fr);
+  overflow: hidden;
+  border-left: 1px solid var(--border-subtle);
+  background: var(--surface-raised);
+}
+
+.tabs {
+  display: flex;
+  min-height: var(--side-panel-row);
+  align-items: stretch;
+  gap: 4px;
+  padding: 0 12px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 2px 10px 0;
+  border-bottom: 2px solid transparent;
+  color: var(--text-tertiary);
+  font-size: var(--text-xs);
+}
+
+.tab:hover { color: var(--text-primary); }
+.tab[data-active="true"] { border-bottom-color: var(--signal); color: var(--text-primary); }
+
+.header {
+  display: flex;
+  min-height: var(--side-panel-head);
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0 14px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.heading {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 10px;
+  color: var(--text-secondary);
+}
+
+.heading > div {
+  display: grid;
+  gap: 2px;
+}
+
+.heading strong {
+  color: var(--text-primary);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+}
+
+.heading small,
+.composer small {
+  color: var(--text-tertiary);
+  font-size: var(--text-2xs);
+}
+
+.notesHost {
+  display: flex;
+  min-height: 0;
+  grid-row: 3;
+  overflow: hidden;
+}
+
+/* The chat tab: session strip, context line, messages, composer. */
+.chatHost {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  grid-row: 3;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.chatHost[hidden] { display: none; }
+.chatHost > .messages { flex: 1; }
+
+.headingIcon {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--signal-soft) 80%, var(--surface-canvas));
+  color: var(--signal);
+}
+
+.heading > div { min-width: 0; }
+.heading small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* One chip per companion session; scrolls sideways when there are many. */
+.sessions {
+  display: flex;
+  min-height: var(--side-panel-row);
+  flex: none;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 12px;
+  overflow-x: auto;
+  scrollbar-width: thin;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.newSession,
+.session {
+  display: inline-flex;
+  height: 28px;
+  flex: 0 0 auto;
+  align-items: center;
+  border: 1px solid var(--border-subtle);
+  border-radius: 999px;
+  background: var(--surface-canvas);
+  color: var(--text-secondary);
+  font-size: var(--text-2xs);
+  transition: background 140ms ease, border-color 140ms ease, color 140ms ease;
+}
+
+.newSession {
+  gap: 4px;
+  padding: 0 10px 0 8px;
+  border-style: dashed;
+}
+
+.newSession:hover,
+.session:hover { border-color: var(--border-strong); color: var(--text-primary); }
+
+.newSession[data-active],
+.session[data-active] {
+  border-color: color-mix(in srgb, var(--signal) 45%, var(--border-subtle));
+  border-style: solid;
+  background: color-mix(in srgb, var(--signal-soft) 70%, var(--surface-canvas));
+  color: var(--text-primary);
+}
+
+.session > button:first-child {
+  max-width: 150px;
+  height: 100%;
+  overflow: hidden;
+  padding: 0 4px 0 11px;
+  color: inherit;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sessionClose {
+  display: grid;
+  width: 20px;
+  height: 20px;
+  margin-right: 4px;
+  place-items: center;
+  border-radius: 50%;
+  color: var(--text-tertiary);
+  opacity: 0;
+  transition: opacity 140ms ease, background 140ms ease;
+}
+
+.session:hover .sessionClose,
+.session[data-active] .sessionClose,
+.sessionClose:focus-visible { opacity: 1; }
+.sessionClose:hover { background: var(--surface-hover); color: var(--danger); }
+
+.sessionsLoading,
+.loading {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-tertiary);
+  font-size: var(--text-2xs);
+}
+
+.loading { margin: 20vh auto 0; width: 100%; justify-content: center; font-size: var(--text-xs); }
+
+.spin { animation: docsNoteSpin 1s linear infinite; }
+
+.notes {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  min-height: 0;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.noteToolbar {
+  display: flex;
+  min-height: 42px;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 10px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.notePicker { display: flex; min-width: 0; flex: 1; gap: 4px; overflow-x: auto; }
+.noteTab { max-width: 132px; overflow: hidden; padding: 6px 8px; border-radius: var(--radius-sm); color: var(--text-tertiary); font-size: var(--text-2xs); text-overflow: ellipsis; white-space: nowrap; }
+.noteTab[data-active="true"], .noteTab:hover { background: var(--surface-hover); color: var(--text-primary); }
+.iconButton { display: grid; width: 30px; height: 30px; flex: 0 0 auto; place-items: center; border-radius: var(--radius-sm); color: var(--text-tertiary); }
+.iconButton:hover { background: var(--surface-hover); color: var(--text-primary); }
+.deleteNote:hover { color: var(--danger); }
+
+.noteTitle {
+  width: 100%;
+  padding: 15px 16px 8px;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--text-primary);
+  font: inherit;
+  font-size: var(--text-lg);
+  font-weight: var(--weight-semibold);
+}
+.noteTitle::placeholder { color: var(--text-tertiary); }
+
+.noteFormat { display: flex; min-height: 36px; align-items: center; justify-content: space-between; gap: 8px; padding: 2px 12px; border-bottom: 1px solid var(--border-subtle); color: var(--text-tertiary); font-size: var(--text-2xs); }
+.noteFormat [role="toolbar"] { display: flex; align-items: center; gap: 1px; }
+.noteFormat [role="toolbar"] button { display: grid; width: 27px; height: 27px; place-items: center; border-radius: var(--radius-sm); color: var(--text-secondary); }
+.noteFormat [role="toolbar"] button:hover { background: var(--surface-hover); color: var(--text-primary); }
+.noteFormat [role="separator"] { width: 1px; height: 17px; margin: 0 3px; background: var(--border-subtle); }
+
+.noteEditor, .notePreview { min-height: 0; flex: 1; overflow: auto; padding: 14px 16px; border: 0; outline: 0; background: transparent; color: var(--text-primary); font: inherit; font-size: var(--text-sm); line-height: 1.65; resize: none; }
+.noteEditor::placeholder { color: var(--text-tertiary); }
+.notePreview > div { color: var(--text-primary); }
+.noteFooter { padding: 8px 12px; border-top: 1px solid var(--border-subtle); color: var(--text-tertiary); font-size: var(--text-2xs); }
+.docsNoteState { display: flex; flex: 1; align-items: center; justify-content: center; gap: 8px; color: var(--text-tertiary); font-size: var(--text-xs); }
+.noteEditorView { min-height: 0; }
+.embeddedKhaiDocs { min-height: 0; flex: 1; overflow: hidden; }
+.embeddedKhaiDocs > :global(.khaidocs-root) { height: 100%; }
+.docsNoteError { margin: 10px 13px 0; padding: 9px 10px; border: 1px solid color-mix(in srgb, var(--danger) 28%, var(--border-subtle)); border-radius: var(--radius-sm); color: var(--danger); font-size: var(--text-2xs); line-height: 1.45; }
+@keyframes docsNoteSpin { to { transform: rotate(360deg); } }
+.notesHost[hidden] { display: none; }
+
+.close {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: var(--radius-sm);
+  color: var(--text-tertiary);
+}
+
+.close:hover {
+  background: var(--surface-hover);
+  color: var(--text-primary);
+}
+
+.context {
+  display: flex;
+  flex: none;
+  min-height: 34px;
+  align-items: center;
+  gap: 7px;
+  padding: 0 14px;
+  border-bottom: 1px solid var(--border-subtle);
+  color: var(--text-tertiary);
+  font-size: var(--text-2xs);
+}
+
+.contextDot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--success);
+}
+
+.messages {
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 20px 14px;
+  scroll-behavior: smooth;
+}
+
+.empty {
+  display: grid;
+  max-width: 300px;
+  justify-items: center;
+  gap: 10px;
+  margin: 12vh auto 0;
+  color: var(--text-tertiary);
+  text-align: center;
+}
+
+.emptyIcon {
+  display: grid;
+  width: 40px;
+  height: 40px;
+  place-items: center;
+  border-radius: 13px;
+  background: color-mix(in srgb, var(--signal-soft) 80%, var(--surface-canvas));
+  color: var(--signal);
+}
+
+.empty strong {
+  color: var(--text-primary);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+}
+
+.empty p {
+  margin: 0;
+  font-size: var(--text-xs);
+  line-height: 1.55;
+}
+
+.suggestions {
+  display: grid;
+  width: 100%;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.suggestions button {
+  padding: 9px 12px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--surface-canvas);
+  color: var(--text-secondary);
+  font-size: var(--text-xs);
+  text-align: left;
+  transition: background 140ms ease, border-color 140ms ease, color 140ms ease;
+}
+
+.suggestions button:hover {
+  border-color: var(--border-strong);
+  background: var(--surface-hover);
+  color: var(--text-primary);
+}
+
+.message {
+  display: flex;
+  justify-content: flex-start;
+  align-items: flex-start;
+  gap: 9px;
+  margin: 0 0 18px;
+  animation: messageIn 180ms ease-out both;
+}
+
+.message[data-role="user"] {
+  justify-content: flex-end;
+  padding-left: 38px;
+}
+
+.bubble {
+  max-width: min(94%, 520px);
+  padding: 11px 14px;
+  border: 1px solid color-mix(in srgb, var(--border-subtle) 78%, transparent);
+  border-radius: 18px 18px 5px 18px;
+  background: color-mix(in srgb, var(--surface-hover) 74%, var(--surface-canvas));
+  color: var(--text-primary);
+  font-size: var(--text-sm);
+  line-height: 1.62;
+  overflow-wrap: anywhere;
+}
+
+.message[data-role="user"] .bubble {
+  border-color: color-mix(in srgb, var(--signal) 18%, var(--border-subtle));
+  border-radius: 18px 18px 5px 18px;
+  background: color-mix(in srgb, var(--signal-soft) 76%, var(--surface-canvas));
+}
+
+.message[data-role="assistant"] .bubble {
+  max-width: calc(100% - 35px);
+  padding: 3px 2px 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.assistantAvatar {
+  display: grid;
+  width: 25px;
+  height: 25px;
+  flex: 0 0 auto;
+  place-items: center;
+  margin-top: 1px;
+  border: 1px solid color-mix(in srgb, var(--signal) 20%, var(--border-subtle));
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--signal-soft) 78%, var(--surface-canvas));
+  color: var(--signal);
+}
+
+.messageLabel {
+  display: block;
+  margin-bottom: 5px;
+  color: var(--text-tertiary);
+  font-size: var(--text-2xs);
+  font-weight: var(--weight-semibold);
+  letter-spacing: .02em;
+}
+
+.bubble p:first-child { margin-top: 0; }
+.bubble p:last-child { margin-bottom: 0; }
+
+.insert {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 10px;
+  padding: 6px 9px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 999px;
+  background: var(--surface-raised);
+  color: var(--text-tertiary);
+  font-size: var(--text-2xs);
+  transition: background 140ms ease, color 140ms ease, border-color 140ms ease;
+}
+
+.insert:hover { border-color: var(--border-strong); background: var(--surface-hover); color: var(--text-primary); }
+
+@keyframes messageIn {
+  from { opacity: 0; transform: translateY(5px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.thinking,
+.error {
+  margin: 10px 4px;
+  color: var(--text-tertiary);
+  font-size: var(--text-xs);
+}
+
+.thinking {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 7px;
+  padding-left: 34px;
+}
+
+.workingText { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dots { animation: pulse 1.2s infinite; }
+.error { color: var(--danger); }
+
+.composer {
+  position: relative;
+  flex: none;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 36px;
+  align-items: end;
+  gap: 7px;
+  margin: 12px;
+  padding: 6px 7px 6px 4px;
+  border: 1px solid var(--border-strong);
+  border-radius: 25px;
+  box-shadow: 0 2px 10px rgb(0 0 0 / 5%);
+  transition: border-color 140ms ease, box-shadow 140ms ease;
+  background: var(--surface-canvas);
+}
+
+.composer textarea {
+  min-width: 0;
+  height: 42px;
+  min-height: 42px;
+  max-height: 148px;
+  resize: none;
+  padding: 10px 9px 10px 13px;
+  border: 0;
+  border-radius: 20px;
+  outline: none;
+  background: transparent;
+  color: var(--text-primary);
+  font: inherit;
+  font-size: var(--text-sm);
+  line-height: 1.5;
+  overflow-y: auto;
+}
+
+.composer:focus-within { border-color: var(--signal); box-shadow: 0 0 0 3px var(--signal-soft), 0 4px 16px rgb(0 0 0 / 6%); }
+
+.composer > button {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  margin-bottom: 3px;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--signal);
+  color: white;
+  box-shadow: 0 2px 7px color-mix(in srgb, var(--signal) 28%, transparent);
+  transition: transform 140ms ease, opacity 140ms ease, box-shadow 140ms ease;
+}
+
+.composer > button:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px color-mix(in srgb, var(--signal) 34%, transparent);
+}
+
+.composer > button:disabled {
+  cursor: default;
+  opacity: 0.38;
+}
+
+.composer > button:disabled { opacity: 0.44; }
+
+.panel > [role="separator"] { display: block; }
+
+@keyframes pulse {
+  50% { opacity: 0.35; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dots, .spin { animation: none; }
+}
+
+/* Notes tab: a slim bar, then the chat's KhaiDocs pages as cards. */
+.docsNoteBar {
+  display: flex;
+  min-height: var(--side-panel-row);
+  flex: none;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 7px 12px 7px 16px;
+  border-bottom: 1px solid var(--border-subtle);
+  color: var(--text-primary);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-medium);
+}
+
+.docsNoteBar small { color: var(--text-tertiary); font-size: var(--text-2xs); font-weight: 400; }
+
+.docsNoteCreate {
+  display: inline-flex;
+  height: 28px;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 4px;
+  padding: 0 11px 0 8px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 999px;
+  background: var(--surface-canvas);
+  color: var(--text-primary);
+  font-size: var(--text-2xs);
+  transition: background 140ms ease, border-color 140ms ease;
+}
+
+.docsNoteCreate:hover:not(:disabled) { border-color: var(--border-strong); background: var(--surface-hover); }
+.docsNoteCreate:disabled { opacity: .55; cursor: wait; }
+
+.docsNoteList {
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  overflow: auto;
+  padding: 12px;
+}
+
+.docsNoteRow {
+  display: flex;
+  width: 100%;
+  min-height: 60px;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--surface-canvas);
+  text-align: left;
+  transition: background 140ms ease, border-color 140ms ease, box-shadow 140ms ease;
+}
+
+.docsNoteRow:hover {
+  border-color: var(--border-strong);
+  box-shadow: 0 2px 8px rgb(0 0 0 / 5%);
+}
+
+.docsNoteRow:focus-visible { outline: 2px solid var(--signal); outline-offset: 1px; }
+
+.docsNoteIcon {
+  display: grid;
+  width: 36px;
+  height: 36px;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--signal-soft) 75%, var(--surface-canvas));
+  color: var(--signal);
+}
+
+.docsNoteMeta { display: grid; min-width: 0; flex: 1; gap: 3px; }
+
+.docsNoteMeta strong {
+  display: -webkit-box;
+  overflow: hidden;
+  color: var(--text-primary);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+  line-height: 1.4;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.docsNoteMeta small { color: var(--text-tertiary); font-size: var(--text-2xs); }
+
+.docsNoteEdit {
+  flex: 0 0 auto;
+  color: var(--text-tertiary);
+  transition: transform 140ms ease, color 140ms ease;
+}
+
+.docsNoteRow:hover .docsNoteEdit { color: var(--text-primary); transform: translateX(2px); }
+
+.noteEmpty {
+  display: grid;
+  max-width: 290px;
+  flex: 1;
+  align-content: center;
+  justify-items: center;
+  gap: 9px;
+  margin: 0 auto;
+  padding: 24px 16px;
+  color: var(--text-tertiary);
+  text-align: center;
+}
+
+.noteEmptyIcon {
+  display: grid;
+  width: 44px;
+  height: 44px;
+  place-items: center;
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--signal-soft) 80%, var(--surface-canvas));
+  color: var(--signal);
+}
+
+.noteEmpty strong { color: var(--text-primary); font-size: var(--text-sm); font-weight: var(--weight-semibold); }
+.noteEmpty p { margin: 0; font-size: var(--text-xs); line-height: 1.55; }
+
+.noteEmpty button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 6px;
+  padding: 8px 14px;
+  border-radius: 999px;
+  background: var(--signal);
+  color: white;
+  font-size: var(--text-xs);
+  font-weight: var(--weight-medium);
+  transition: opacity 140ms ease, transform 140ms ease;
+}
+
+.noteEmpty button:hover:not(:disabled) { transform: translateY(-1px); }
+.noteEmpty button:disabled { opacity: .55; cursor: wait; }
+
+.noteEditorHeader {
+  display: flex;
+  min-height: var(--side-panel-row);
+  flex: none;
+  align-items: center;
+  gap: 8px;
+  padding: 0 12px 0 8px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.noteEditorHeader > span {
+  overflow: hidden;
+  flex: 1;
+  color: var(--text-primary);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-medium);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.noteBack {
+  display: inline-flex;
+  height: 28px;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 2px;
+  padding: 0 9px 0 5px;
+  border-radius: 999px;
+  color: var(--text-secondary);
+  font-size: var(--text-2xs);
+}
+
+.noteBack:hover { background: var(--surface-hover); color: var(--text-primary); }

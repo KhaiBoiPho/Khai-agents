@@ -424,6 +424,7 @@ class AgentSession:
         skill_runtime: SkillRuntime | None = None,
         execution_profile: Any | None = None,
         tool_filter: Any | None = None,
+        tool_router: Any | None = None,
         closure_callback: Any | None = None,
         mcp_runtime: McpSessionRuntime | None = None,
         provider_cleanup: Callable[[], Awaitable[None]] | None = None,
@@ -510,6 +511,9 @@ class AgentSession:
         # tools that exist only during a Goal-associated Turn). It composes with the
         # Skill visibility snapshot and can never add registry capabilities.
         self._tool_filter = tool_filter
+        # Optional per-turn tool selection (core.agent_runtime.tool_router);
+        # its filter is part of ``tool_filter``, this only refreshes it.
+        self._tool_router = tool_router
         # Optional application-owned clean-exit check. Goal-associated Turns use
         # this to ask the model for one final complete/blocked/continue decision;
         # ordinary Turns leave it unset.
@@ -1107,6 +1111,16 @@ class AgentSession:
                 return "\n\n".join(reasons) or None
 
             stop_hook = combined_stop_hook
+
+        if self._tool_router is not None:
+            # One small decision call per turn picks the tool groups this
+            # request needs; any failure leaves every tool visible.
+            try:
+                await self._tool_router.route(text, self._history, self._tools.tool_names)
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                logger.exception("tool routing failed")
 
         event_hook = _EventEmittingHook(
             self._emit,

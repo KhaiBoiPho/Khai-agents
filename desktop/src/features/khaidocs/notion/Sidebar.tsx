@@ -9,8 +9,8 @@
  */
 
 import { NotificationPopover } from "@/features/notification/components/notification-popover.tsx";
-import { ReactNode, useEffect, useState } from "react";
-import { Link, useLocation } from "react-router-dom";
+import { ReactNode, useCallback, useEffect, useState } from "react";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAtom } from "jotai";
 import { Menu, Tooltip } from "@mantine/core";
 import { useDisclosure } from "@mantine/hooks";
@@ -28,6 +28,7 @@ import {
   IconTrash,
   IconDots,
   IconEdit,
+  IconFolder,
 } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 import SpaceTree from "@/features/page/tree/components/space-tree.tsx";
@@ -49,6 +50,9 @@ import { PageIcon } from "./PageIcon";
 import { pruneRecents, useRecentPages } from "./recents";
 import { getPageById } from "@/features/page/services/page-service.ts";
 import { useCreateNode } from "./tree-actions";
+import { ensureChatNotesFolder, getChatNotesFolderId, organizeIndexedChatNotes } from "./chat-notes";
+import { treeDataAtom } from "@/features/page/tree/atoms/tree-data-atom.ts";
+import { treeModel } from "@/features/page/tree/model/tree-model";
 import classes from "./sidebar.module.css";
 
 const COLLAPSED_KEY = "khaidocs:sidebar-sections";
@@ -85,6 +89,7 @@ export function KhaiDocsSidebar({
 }) {
   const { t } = useTranslation();
   const location = useLocation();
+  const navigate = useNavigate();
   const { collapsed, toggle } = useSectionState();
   const [templatesOpened, templates] = useDisclosure(false);
   const [settingsOpened, settings] = useDisclosure(false);
@@ -94,6 +99,9 @@ export function KhaiDocsSidebar({
   const toggleMobile = useToggleSidebar(mobileSidebarAtom);
   const toggleDesktop = useToggleSidebar(desktopSidebarAtom);
   const createNode = useCreateNode(space);
+  const [chatNotesPath, setChatNotesPath] = useState<string | null>(null);
+  const [chatNotesFolderId, setChatNotesFolderId] = useState<string | null>(() => getChatNotesFolderId(space.id));
+  const [, setTreeData] = useAtom(treeDataAtom);
   const allRecents = useRecentPages();
   const recents = allRecents.filter((r) => r.spaceSlug === space.slug);
   useEffect(() => {
@@ -105,6 +113,40 @@ export function KhaiDocsSidebar({
   const closeMobile = () => mobileOpened && toggleMobile();
   const homeUrl = getSpaceUrl(space.slug);
   const path = location.pathname.toLowerCase();
+  const openChatNotes = useCallback(async () => {
+    try {
+      const archive = await ensureChatNotesFolder(space.id);
+      setChatNotesFolderId(archive.id);
+      const movedPageIds = await organizeIndexedChatNotes(space.id, archive.id);
+      if (movedPageIds.length) {
+        setTreeData((tree) => movedPageIds.reduce((next, id) => treeModel.remove(next, id), tree));
+      }
+      const url = buildPageUrl(space.slug, archive.slugId, archive.title);
+      setChatNotesPath(url);
+      navigate(url);
+      closeMobile();
+    } catch {
+      /* The companion panel reports API errors when creating or loading notes. */
+    }
+  }, [space.id, space.slug, navigate, closeMobile, setTreeData]);
+
+  useEffect(() => {
+    const folderId = getChatNotesFolderId(space.id);
+    setChatNotesFolderId(folderId);
+    if (!folderId) {
+      setChatNotesPath(null);
+      return;
+    }
+    let cancelled = false;
+    void getPageById({ pageId: folderId }).then((page) => {
+      if (!cancelled && page.spaceId === space.id) {
+        setChatNotesPath(buildPageUrl(space.slug, page.slugId, page.title));
+      }
+    }).catch(() => {
+      if (!cancelled) setChatNotesPath(null);
+    });
+    return () => { cancelled = true; };
+  }, [space.id, space.slug]);
 
   return (
     <div className={classes.sidebar}>
@@ -241,11 +283,17 @@ export function KhaiDocsSidebar({
           }
         >
           <div className={classes.treeHost}>
-            <SpaceTree spaceId={space.id} readOnly={!canManagePages} />
+            <SpaceTree spaceId={space.id} readOnly={!canManagePages} hiddenRootIds={chatNotesFolderId ? [chatNotesFolderId] : []} />
           </div>
         </Section>
 
         <Section id="others" title={t("Others")} collapsed={collapsed} onToggle={toggle}>
+          <NavRow
+            icon={<IconFolder size={18} stroke={1.75} />}
+            label="Ghi chú chat"
+            active={Boolean(chatNotesPath && path === chatNotesPath.toLowerCase())}
+            onClick={() => void openChatNotes()}
+          />
           {canManagePages && (
             <NavRow
               icon={<IconTemplate size={18} stroke={1.75} />}

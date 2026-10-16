@@ -1,7 +1,12 @@
+/* The bar shares the composer's status row with the folder chips, and the
+   main chat can be dragged narrow. It sizes to the room it is given (never
+   its text) and sheds detail as it narrows; the tooltip keeps everything. */
 .bar {
+  container-type: inline-size;
   display: flex;
-  min-width: 120px;
-  flex: 1;
+  min-width: 72px;
+  flex: 1 1 160px;
+  overflow: hidden;
   align-items: center;
   gap: 8px;
   color: var(--text-secondary);
@@ -15,7 +20,7 @@
 .track {
   position: relative;
   height: 6px;
-  min-width: 60px;
+  min-width: 24px;
   flex: 1;
   overflow: hidden;
   border-radius: 999px;
@@ -43,6 +48,35 @@
   font-weight: 600;
 }
 
+.amount {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .chat {
+  flex: none;
   color: var(--text-tertiary);
+}
+
+/* Drop detail in order of least use: this chat's cost, the top-up total and
+   provider name, then the track itself, leaving only the balance. */
+@container (max-width: 320px) {
+  .chat {
+    display: none;
+  }
+}
+
+@container (max-width: 220px) {
+  .label,
+  .total {
+    display: none;
+  }
+}
+
+@container (max-width: 110px) {
+  .track {
+    display: none;
+  }
 }

@@ -169,10 +169,6 @@ def main():
             from cli.service_cli import run as service_run
 
             raise SystemExit(service_run(sys.argv[2:]))
-        elif sys.argv[1] == "desktop":
-            from cli.desktop_cli import run as desktop_run
-
-            raise SystemExit(desktop_run(sys.argv[2:]))
         elif sys.argv[1] == "web":
             from cli.web_cli import run as web_run
 
@@ -217,7 +213,6 @@ def main():
                         "",
                         "Usage:",
                         row("deepcode", "Open the terminal coding agent (TUI)"),
-                        row("deepcode desktop", "Open the native desktop client"),
                         row("deepcode web", "Open the local browser client"),
                         row(
                             "deepcode init",

@@ -4,7 +4,7 @@
   min-width: 0;
   /* Not a flat 54px: the row holds text, and text now tracks --font-size-base,
      so a fixed height would clip the tabs at the larger end of the slider. */
-  grid-template-rows: minmax(44px, auto) minmax(0, 1fr);
+  grid-template-rows: minmax(var(--side-panel-head), auto) minmax(0, 1fr);
   overflow: hidden;
   background: var(--surface-raised);
   container-type: inline-size;
@@ -17,6 +17,7 @@
   min-width: 0;
   align-items: center;
   gap: 2px;
+  min-height: var(--side-panel-head);
   padding: 6px 76px 6px 8px;
   overflow-x: auto;
   border-bottom: 1px solid var(--border-subtle);

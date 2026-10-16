@@ -52,3 +52,17 @@ describe("MarkdownContent", () => {
     expect(screen.queryByText(/window\.location/)).toBeNull();
   });
 });
+
+describe("splitMarkdownBlocks", () => {
+  it("splits at blank lines but keeps fences and indented continuations whole", async () => {
+    const { splitMarkdownBlocks } = await import("./markdownBlocks");
+    const text = "# Title\n\nPara one\n\n```js\na\n\nb\n```\n\n1. item\n\n   more of item\n2. next\n\nEnd";
+    expect(splitMarkdownBlocks(text)).toEqual([
+      "# Title\n",
+      "Para one\n",
+      "```js\na\n\nb\n```\n",
+      "1. item\n\n   more of item\n2. next\n",
+      "End",
+    ]);
+  });
+});

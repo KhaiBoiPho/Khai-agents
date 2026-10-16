@@ -7,6 +7,8 @@
 }
 
 .ProseMirror {
+  font-family: "Source Sans 3 Variable", "Source Sans 3", -apple-system,
+    BlinkMacSystemFont, "Segoe UI", sans-serif;
   background-color: light-dark(
     var(--mantine-color-white),
     var(--mantine-color-dark-7)
@@ -16,7 +18,7 @@
     var(--mantine-color-white)
   );
   font-size: var(--mantine-font-size-md);
-  line-height: var(--mantine-line-height-xl);
+  line-height: 1.55;
   font-weight: 400;
   width: 100%;
 
@@ -96,6 +98,7 @@
   }
 
   code {
+    font-family: var(--mantine-font-family-monospace);
     background-color: light-dark(
       var(--mantine-color-gray-0),
       var(--mantine-color-dark-8)
@@ -304,14 +307,14 @@
   padding-right: 0;
 }
 
-/* Definite height so the inner .tableScrollport scrolls and the sticky table
- * header pins. Flow on print, else it emits a trailing blank page. */
+/* Let documents grow with their content so the browser scrolls the page
+ * normally instead of creating a viewport-sized inner scroll area. */
 .base-page-root {
-  height: calc(100cqh - var(--app-shell-header-height, 45px)); /* KhaiDocs: was 100dvh */
+  min-height: calc(100cqh - var(--app-shell-header-height, 45px));
 }
 
 @media print {
   .base-page-root {
-    height: 100%;
+    min-height: 100%;
   }
 }

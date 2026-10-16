@@ -316,17 +316,30 @@ export function DragHandlePlugin(
   }
 
   let dragHandleElement: HTMLElement | null = null;
+  let insertBlockButton: HTMLButtonElement | null = null;
+  let hoveredNodePosition: number | null = null;
+
+  function positionInsertButton(left: number, top: number) {
+    if (!insertBlockButton) return;
+    // Keep the add control close to the drag/menu handle, with a small
+    // six-pixel gap between their hit areas.
+    insertBlockButton.style.left = `${left - 40}px`;
+    insertBlockButton.style.top = `${top}px`;
+  }
 
   function hideDragHandle() {
     if (dragHandleElement) {
       dragHandleElement.classList.add("hide");
     }
+    insertBlockButton?.classList.add("hide");
+    hoveredNodePosition = null;
   }
 
   function showDragHandle() {
     if (dragHandleElement) {
       dragHandleElement.classList.remove("hide");
     }
+    insertBlockButton?.classList.remove("hide");
   }
 
   function hideHandleOnEditorOut(event: MouseEvent) {
@@ -335,7 +348,7 @@ export function DragHandlePlugin(
       const relatedTarget = event.relatedTarget as HTMLElement;
       const isInsideEditor =
         relatedTarget?.classList.contains("tiptap") ||
-        relatedTarget?.classList.contains("drag-handle");
+        Boolean(relatedTarget?.closest(".drag-handle, .drag-handle-add"));
 
       if (isInsideEditor) return;
     }
@@ -352,6 +365,33 @@ export function DragHandlePlugin(
       dragHandleElement.draggable = true;
       dragHandleElement.dataset.dragHandle = "";
       dragHandleElement.classList.add("drag-handle");
+
+      insertBlockButton = document.createElement("button");
+      insertBlockButton.type = "button";
+      insertBlockButton.className = "drag-handle-add";
+      insertBlockButton.setAttribute("aria-label", "Insert block below");
+      insertBlockButton.title = "Insert block below";
+      const plusIcon = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+      plusIcon.setAttribute("viewBox", "0 0 20 20");
+      plusIcon.setAttribute("width", "16");
+      plusIcon.setAttribute("height", "16");
+      plusIcon.setAttribute("aria-hidden", "true");
+      plusIcon.innerHTML = '<path d="M10 3.5v13M3.5 10h13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />';
+      insertBlockButton.appendChild(plusIcon);
+      insertBlockButton.addEventListener("click", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        const position = hoveredNodePosition;
+        if (position === null) return;
+        const node = view.state.doc.nodeAt(position);
+        const paragraph = view.state.schema.nodes.paragraph?.createAndFill();
+        if (!node || !paragraph) return;
+        const insertAt = position + node.nodeSize;
+        const tr = view.state.tr.insert(insertAt, paragraph);
+        tr.setSelection(TextSelection.create(tr.doc, insertAt + 1));
+        view.dispatch(tr.scrollIntoView());
+        view.focus();
+      });
 
       function onDragHandleDragStart(e: DragEvent) {
         handleDragStart(e, view);
@@ -372,18 +412,18 @@ export function DragHandlePlugin(
       function onDragHandleClick(event: MouseEvent) {
         event.preventDefault();
         event.stopPropagation();
-        const node = nodeDOMAtCoords(
-          {
-            x: event.clientX + 50 + options.dragHandleWidth,
-            y: event.clientY,
-          },
-          options,
-          view,
-        );
-        if (!(node instanceof Element)) return;
-        const rawPosition = nodePosAtDOM(node, view, options);
-        if (rawPosition == null || rawPosition < 0) return;
-        const position = calcNodePos(rawPosition, view);
+        let position = hoveredNodePosition;
+        if (position === null) {
+          const node = nodeDOMAtCoords(
+            { x: event.clientX + 50 + options.dragHandleWidth, y: event.clientY },
+            options,
+            view,
+          );
+          if (!(node instanceof Element)) return;
+          const rawPosition = nodePosAtDOM(node, view, options);
+          if (rawPosition == null || rawPosition < 0) return;
+          position = calcNodePos(rawPosition, view);
+        }
         const selectedNode = view.state.doc.nodeAt(position);
         if (!selectedNode || !NodeSelection.isSelectable(selectedNode)) return;
         view.dispatch(
@@ -405,7 +445,9 @@ export function DragHandlePlugin(
       hideDragHandle();
 
       if (!handleBySelector) {
-        view?.dom?.parentElement?.appendChild(dragHandleElement);
+        const handleRoot = view.dom.closest(".khaidocs-root") ?? view.dom.parentElement;
+        handleRoot?.appendChild(insertBlockButton);
+        handleRoot?.appendChild(dragHandleElement);
       }
       view?.dom?.parentElement?.addEventListener(
         "mouseout",
@@ -416,6 +458,7 @@ export function DragHandlePlugin(
         destroy: () => {
           if (!handleBySelector) {
             dragHandleElement?.remove?.();
+            insertBlockButton?.remove();
           }
           dragHandleElement?.removeEventListener("drag", onDragHandleDrag);
           dragHandleElement?.removeEventListener("click", onDragHandleClick);
@@ -424,6 +467,7 @@ export function DragHandlePlugin(
             onDragHandleDragStart,
           );
           dragHandleElement = null;
+          insertBlockButton = null;
           view?.dom?.parentElement?.removeEventListener(
             "mouseout",
             hideHandleOnEditorOut,
@@ -461,6 +505,11 @@ export function DragHandlePlugin(
             return;
           }
 
+          const rawPosition = nodePosAtDOM(node, view, options);
+          hoveredNodePosition = rawPosition == null || rawPosition < 0
+            ? null
+            : calcNodePos(rawPosition, view);
+
           const isCustomNode = isCustomNodeDOM(node, options);
 
           // Custom nodes pin the handle to the inner NodeViewWrapper's top-left:
@@ -476,8 +525,9 @@ export function DragHandlePlugin(
               rendererOuter;
             const innerRect = absoluteRect(inner);
             if (!dragHandleElement) return;
-            dragHandleElement.style.left = `${innerRect.left + 4}px`;
+            dragHandleElement.style.left = `${innerRect.left - 8}px`;
             dragHandleElement.style.top = `${innerRect.top + 4}px`;
+            positionInsertButton(innerRect.left + 4, innerRect.top + 4);
             showDragHandle();
             return;
           }
@@ -508,8 +558,9 @@ export function DragHandlePlugin(
 
           if (!dragHandleElement) return;
 
-          dragHandleElement.style.left = `${rect.left - rect.width}px`;
+          dragHandleElement.style.left = `${rect.left - rect.width - 12}px`;
           dragHandleElement.style.top = `${rect.top}px`;
+          positionInsertButton(rect.left - rect.width, rect.top);
           showDragHandle();
         },
         keydown: () => {

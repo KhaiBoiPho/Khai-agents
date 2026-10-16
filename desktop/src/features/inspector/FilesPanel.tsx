@@ -4,6 +4,7 @@
  * the right, with Markdown shown rendered and a toggle to its source.
  */
 
+import { FileName } from "./FileName";
 import {
   BookOpenCheck,
   ChevronsDownUp,
@@ -16,6 +17,7 @@ import {
   Save,
   Search,
   X,
+  Loader2,
 } from "lucide-react";
 import {
   lazy,
@@ -36,7 +38,6 @@ import { documentKind } from "./documentKinds";
 import { subscribeFilePreview, type LineRange } from "./filePreviewRequests";
 import { FileIcon } from "./FileIcon";
 import { FileTree } from "./FileTree";
-import { InspectorEmpty } from "./InspectorEmpty";
 import { languageFor } from "./inspectorFormat";
 import { ancestorsOf, buildTree, directoryPaths, filterTree } from "./treeModel";
 import type { DocumentIndexController } from "./useDocumentIndex";
@@ -87,6 +88,7 @@ function saveTreeLayout(layout: { visible: boolean; width: number }) {
 }
 
 const isMarkdown = (path: string) => /\.(md|mdx|markdown)$/i.test(path);
+const isHtml = (path: string) => /\.(html?|xhtml)$/i.test(path);
 const baseName = displayFileName;
 
 interface FilesPanelProps {
@@ -136,6 +138,7 @@ export function FilesPanel({
   const [layout, setLayout] = useState(readTreeLayout);
   const [openPaths, setOpenPaths] = useState<string[]>([]);
   const [showSource, setShowSource] = useState(false);
+  const [showHtmlSource, setShowHtmlSource] = useState(false);
   // A PDF/Office/CSV document shown in place of the text file; documents
   // never go through the text editor.
   const [activeDoc, setActiveDoc] = useState<string | null>(null);
@@ -307,9 +310,27 @@ export function FilesPanel({
     window.addEventListener("pointerup", stop);
   };
 
+  // Open the most recently changed file once, so the panel never starts on
+  // an empty "pick a file" screen. Closing every tab afterwards is respected.
+  const autoOpenedRef = useRef(false);
+  const firstFile = useMemo(
+    () =>
+      entries
+        .filter((entry) => entry.kind === "file" && !entry.hidden)
+        .sort((a, b) => (b.modifiedAt ?? "").localeCompare(a.modifiedAt ?? ""))[0] ?? null,
+    [entries],
+  );
+  useEffect(() => {
+    if (autoOpenedRef.current || activePath || !firstFile) return;
+    autoOpenedRef.current = true;
+    void openFileRef.current(firstFile.path);
+  }, [activePath, firstFile]);
+  const waitingForFirst = !autoOpenedRef.current && Boolean(firstFile);
+
   const fileCount = entries.filter((entry) => entry.kind !== "directory").length;
   const readOnly = !trusted || hasActiveTurn || Boolean(file?.truncated);
   const rendered = Boolean(file && isMarkdown(file.path) && !showSource);
+  const htmlPreview = Boolean(file && isHtml(file.path) && !showHtmlSource);
 
   return (
     <div className={styles.view}>
@@ -354,7 +375,7 @@ export function FilesPanel({
                   onClick={() => void openFile(path)}
                 >
                   <FileIcon name={baseName(path)} size={13} />
-                  <span>{baseName(path)}</span>
+                  <FileName name={baseName(path)} />
                   {active && dirty ? <i className={styles.dirtyDot} aria-label="Unsaved" /> : null}
                 </button>
                 <button
@@ -459,7 +480,7 @@ export function FilesPanel({
                 <nav className={styles.breadcrumb} aria-label="File path" title={activeDoc}>
                   {activeDoc.split("/").map((part, index, parts) =>
                     index === parts.length - 1 ? (
-                      <strong key={index}>{part}</strong>
+                      <strong key={index}><FileName name={part} /></strong>
                     ) : (
                       <span key={index}>
                         {part}
@@ -484,7 +505,7 @@ export function FilesPanel({
                 ) : null}
               </header>
               <div className={styles.editorBody}>
-                <Suspense fallback={<div className={styles.loading}>Opening document…</div>}>
+                <Suspense fallback={<div className={styles.openingFile} role="status"><Loader2 size={18} className={styles.spinner} /><span>Đang mở tài liệu…</span></div>}>
                   <DocumentViewer
                     key={activeDoc}
                     path={activeDoc}
@@ -528,6 +549,18 @@ export function FilesPanel({
                     {showSource ? <Eye size={15} /> : <Code2 size={15} />}
                   </button>
                 ) : null}
+                {isHtml(file.path) ? (
+                  <button
+                    type="button"
+                    className={styles.iconButton}
+                    data-active={htmlPreview || undefined}
+                    onClick={() => setShowHtmlSource(!showHtmlSource)}
+                    title={htmlPreview ? "Show source code" : "Show rendered page"}
+                    aria-label={htmlPreview ? "Show HTML source code" : "Show rendered HTML page"}
+                  >
+                    {htmlPreview ? <Code2 size={15} /> : <Eye size={15} />}
+                  </button>
+                ) : null}
                 {onDownload ? (
                   <button
                     type="button"
@@ -560,12 +593,14 @@ export function FilesPanel({
                 </p>
               ) : null}
               <div className={styles.editorBody}>
-                {rendered ? (
+                {htmlPreview ? (
+                  <HtmlFrame title={`Preview of ${baseName(file.path)}`} html={workbench.draft} />
+                ) : rendered ? (
                   <article className={styles.preview}>
                     <MarkdownContent>{workbench.draft}</MarkdownContent>
                   </article>
                 ) : (
-                  <Suspense fallback={<div className={styles.loading}>Loading editor…</div>}>
+                  <Suspense fallback={<div className={styles.openingFile} role="status"><Loader2 size={18} className={styles.spinner} /><span>Đang mở trình soạn thảo…</span></div>}>
                     <LocalMonacoEditor
                       height="100%"
                       language={languageFor(file.path)}
@@ -587,12 +622,21 @@ export function FilesPanel({
                   </Suspense>
                 )}
               </div>
-              {hasActiveTurn && !rendered ? (
+              {hasActiveTurn && !rendered && !htmlPreview ? (
                 <p className={styles.lockNotice}>Editing is locked until the active Turn finishes.</p>
               ) : null}
             </>
           ) : (
-            <InspectorEmpty label="Select a file in the explorer to open it." />
+            workbench.loading || waitingForFirst ? (
+              <div className={styles.openingFile} role="status">
+                <Loader2 size={18} className={styles.spinner} />
+                <span>Đang mở tài liệu…</span>
+              </div>
+            ) : entries.length === 0 ? (
+              <div className={styles.openingFile}>
+                <span>Chat này chưa có file nào.</span>
+              </div>
+            ) : null
           )}
         </section>
       </div>
@@ -639,6 +683,29 @@ function KnowledgeBar({
           Re-index
         </button>
       ) : null}
+    </div>
+  );
+}
+
+/** A rendered HTML page, with a spinner until the frame has painted it. */
+function HtmlFrame({ title, html }: { title: string; html: string }) {
+  const [loadedFor, setLoadedFor] = useState<string | null>(null);
+  return (
+    <div className={styles.htmlFrame}>
+      {loadedFor !== html ? (
+        <div className={`${styles.openingFile} ${styles.overlay}`} role="status">
+          <Loader2 size={18} className={styles.spinner} />
+          <span>Đang hiển thị trang…</span>
+        </div>
+      ) : null}
+      <iframe
+        className={styles.htmlPreview}
+        title={title}
+        sandbox="allow-scripts"
+        referrerPolicy="no-referrer"
+        srcDoc={html}
+        onLoad={() => setLoadedFor(html)}
+      />
     </div>
   );
 }

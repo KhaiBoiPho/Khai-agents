@@ -1,5 +1,12 @@
 import type { Project, Thread } from "../generated/app-server";
 
+export const COMPANION_THREAD_PREFIX = "__khai_companion__:";
+
+/** Companion sessions are private to the parent chat's side panel. */
+export function isCompanionThread(thread: Pick<Thread, "title">): boolean {
+  return thread.title.startsWith(COMPANION_THREAD_PREFIX);
+}
+
 /** The hidden project created by `chats/workspace` for plain chats. */
 export function isChatsProject(project: Project | null | undefined): boolean {
   if (!project) return false;

@@ -9,7 +9,7 @@ from scripts.ci_scope import affects_desktop, affects_runtime
     "path",
     [
         "desktop/src/App.tsx",
-        "desktop/src-tauri/src/main.rs",
+        "desktop/src/rpc/browserRuntime.ts",
         "app_server/dispatcher.py",
         "core/skills/service.py",
         "protocol/app-server.schema.json",
@@ -18,7 +18,7 @@ from scripts.ci_scope import affects_desktop, affects_runtime
         "scripts/ci_scope.py",
     ],
 )
-def test_desktop_ci_runs_for_desktop_and_sidecar_inputs(path: str) -> None:
+def test_desktop_ci_runs_for_web_client_and_server_inputs(path: str) -> None:
     assert affects_desktop([path])
 
 

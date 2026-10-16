@@ -81,6 +81,7 @@ import { EditorAiMenu } from "@/ee/ai/components/editor/ai-menu/ai-menu";
 import { EditorLinkMenu } from "@/features/editor/components/link/link-menu";
 import ColumnsMenu from "@/features/editor/components/columns/columns-menu.tsx";
 import { BlockActionsMenu } from "@/features/editor/components/block-actions-menu";
+import { PageInsertDialog } from "@/features/editor/components/page-insert-dialog";
 import { TransclusionLookupProvider } from "@/features/editor/components/transclusion/transclusion-lookup-context";
 import { useTranslation } from "react-i18next";
 import {
@@ -484,6 +485,7 @@ function CollabPageEditor({
             <DrawioMenu editor={editor} />
             <ColumnsMenu editor={editor} />
             <BlockActionsMenu editor={editor} />
+            <PageInsertDialog />
           </div>
         )}
         {editor && !editorIsEditable && (editable || canComment) && (

@@ -90,7 +90,7 @@ export function ColumnsMenu({ editor }: EditorMenuProps) {
       const parent = findParentNode(
         (node: PMNode) => node.type.name === "columns",
       )(state.selection);
-      if (!parent) return false;
+      if (!parent || parent.node.childCount < 2) return false;
 
       const dom = editor.view.nodeDOM(parent.pos) as HTMLElement;
       if (!dom) return false;
@@ -112,7 +112,8 @@ export function ColumnsMenu({ editor }: EditorMenuProps) {
       )(selection);
 
       return {
-        columnCount: parent?.node.childCount || 2,
+        insideColumns: !!parent && parent.node.childCount >= 2,
+        columnCount: parent?.node.childCount ?? 0,
         layout: (parent?.node.attrs.layout as ColumnsLayout) || "two_equal",
         isNormal: ctx.editor.isActive("columns", { widthMode: "normal" }),
         isWide: ctx.editor.isActive("columns", { widthMode: "wide" }),
@@ -160,11 +161,7 @@ export function ColumnsMenu({ editor }: EditorMenuProps) {
       };
     }
 
-    const domRect = posToDOMRect(editor.view, selection.from, selection.to);
-    return {
-      getBoundingClientRect: () => domRect,
-      getClientRects: () => [domRect],
-    };
+    return null;
   }, [editor]);
 
   const setColumnCount = useCallback(
@@ -249,7 +246,8 @@ export function ColumnsMenu({ editor }: EditorMenuProps) {
     editor.chain().focus().setNodeSelection(parent.pos).deleteSelection().run();
   }, [editor]);
 
-  const columnCount = editorState?.columnCount || 2;
+  const columnCount = editorState?.columnCount ?? 0;
+  if (!editorState?.insideColumns) return null;
   const currentLayout = editorState?.layout || "two_equal";
   const presets = getPresetsForCount(columnCount);
 

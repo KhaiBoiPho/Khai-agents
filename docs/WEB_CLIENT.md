@@ -77,10 +77,9 @@ export credentials. Software updates remain an installation/service operation.
 The browser cannot invoke native dialogs, open host applications or run the
 Desktop updater.
 
-`ClientRuntime` is the shared interface. Separate entrypoints inject
-`BrowserRuntime` or `TauriDesktopRuntime`; shared components do not import Tauri
-APIs. Desktop retains native dialogs and its updater, and uses a native stdio
-relay to attach to the same service as Web and TUI. Exiting any of these clients
+`ClientRuntime` is the shared interface and `BrowserRuntime` is its only
+implementation: the native desktop shell was removed, so the browser is the
+one frontend. It attaches to the same service as the TUI. Exiting any of these clients
 detaches its connection without shutting down the service.
 
 ## Build and distribution
